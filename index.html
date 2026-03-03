@@ -171,11 +171,11 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
     </div>
     <button id="login-btn">Sign In</button>
     <div id="login-err"></div>
-    <div class="url-toggle"><button id="show-url-btn">⚙ Configure API URL</button></div>
+    <div class="url-toggle"><button id="show-url-btn" onclick="var s=document.getElementById('url-section');s.style.display=s.style.display==='none'?'block':'none';if(s.style.display==='block'){var i=document.getElementById('url-inp');if(i)i.value=localStorage.getItem('aws_url')||'';}">⚙ Configure API URL</button></div>
     <div id="url-section">
       <div style="font-size:11px;color:#7A92B0;margin-bottom:7px">Paste your Google Apps Script Web App URL:</div>
       <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/>
-      <button id="save-url-btn">Save URL</button>
+      <button id="save-url-btn" onclick="var u=document.getElementById('url-inp').value.trim();if(!u||!u.startsWith('https://script.google.com')){document.getElementById('login-err').textContent='URL must start with https://script.google.com';document.getElementById('login-err').style.display='block';return;}localStorage.setItem('aws_url',u);document.getElementById('url-section').style.display='none';document.getElementById('login-err').style.display='none';alert('API URL saved! Now sign in.');">Save URL</button>
     </div>
   </div>
 </div>
@@ -4646,20 +4646,22 @@ document.getElementById("login-pass").addEventListener("keydown",function(e){if(
 document.getElementById("login-user").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("login-pass").focus();});
 document.getElementById("logout-btn").addEventListener("click",doLogout);
 
-// URL config toggle
-document.getElementById("show-url-btn").addEventListener("click",function(){
+// URL config toggle (backup handler — inline onclick on button handles it too)
+var _showUrlBtn=document.getElementById("show-url-btn");
+if(_showUrlBtn&&!_showUrlBtn.dataset.bound){_showUrlBtn.dataset.bound="1";_showUrlBtn.addEventListener("click",function(){
   var sec=document.getElementById("url-section");
   sec.style.display=sec.style.display==="none"?"block":"none";
   if(sec.style.display==="block") document.getElementById("url-inp").value=webUrl;
-});
-document.getElementById("save-url-btn").addEventListener("click",function(){
+});}
+var _saveUrlBtn=document.getElementById("save-url-btn");
+if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveUrlBtn.addEventListener("click",function(){
   var url=document.getElementById("url-inp").value.trim();
   if(!url||!url.startsWith("https://script.google.com")){showLoginErr("URL must start with https://script.google.com");return;}
   webUrl=url;localStorage.setItem("aws_url",url);
   document.getElementById("url-section").style.display="none";
   document.getElementById("login-err").style.display="none";
   toast("API URL saved.","ok");
-});
+});}
 
 // Auto-login if session token exists
 (function(){
