@@ -9,19 +9,34 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Poppins',sans-serif;background:#F0F4F8;color:#1A365E}
 button,input,select,textarea{font-family:'Poppins',sans-serif}
-#setup{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:linear-gradient(135deg,#0F2240 0%,#1A365E 60%,#D61F31 100%)}
-#setup-box{background:#fff;border-radius:20px;padding:36px;width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
-#setup-box h1{font-size:17px;font-weight:700;color:#1A365E;margin-bottom:4px}
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:linear-gradient(135deg,#0F2240 0%,#1A365E 60%,#D61F31 100%)}
+#login-box{background:#fff;border-radius:20px;padding:36px;width:100%;max-width:420px;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+#login-logo{background:#0F2240;border-radius:14px;padding:16px 12px;text-align:center;margin-bottom:20px}
+#login-logo img{height:auto;width:100%;max-width:280px;object-fit:contain}
+#login-box h1{font-size:17px;font-weight:700;color:#1A365E;margin-bottom:4px}
 .sub{font-size:12px;color:#7A92B0;margin-bottom:20px}
-.step{background:#F7F9FC;border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1.5px solid #E4EAF2;font-size:12px;color:#3D5475;line-height:1.6}
-.sn{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#1A365E;color:#fff;border-radius:5px;font-size:10px;font-weight:800;margin-right:6px}
-#url-inp{width:100%;padding:10px 13px;border:2px solid #E4EAF2;border-radius:9px;font-size:13px;color:#1A365E;outline:none;margin-top:6px}
-#url-inp:focus{border-color:#D61F31}
-#conn-btn{width:100%;padding:12px;background:#D61F31;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:700;margin-top:10px;cursor:pointer}
-#conn-btn:hover{background:#B01526}
-#skip-btn{width:100%;padding:9px;background:none;border:none;color:#7A92B0;font-size:12px;margin-top:6px;cursor:pointer}
-#slw{background:#0F2240;border-radius:14px;padding:16px 12px;text-align:center;margin-bottom:20px}
-#slw img{height:auto;width:100%;max-width:320px;object-fit:contain}
+.login-field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}
+.login-field label{font-size:10px;font-weight:700;color:#3D5475;text-transform:uppercase;letter-spacing:.7px}
+.login-field input{padding:10px 13px;border:2px solid #E4EAF2;border-radius:9px;font-size:13px;color:#1A365E;outline:none;font-family:Poppins,sans-serif}
+.login-field input:focus{border-color:#1A365E}
+#login-btn{width:100%;padding:13px;background:#D61F31;color:#fff;border:none;border-radius:11px;font-size:14px;font-weight:700;margin-top:6px;cursor:pointer;font-family:Poppins,sans-serif;transition:background .2s}
+#login-btn:hover{background:#B01526}
+#login-btn:disabled{background:#C0C0C0;cursor:not-allowed}
+#login-err{display:none;padding:10px 13px;border-radius:9px;font-size:12px;font-weight:600;margin-top:10px;text-align:center;background:#FFF0F1;color:#D61F31;border:1px solid #F5C2C7}
+.url-toggle{text-align:center;margin-top:14px}
+.url-toggle button{background:none;border:none;color:#7A92B0;font-size:11px;cursor:pointer;font-family:Poppins,sans-serif;text-decoration:underline}
+#url-section{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #E4EAF2}
+#url-inp{width:100%;padding:9px 12px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:12px;color:#1A365E;outline:none;font-family:Poppins,sans-serif;margin-bottom:7px}
+#url-inp:focus{border-color:#1A365E}
+#save-url-btn{width:100%;padding:9px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif}
+/* Sidebar user pill */
+.user-pill{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.08);margin:0 4px 4px}
+.user-ava{width:28px;height:28px;border-radius:7px;background:#D61F31;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px}
+.user-logout{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.5);border-radius:5px;padding:3px 7px;font-size:10px;cursor:pointer;font-family:Poppins,sans-serif}
+.user-logout:hover{background:rgba(214,31,49,.3);color:#fff}
 #app{display:none;height:100vh;flex-direction:row;overflow:hidden}
 #app.on{display:flex}
 #sb{width:220px;background:linear-gradient(180deg,#0F2240,#1A365E);display:flex;flex-direction:column;flex-shrink:0}
@@ -141,19 +156,130 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 
 
 
-<div id="setup">
-  <div id="setup-box">
-    <div id="slw"><img id="setup-logo" src="" alt="AWS"/></div>
+<div id="login">
+  <div id="login-box">
+    <div id="login-logo"><img id="login-logo-img" src="" alt="AWS"/></div>
     <h1>Student Information System</h1>
-    <div class="sub">K-12 Admissions &amp; Enrollment · American World School</div>
-    <div class="step"><span class="sn">1</span>Create a Google Sheet → <strong>Extensions → Apps Script</strong> → paste <strong>AppsScript.gs</strong> → Deploy as Web App (Anyone).</div>
-    <div class="step"><span class="sn">2</span>Paste your Web App URL below:<br/><input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/></div>
-    <div id="conn-status" style="display:none;padding:10px 13px;border-radius:9px;font-size:12px;font-weight:600;margin-top:8px;text-align:center"></div>
-    <button id="conn-btn">Connect &amp; Test</button>
-    <button id="skip-btn">Skip — use local storage only</button>
-    <button id="clear-btn" style="width:100%;padding:7px;background:none;border:none;color:#E57373;font-size:11px;margin-top:2px;cursor:pointer;display:none">✕ Clear saved URL &amp; reset</button>
+    <div class="sub">American World School · K-12 Admissions &amp; Enrollment</div>
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="Enter your username" autocomplete="username"/>
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password"/>
+    </div>
+    <button id="login-btn">Sign In</button>
+    <div id="login-err"></div>
+    <div class="url-toggle"><button id="show-url-btn">⚙ Configure API URL</button></div>
+    <div id="url-section">
+      <div style="font-size:11px;color:#7A92B0;margin-bottom:7px">Paste your Google Apps Script Web App URL:</div>
+      <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/>
+      <button id="save-url-btn">Save URL</button>
+    </div>
   </div>
 </div>
+<script>
+// ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
+// Runs immediately, independently of the main app script below.
+// Handles: Configure URL toggle, Save URL, and Sign In button.
+(function(){
+  function el(id){return document.getElementById(id);}
+
+  // Populate URL input from localStorage on load
+  var savedUrl=localStorage.getItem("aws_url")||"";
+  if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
+
+  // ⚙ Configure API URL toggle
+  el("show-url-btn").addEventListener("click",function(e){
+    e.preventDefault();
+    var sec=el("url-section");
+    var isHidden=sec.style.display===""||sec.style.display==="none";
+    sec.style.display=isHidden?"block":"none";
+    if(isHidden){
+      var inp=el("url-inp");
+      inp.value=localStorage.getItem("aws_url")||"";
+      inp.focus();
+    }
+  });
+
+  // Save URL button
+  el("save-url-btn").addEventListener("click",function(e){
+    e.preventDefault();
+    var url=(el("url-inp").value||"").trim();
+    if(!url){
+      showErr("Please paste your Apps Script URL.");return;
+    }
+    if(!url.startsWith("https://script.google.com")){
+      showErr("URL must start with https://script.google.com");return;
+    }
+    if(!url.endsWith("/exec")){
+      showErr("URL must end with /exec — copy the full Web App URL.");return;
+    }
+    localStorage.setItem("aws_url",url);
+    el("url-section").style.display="none";
+    showErr("");
+    // Flash the sign in button green briefly to confirm
+    var btn=el("login-btn");
+    btn.style.background="#1DBD6A";
+    btn.textContent="✓ URL Saved — Sign In";
+    setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
+  });
+
+  // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
+  el("login-btn").addEventListener("click",function(e){
+    e.preventDefault();
+    if(typeof doLogin==="function"){doLogin();return;}
+    var webUrl=localStorage.getItem("aws_url")||"";
+    if(!webUrl){
+      showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
+      el("url-section").style.display="block";
+      return;
+    }
+    var userEl=el("login-user"), passEl=el("login-pass");
+    var username=userEl?userEl.value.trim():"";
+    var password=passEl?passEl.value.trim():"";
+    if(!username||!password){showErr("Please enter your username and password.");return;}
+    var btn=el("login-btn");
+    btn.disabled=true; btn.textContent="Signing in...";
+    showErr("");
+    var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
+    var c=new AbortController(), t=setTimeout(function(){c.abort();},12000);
+    fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+      .then(function(r){clearTimeout(t);return r.json();})
+      .then(function(d){
+        btn.disabled=false; btn.textContent="Sign In";
+        if(d.status==="ok"&&d.token){
+          localStorage.setItem("aws_token",d.token);
+          if(typeof launchApp==="function"){
+            if(typeof updateUserUI==="function") updateUserUI(d.user||{username:username,role:"staff",name:username});
+            window._sessionToken=d.token;
+            if(typeof loadLocal==="function") loadLocal();
+            if(typeof sheetFetch==="function") sheetFetch().then(function(){launchApp();});
+            else launchApp();
+          } else {
+            showErr("Logged in! Reloading...");
+            setTimeout(function(){location.reload();},800);
+          }
+        } else {
+          showErr(d.message||"Incorrect username or password.");
+        }
+      })
+      .catch(function(err){
+        btn.disabled=false; btn.textContent="Sign In";
+        showErr(err.name==="AbortError"?"Request timed out.":"Could not reach server. Check your API URL.");
+      });
+  });
+
+  function showErr(msg){
+    var e=el("login-err");
+    if(!e)return;
+    if(!msg){e.style.display="none";return;}
+    e.textContent=msg;e.style.display="block";
+  }
+})();
+</script>
+
 
 <div id="app">
   <div id="sb">
@@ -182,9 +308,17 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
       <button class="ni" data-v="staff"><span class="ni-ico">👩‍🏫</span>Staff Directory</button>
       <button class="ni" data-v="analytics"><span class="ni-ico">📈</span>Analytics</button>
       <button class="ni" data-v="notifications"><span class="ni-ico">🔔</span>Alerts<span class="nbadge" id="nb-notif" style="display:none"></span></button>
+      <button class="ni admin-only" data-v="users" style="display:none"><span class="ni-ico">👤</span>User Management</button>
       <button class="ni" data-v="settings"><span class="ni-ico">⚙️</span>Settings</button>
     </nav>
-    <div class="sbf"><div class="spill" id="spill"><div class="sdot"></div><span id="sync-txt">Local Mode</span></div></div>
+    <div class="sbf">
+      <div class="user-pill" id="user-pill">
+        <div class="user-ava" id="user-ava">?</div>
+        <div class="user-info"><div class="user-name" id="user-name">—</div><div class="user-role" id="user-role">staff</div></div>
+        <button class="user-logout" id="logout-btn" title="Sign out">⏏</button>
+      </div>
+      <div class="spill" id="spill"><div class="sdot"></div><span id="sync-txt">Connecting...</span></div>
+    </div>
   </div>
   <div id="main">
     <div id="topbar">
@@ -477,34 +611,32 @@ var SM={
 var PM={"Low":{bg:"#F4F6F8",tc:"#5A6E86"},"Normal":{bg:"#EEF3FF",tc:"#1A365E"},"High":{bg:"#FFF6E0",tc:"#8A5F00"},"Urgent":{bg:"#FFF0F1",tc:"#D61F31"}};
 
 function defS(){return{academicYear:"2024 - 2025",campuses:["Main Campus","North Campus","South Campus","Online"],capacity:"Pre-K–5: 120 | 6–8: 80 | 9–12: 100",docs:["Birth Certificate","Immunization Records","Prior School Transcript","Passport / ID Copy","Medical Form","Recommendation Letter","Emergency Contact Form","Technology Agreement"],emailNotif:"Enabled for status changes and document requests",cohorts:["Grade 1A","Grade 1B","Grade 5A","Grade 5B","Grade 9A","Grade 9B","Grade 10A"],sidPrefix:"AWS",gradeScale:"A/B/C/D/F",feeCurrency:{base:"INR",rates:{"USD":1,"INR":83.2}}};}
+// ── Settings: localStorage cache + background Sheets push ─────────────────
 function loadS(){try{var s=localStorage.getItem("aws_sett_v5");return s?Object.assign(defS(),JSON.parse(s)):defS();}catch(e){return defS();}}
 function saveS(s){
   localStorage.setItem("aws_sett_v5",JSON.stringify(s));
-  // Sync to Sheets in background
-  if(webUrl) setTimeout(function(){syncSettings();}, 100);
+  if(webUrl) setTimeout(function(){gmsSheetRequest("saveSettings",{settings:s},null);},100);
 }
 var SETT=loadS();
-// GMS: course records keyed by student id → array of course records
+
+// ── GMS / Grades: localStorage cache only (synced as courses) ─────────────
 function loadGMS(){try{return JSON.parse(localStorage.getItem("aws_gms_v5")||"{}");}catch(e){return {};}}
 function saveGMS(){localStorage.setItem("aws_gms_v5",JSON.stringify(GMS));}
-var GMS=loadGMS(); // {studentId: [{courseCode,title,type,ag,area,semester,year,grade,credits,apScore,transferFlag,notes}]}
-// Legacy GR alias for compatibility
+var GMS=loadGMS();
 var GR={};
 function loadGR(){return {};}
 function saveGR(){saveGMS();}
 
-// ── Attendance data: {date_studentId: {status,note}} ──────────────────────
+// ── Attendance: localStorage cache + Sheets push ──────────────────────────
 function loadATT(){try{return JSON.parse(localStorage.getItem("aws_att_v5")||"{}");}catch(e){return {};}}
-function saveATT(){
-  localStorage.setItem("aws_att_v5",JSON.stringify(ATT));
-}
+function saveATT(){localStorage.setItem("aws_att_v5",JSON.stringify(ATT));}
 function saveATTAndSync(date){
   saveATT();
   if(webUrl) syncAttendanceForDate(date);
 }
 var ATT=loadATT();
 
-// ── Interview data: [{id,studentId,date,time,interviewer,format,status,scores,notes,recommendation}] ──
+// ── Interviews: localStorage cache + Sheets push ──────────────────────────
 function loadINT(){try{return JSON.parse(localStorage.getItem("aws_int_v5")||"[]");}catch(e){return [];}}
 function saveINT(){
   localStorage.setItem("aws_int_v5",JSON.stringify(INT));
@@ -512,7 +644,7 @@ function saveINT(){
 }
 var INT=loadINT();
 
-// ── Fee data: [{id,studentId,type,label,amount,due,paid,paidDate,method,note,waived}] ──
+// ── Fees: localStorage cache + Sheets push ────────────────────────────────
 function loadFEE(){try{return JSON.parse(localStorage.getItem("aws_fee_v5")||"[]");}catch(e){return [];}}
 function saveFEE(){
   localStorage.setItem("aws_fee_v5",JSON.stringify(FEE));
@@ -520,13 +652,37 @@ function saveFEE(){
 }
 var FEE=loadFEE();
 
-// ── Communications log: [{id,studentId,date,type,direction,subject,body,staff,outcome}] ──
+// ── Communications: localStorage cache + Sheets push ─────────────────────
 function loadCOM(){try{return JSON.parse(localStorage.getItem("aws_com_v5")||"[]");}catch(e){return [];}}
 function saveCOM(){
   localStorage.setItem("aws_com_v5",JSON.stringify(COM));
   if(webUrl) syncComms();
 }
 var COM=loadCOM();
+
+// ── Staff: in-memory array (populated from Sheets on login) ───────────────
+var _STAFF=[];
+function loadStaff(){return _STAFF.slice();}
+function saveStaff(list){
+  _STAFF=list;
+  if(webUrl) gmsSheetRequest("saveStaff",{staff:_STAFF},null);
+}
+
+// ── Calendar: in-memory array (populated from Sheets on login) ────────────
+var _CAL=[];
+function loadCal(){return _CAL.slice();}
+function saveCal(events){
+  _CAL=events;
+  if(webUrl) gmsSheetRequest("saveCalendar",{events:_CAL},null);
+}
+
+// ── Report card remarks: in-memory map sid_term→text ─────────────────────
+var _REMARKS={};
+function getRemark(sid,term){return _REMARKS[sid+"_"+term]||"";}
+function saveRemark(sid,term,text){
+  _REMARKS[sid+"_"+term]=text;
+  if(webUrl) gmsSheetRequest("saveRemarks",{studentId:String(sid),term:term,remarks:text},null);
+}
 
 // ── GMS Helper Functions ──────────────────────────────────────
 function getGPAPoints(grade,type){
@@ -594,7 +750,11 @@ function getAPScholar(records){
   saveGMS();
 })();
 
-var students=[],nextId=100,view="dashboard",editId=null,webUrl=localStorage.getItem("aws_url")||"";
+var students=[],nextId=100,view="dashboard",editId=null;
+var webUrl=localStorage.getItem("aws_url")||"";
+var _sessionToken=localStorage.getItem("aws_token")||"";
+var _currentUser=null;
+try{_currentUser=JSON.parse(localStorage.getItem("aws_user")||"null");}catch(e){}
 var srch="",fSt="All",fGr="All",fCa="All",activeTab="personal";
 
 var SAMPLE=[
@@ -632,10 +792,17 @@ function sheetFetch(){
   var done=false;
   var c=new AbortController();
   var t=setTimeout(function(){if(!done){c.abort();}},12000);
-  return fetch(webUrl+"?action=getAll",{signal:c.signal,mode:"cors"})
+  var url=webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken);
+  return fetch(url,{signal:c.signal,mode:"cors"})
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
+      if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
+        // Session expired — go back to login
+        handleSessionExpired();return false;
+      }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
+        // Update current user info if returned
+        if(d.user)updateUserUI(d.user);
         // Students
         students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});});
         nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
@@ -651,7 +818,7 @@ function sheetFetch(){
         if(d.settings&&typeof d.settings==="object"&&Object.keys(d.settings).length){
           SETT=Object.assign(defS(),d.settings);saveS(SETT);
         }
-        // ── NEW: Attendance ──────────────────────────────────────
+        // Attendance
         if(Array.isArray(d.attendance)&&d.attendance.length){
           var attObj={};
           d.attendance.forEach(function(r){
@@ -660,7 +827,7 @@ function sheetFetch(){
           ATT=attObj;
           localStorage.setItem("aws_att_v5",JSON.stringify(ATT));
         }
-        // ── NEW: Interviews ──────────────────────────────────────
+        // Interviews
         if(Array.isArray(d.interviews)&&d.interviews.length){
           INT=d.interviews.map(function(inv){
             var scores=[];
@@ -673,7 +840,7 @@ function sheetFetch(){
           });
           localStorage.setItem("aws_int_v5",JSON.stringify(INT));
         }
-        // ── NEW: Fees ────────────────────────────────────────────
+        // Fees
         if(Array.isArray(d.fees)&&d.fees.length){
           FEE=d.fees.map(function(f){
             return Object.assign({},f,{
@@ -687,7 +854,7 @@ function sheetFetch(){
           });
           localStorage.setItem("aws_fee_v5",JSON.stringify(FEE));
         }
-        // ── NEW: Communications ──────────────────────────────────
+        // Communications
         if(Array.isArray(d.comms)&&d.comms.length){
           COM=d.comms.map(function(log){
             return Object.assign({},log,{
@@ -697,25 +864,34 @@ function sheetFetch(){
           });
           localStorage.setItem("aws_com_v5",JSON.stringify(COM));
         }
-        // ── Load TPMS data from Sheets ──────────────────────────────
+        // TPMS
         if(d.tpms){
-          if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length){
-            saveLessons(d.tpms.lessons);
-          }
-          if(Array.isArray(d.tpms.units)&&d.tpms.units.length){
-            saveUnits(d.tpms.units);
-          }
+          if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length){saveLessons(d.tpms.lessons);}
+          if(Array.isArray(d.tpms.units)&&d.tpms.units.length){saveUnits(d.tpms.units);}
           if(Array.isArray(d.tpms.events)&&d.tpms.events.length){
-            // Merge user events with seeded academic calendar
             var userEvents=d.tpms.events;
             var existingEvents=loadTpmsEvents();
             var schoolEvents=existingEvents.filter(function(e){return e.layer==="school";});
-            var merged=schoolEvents.concat(userEvents);
-            saveTpmsEvents(merged);
+            saveTpmsEvents(schoolEvents.concat(userEvents));
           }
-          if(Array.isArray(d.tpms.pd)&&d.tpms.pd.length){
-            savePdRecords(d.tpms.pd);
-          }
+          if(Array.isArray(d.tpms.pd)&&d.tpms.pd.length){savePdRecords(d.tpms.pd);}
+        }
+        // Staff
+        if(Array.isArray(d.staff)){
+          _STAFF=d.staff.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id});});
+        }
+        // Catalog
+        if(Array.isArray(d.catalog)&&d.catalog.length){
+          localStorage.setItem("aws_catalog_v5",JSON.stringify(d.catalog));
+        }
+        // Report card remarks
+        if(Array.isArray(d.remarks)){
+          _REMARKS={};
+          d.remarks.forEach(function(r){if(r.studentId&&r.term)_REMARKS[r.studentId+"_"+r.term]=r.remarks||"";});
+        }
+        // Calendar
+        if(Array.isArray(d.calendar)){
+          _CAL=d.calendar.map(function(e){return Object.assign({},e,{id:e.id||("cal"+Date.now()+Math.random())});});
         }
         saveLocal();setLive();return true;
       }return false;
@@ -724,26 +900,31 @@ function sheetFetch(){
 function sheetPush(student,action){
   if(!webUrl)return;
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
-  var payload=encodeURIComponent(JSON.stringify({student:s}));
+  var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
   var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
-  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload,{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
 }
 function sheetDel(id){
   if(!webUrl)return;
-  var payload=encodeURIComponent(JSON.stringify({id:String(id)}));
+  var payload=encodeURIComponent(JSON.stringify({id:String(id),token:_sessionToken}));
   var c=new AbortController();setTimeout(function(){c.abort();},8000);
-  fetch(webUrl+"?action=delete&payload="+payload,{signal:c.signal}).catch(function(){});
+  fetch(webUrl+"?action=delete&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).catch(function(){});
 }
 
 // ── GMS SYNC FUNCTIONS ────────────────────────────────────────
 
 function gmsSheetRequest(action, payload, onOk) {
   if(!webUrl) return;
+  payload.token = _sessionToken;
   var body = encodeURIComponent(JSON.stringify(payload));
   var c = new AbortController(), t = setTimeout(function(){c.abort();}, 12000);
-  fetch(webUrl+"?action="+action+"&payload="+body, {signal:c.signal})
+  fetch(webUrl+"?action="+action+"&payload="+body+"&token="+encodeURIComponent(_sessionToken), {signal:c.signal})
     .then(function(r){clearTimeout(t); return r.json();})
-    .then(function(d){if(d.status==="ok"){setLive();if(onOk)onOk(d);}else{console.warn("GMS sync error:",d.message);}})
+    .then(function(d){
+      if(d.status==="ok"){setLive();if(onOk)onOk(d);}
+      else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
+      else{console.warn("GMS sync error:",d.message);}
+    })
     .catch(function(e){console.warn("GMS sync failed:",e);});
 }
 
@@ -838,10 +1019,10 @@ function syncTPMS() {
 function nav(v){
   view=v;
   document.querySelectorAll(".ni").forEach(function(b){b.classList.toggle("active",b.dataset.v===v);});
-  var titles={dashboard:"Dashboard",applications:"Applications",enrolled:"Enrolled Students",waitlist:"Waitlist",cohorts:"Cohorts",documents:"Documents",grades:"Grades",analytics:"Analytics",notifications:"Alerts & Notifications",settings:"Settings"};
+  var titles={dashboard:"Dashboard",applications:"Applications",enrolled:"Enrolled Students",waitlist:"Waitlist",cohorts:"Cohorts",documents:"Documents",grades:"Grades",analytics:"Analytics",notifications:"Alerts & Notifications",settings:"Settings",users:"User Management",staff:"Staff Directory",attendance:"Attendance",interviews:"Interviews",fees:"Fees & Tuition",comms:"Communications",reportcards:"Report Cards",calendar:"Calendar",tpms:"Teaching & Planning"};
   document.getElementById("pg-title").textContent=titles[v]||v;
   document.getElementById("new-btn").textContent=v==="cohorts"?"+ Add Cohort":"+ New Application";
-  document.getElementById("new-btn").style.display=["dashboard","documents","analytics","notifications","settings"].includes(v)?"none":"flex";
+  document.getElementById("new-btn").style.display=["dashboard","documents","analytics","notifications","settings","users","staff","reportcards","calendar","tpms"].includes(v)?"none":"flex";
   document.getElementById("refresh-btn").style.display=webUrl?"flex":"none";
   // Show GMS sync button only on grades view
   var gmsBtn=document.getElementById("gms-sync-btn");
@@ -895,6 +1076,7 @@ function render(){
   else if(view==="notifications")rNotifs(c);
   else if(view==="settings")rSettings(c);
   else if(view==="tpms")rTPMS(c);
+  else if(view==="users")rUsers(c);
 }
 
 function sc(label,val,color){return'<div class="card sc-card"><div class="sl">'+esc(label)+'</div><div style="font-size:26px;font-weight:800;color:'+color+'">'+val+'</div></div>';}
@@ -2345,6 +2527,11 @@ function rGmsGraduation(body,s){
 
   var html='<div style="display:flex;flex-direction:column;gap:14px">';
 
+  // ── Print / PDF toolbar ───────────────────────────────────────
+  html+='<div style="display:flex;justify-content:flex-end;gap:8px">';
+  html+='<button id="grad-print-btn" style="display:flex;align-items:center;gap:7px;padding:8px 18px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(26,54,94,.2)">🖨️ Print / Save PDF</button>';
+  html+='</div>';
+
   // ── Hero status card ──────────────────────────────────────────
   var heroColor=allMet?"linear-gradient(135deg,#E8FBF0,#D5F5E3)":
                 onPace?"linear-gradient(135deg,#EEF3FF,#DDE6FF)":
@@ -2572,6 +2759,303 @@ function rGmsGraduation(body,s){
 
   html+='</div>';
   body.innerHTML=html;
+
+  document.getElementById("grad-print-btn").addEventListener("click",function(){
+    printGraduationAudit(s,courses,trans,credits,{
+      totalEarned:totalEarned,pctDone:pctDone,allMet:allMet,onPace:onPace,
+      wgpa:wgpa,ugpa:ugpa,dist:dist,distinctions:distinctions,
+      totalPending:totalPending,credRemaining:credRemaining,
+      deTotal:deTotal,deCollegeTotal:deCollegeTotal,
+      failedCourses:failedCourses,mandatoryAlerts:mandatoryAlerts,
+      expectedByNow:expectedByNow,typeCounts:typeCounts
+    });
+  });
+}
+
+// ─── GRADUATION AUDIT — PRINT / PDF ───────────────────────────────────────
+function printGraduationAudit(s,courses,trans,credits,d){
+  var TOTAL_REQ=24;
+  var issueDate=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+  var acYear=SETT.academicYear||"2024–2025";
+  function hesc(str){return String(str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+  // ── subject area course table rows ────────────────────────────
+  function courseRows(area){
+    var areaLabel=area||"Electives";
+    var list=courses.filter(function(c){
+      return (c.area||"Electives")===area&&c.grade!=="F";
+    });
+    var tRows=trans.filter(function(t){
+      return (t.area||"Electives")===area;
+    });
+    var rows="";
+    list.forEach(function(c){
+      var earned=parseFloat(c.creditsEarned)||0;
+      var grade=c.grade||"IP";
+      rows+='<tr>'
+        +'<td>'+hesc(c.title||"—")+'</td>'
+        +'<td style="text-align:center">'+hesc(c.year||"—")+'</td>'
+        +'<td style="text-align:center">'+hesc(c.type||"—")+'</td>'
+        +'<td style="text-align:center;font-weight:700">'+hesc(grade)+'</td>'
+        +'<td style="text-align:center;font-weight:700">'+earned+'</td>'
+        +'</tr>';
+    });
+    tRows.forEach(function(t){
+      var earned=parseFloat(t.creditsAwarded)||0;
+      rows+='<tr style="background:#F0F9FF">'
+        +'<td>'+hesc(t.origTitle||t.title||"Transfer Credit")+'<span style="font-size:9px;color:#0369A1;margin-left:4px">[Transfer — '+hesc(t.sourceSchool||"External")+'</span></td>'
+        +'<td style="text-align:center">'+hesc(t.year||"—")+'</td>'
+        +'<td style="text-align:center">TR</td>'
+        +'<td style="text-align:center;font-weight:700">'+hesc(t.origGrade||"—")+'</td>'
+        +'<td style="text-align:center;font-weight:700">'+earned+'</td>'
+        +'</tr>';
+    });
+    return rows;
+  }
+
+  // ── requirement rows ──────────────────────────────────────────
+  var reqRows="";
+  GRAD_REQS.forEach(function(req){
+    var earned=Math.round((credits[req.key]||0)*10)/10;
+    var pending=Math.round((credits[req.key+"_pending"]||0)*10)/10;
+    var met=earned>=req.required;
+    var statusText=met?"✓ Met":(pending>0?"In Progress ("+(earned+pending).toFixed(1)+" if all pass)":((req.required-earned).toFixed(1)+" cr needed"));
+    var statusColor=met?"#0E6B3B":pending>0?"#92400E":"#C0392B";
+    reqRows+='<tr>'
+      +'<td>'+hesc(req.icon+" "+req.label)+'</td>'
+      +'<td style="text-align:center">'+req.required+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+earned+'</td>'
+      +(pending>0?'<td style="text-align:center;color:#92400E;font-weight:600">'+pending+' (IP)</td>':'<td style="text-align:center;color:#7A92B0">—</td>')
+      +'<td style="text-align:center;font-weight:800;color:'+statusColor+'">'+statusText+'</td>'
+      +'</tr>';
+  });
+
+  // ── distinctions earned ───────────────────────────────────────
+  var distEarned=d.distinctions.filter(function(x){return x.met;});
+
+  // ── course detail sections by area ───────────────────────────
+  var areaSections="";
+  GRAD_REQS.forEach(function(req){
+    var rows=courseRows(req.area);
+    if(!rows)return;
+    areaSections+='<div class="section-break">'
+      +'<h3 style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#1A365E;border-bottom:1.5px solid #1A365E;padding-bottom:4px;margin:0 0 8px">'+hesc(req.icon+" "+req.label)+'</h3>'
+      +'<table><thead><tr><th>Course Title</th><th>Year</th><th>Type</th><th>Grade</th><th>Credits</th></tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>'
+      +'</div>';
+  });
+
+  // ── counselor note lines ──────────────────────────────────────
+  var counselorNotes=s.counselorNotes?('<p style="font-size:11px;color:#3D5475;background:#F7F9FC;border-left:3px solid #1A365E;padding:8px 12px;margin:0 0 14px;border-radius:0 6px 6px 0"><strong>Counselor Notes:</strong> '+hesc(s.counselorNotes)+'</p>'):"";
+
+  var statusBg=d.allMet?"#E8FBF0":d.onPace?"#EEF3FF":"#FFF0F1";
+  var statusBorder=d.allMet?"#1DBD6A":d.onPace?"#1A365E":"#D61F31";
+  var statusLabel=d.allMet?"✓ All Graduation Requirements Met":d.onPace?"On Track to Graduate":"Behind Pace — Counselor Review Needed";
+
+  var doc='<!DOCTYPE html><html lang="en"><head>'
+    +'<meta charset="UTF-8">'
+    +'<title>Graduation Audit — '+hesc(s.firstName+" "+s.lastName)+'</title>'
+    +'<style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:"Georgia",serif;font-size:12px;color:#1A365E;background:#fff;max-width:780px;margin:0 auto;padding:32px 36px}'
+    +'h1{font-size:20px;font-weight:900;letter-spacing:.5px}'
+    +'h2{font-size:13px;font-weight:800;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;color:#1A365E}'
+    +'h3{font-size:11px}'
+    +'.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1A365E;padding-bottom:14px;margin-bottom:18px}'
+    +'.school-block{}'
+    +'.school-name{font-size:18px;font-weight:900;letter-spacing:1px;color:#1A365E}'
+    +'.school-sub{font-size:10px;letter-spacing:2px;color:#7A92B0;margin-top:3px}'
+    +'.doc-title{font-size:11px;font-weight:700;color:#7A92B0;text-align:right;letter-spacing:1px}'
+    +'.doc-meta{font-size:11px;color:#3D5475;text-align:right;margin-top:4px}'
+    +'.confidential{font-size:9px;font-weight:700;color:#D61F31;text-align:right;margin-top:2px}'
+    +'.student-bar{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;background:#F7F9FC;border:1px solid #E4EAF2;border-radius:6px;padding:12px 16px;margin-bottom:16px}'
+    +'.sb-item .label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#7A92B0}'
+    +'.sb-item .value{font-size:12px;font-weight:700;color:#1A365E;margin-top:2px}'
+    +'.status-banner{padding:12px 16px;border-radius:6px;border-left:4px solid '+statusBorder+';background:'+statusBg+';margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}'
+    +'.status-label{font-size:13px;font-weight:800;color:#1A365E}'
+    +'.status-sub{font-size:11px;color:#3D5475;margin-top:2px}'
+    +'.progress-bar{height:8px;background:#E4EAF2;border-radius:4px;margin-top:8px;overflow:hidden}'
+    +'.progress-fill{height:100%;background:'+(d.allMet?"#1DBD6A":d.onPace?"#1A365E":"#D61F31")+';border-radius:4px}'
+    +'.gpa-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px}'
+    +'.gpa-box{border:1.5px solid #E4EAF2;border-radius:6px;padding:10px 12px;text-align:center}'
+    +'.gpa-box .gpa-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#7A92B0}'
+    +'.gpa-box .gpa-val{font-size:22px;font-weight:900;margin-top:4px}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px}'
+    +'th{background:#1A365E;color:#fff;padding:6px 9px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}'
+    +'td{padding:6px 9px;border-bottom:1px solid #E4EAF2}'
+    +'tr:last-child td{border-bottom:none}'
+    +'tr:nth-child(even) td{background:#F7F9FC}'
+    +'.req-table tr td:first-child{font-weight:600}'
+    +'.req-met td{background:#F0FFF4!important}'
+    +'.req-unmet td{background:#FFF8F8!important}'
+    +'.section-break{margin-bottom:18px}'
+    +'.section-block{margin-bottom:20px}'
+    +'.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin:2px}'
+    +'.dist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}'
+    +'.dist-card{padding:9px 12px;border-radius:5px;border:1.5px solid #E4EAF2;font-size:11px}'
+    +'.dist-card.met{border-color:#1DBD6A;background:#F0FFF4}'
+    +'.dist-card.met-gold{border-color:#FAC600;background:#FFFBEA}'
+    +'.dist-name{font-weight:800}'
+    +'.dist-desc{font-size:10px;color:#7A92B0;margin-top:1px}'
+    +'.dist-status{font-size:10px;font-weight:800;margin-top:4px}'
+    +'.alert-box{padding:10px 14px;border-radius:5px;margin-bottom:12px;font-size:11px}'
+    +'.alert-red{background:#FFF0F1;border-left:3px solid #D61F31}'
+    +'.alert-amber{background:#FFFBEA;border-left:3px solid #D97706}'
+    +'.sig-block{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:28px;padding-top:16px;border-top:2px solid #E4EAF2}'
+    +'.sig-line{border-bottom:1px solid #1A365E;height:32px;margin-bottom:5px}'
+    +'.sig-label{font-size:10px;color:#7A92B0}'
+    +'.footer{text-align:center;font-size:9px;color:#7A92B0;margin-top:28px;padding-top:10px;border-top:1px solid #E4EAF2}'
+    +'@media print{'
+    +'  body{padding:18px 22px;font-size:11px}'
+    +'  .no-print{display:none!important}'
+    +'  .section-break{page-break-inside:avoid}'
+    +'  .sig-block{page-break-inside:avoid}'
+    +'  h2{page-break-after:avoid}'
+    +'  @page{size:A4;margin:18mm 16mm}'
+    +'}'
+    +'</style>'
+    +'</head><body>'
+
+    // ── Toolbar (screen only) ──────────────────────────────────
+    +'<div class="no-print" style="display:flex;gap:10px;margin-bottom:20px">'
+    +'<button onclick="window.print()" style="padding:9px 22px;background:#1A365E;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Print / Save as PDF</button>'
+    +'<button onclick="window.close()" style="padding:9px 18px;background:#F5F7FA;color:#3D5475;border:1.5px solid #E4EAF2;border-radius:7px;font-size:13px;cursor:pointer">✕ Close</button>'
+    +'<span style="margin-left:auto;font-size:11px;color:#7A92B0;align-self:center">Tip: In print dialog → choose <strong>Save as PDF</strong>, enable <em>Background graphics</em> for best results.</span>'
+    +'</div>'
+
+    // ── Letterhead ─────────────────────────────────────────────
+    +'<div class="header">'
+    +'<div class="school-block">'
+    +'<div class="school-name">AMERICAN WORLD SCHOOL</div>'
+    +'<div class="school-sub">GRADUATION AUDIT — OFFICIAL DOCUMENT</div>'
+    +'<div style="font-size:10px;color:#3D5475;margin-top:6px">24-Credit High School Diploma Program · '+hesc(acYear)+'</div>'
+    +'</div>'
+    +'<div>'
+    +'<div class="doc-title">GRADUATION AUDIT</div>'
+    +'<div class="doc-meta">Issue Date: '+issueDate+'</div>'
+    +'<div class="doc-meta">Academic Year: '+hesc(acYear)+'</div>'
+    +'<div class="confidential">CONFIDENTIAL — FOR FAMILY USE</div>'
+    +'</div>'
+    +'</div>'
+
+    // ── Student info bar ───────────────────────────────────────
+    +'<div class="student-bar">'
+    +'<div class="sb-item"><div class="label">Student Name</div><div class="value">'+hesc(s.firstName+" "+s.lastName)+'</div></div>'
+    +'<div class="sb-item"><div class="label">Student ID</div><div class="value" style="font-family:monospace">'+hesc(s.studentId||"—")+'</div></div>'
+    +'<div class="sb-item"><div class="label">Grade Level</div><div class="value">'+hesc(s.grade||"—")+'</div></div>'
+    +'<div class="sb-item"><div class="label">Campus</div><div class="value">'+hesc(s.campus||"Main Campus")+'</div></div>'
+    +'</div>'
+
+    // ── Status banner ──────────────────────────────────────────
+    +'<div class="status-banner">'
+    +'<div>'
+    +'<div class="status-label">'+statusLabel+'</div>'
+    +'<div class="status-sub">'+d.totalEarned+' of '+TOTAL_REQ+' credits earned · '+d.pctDone+'% complete'+(d.totalPending>0?' · '+d.totalPending+' cr in progress':'')+'</div>'
+    +'<div class="progress-bar"><div class="progress-fill" style="width:'+d.pctDone+'%"></div></div>'
+    +'</div>'
+    +(d.dist?'<div style="text-align:center;background:'+d.dist.col+';color:#fff;border-radius:6px;padding:7px 14px;margin-left:16px"><div style="font-size:9px;font-weight:700;opacity:.8">DISTINCTION</div><div style="font-size:13px;font-weight:800">'+hesc(d.dist.label)+'</div></div>':"")
+    +'</div>'
+
+    // ── GPA summary ────────────────────────────────────────────
+    +'<div class="gpa-row">'
+    +'<div class="gpa-box"><div class="gpa-label">Unweighted GPA</div><div class="gpa-val" style="color:'+(d.ugpa>=3.5?"#1DBD6A":d.ugpa>=2.5?"#D97706":"#D61F31")+'">'+d.ugpa.toFixed(2)+'</div></div>'
+    +'<div class="gpa-box"><div class="gpa-label">Weighted GPA</div><div class="gpa-val" style="color:#1A365E">'+d.wgpa.toFixed(2)+'</div></div>'
+    +'<div class="gpa-box"><div class="gpa-label">Credits Earned</div><div class="gpa-val" style="color:#1A365E">'+d.totalEarned+'<span style="font-size:13px;color:#7A92B0"> / '+TOTAL_REQ+'</span></div></div>'
+    +'<div class="gpa-box"><div class="gpa-label">Credits Remaining</div><div class="gpa-val" style="color:'+(d.credRemaining>0?"#D61F31":"#1DBD6A")+'">'+d.credRemaining.toFixed(1)+'</div></div>'
+    +'</div>'
+
+    // ── Alerts ─────────────────────────────────────────────────
+    +(d.failedCourses.length?'<div class="alert-box alert-red"><strong>❌ Failed Courses — No Credit Awarded, Must Repeat:</strong> '+d.failedCourses.map(function(c){return hesc(c.title);}).join(", ")+'</div>':"")
+    +(d.mandatoryAlerts.length?'<div class="alert-box alert-amber"><strong>⚠️ Required Courses Not Yet Completed:</strong> '+d.mandatoryAlerts.map(function(a){return hesc(a.area+": "+a.course);}).join(" · ")+'</div>':"")
+    +counselorNotes
+
+    // ── Credit requirements table ──────────────────────────────
+    +'<div class="section-block">'
+    +'<h2>Credit Requirements Checklist</h2>'
+    +'<table class="req-table"><thead><tr><th>Subject Area</th><th style="text-align:center">Required</th><th style="text-align:center">Earned</th><th style="text-align:center">In Progress</th><th style="text-align:center">Status</th></tr></thead>'
+    +'<tbody>'+reqRows
+    +'<tr style="background:#1A365E"><td style="color:#fff;font-weight:800">TOTAL — AWS High School Diploma</td>'
+    +'<td style="text-align:center;color:#fff;font-weight:800">'+TOTAL_REQ+'</td>'
+    +'<td style="text-align:center;color:#fff;font-weight:900;font-size:13px">'+d.totalEarned+'</td>'
+    +(d.totalPending>0?'<td style="text-align:center;color:rgba(255,255,255,.75)">'+d.totalPending+'</td>':'<td></td>')
+    +'<td style="text-align:center;color:#fff;font-weight:800">'+(d.allMet?"✓ COMPLETE":"⚠ INCOMPLETE")+'</td>'
+    +'</tr>'
+    +'</tbody></table>'
+    +'</div>'
+
+    // ── Course detail by subject area ──────────────────────────
+    +'<div class="section-block">'
+    +'<h2>Course History by Subject Area</h2>'
+    +areaSections
+    +'</div>'
+
+    // ── Academic distinctions ──────────────────────────────────
+    +'<div class="section-block">'
+    +'<h2>Academic Distinctions</h2>'
+    +'<div class="dist-grid">'
+    +d.distinctions.map(function(x){
+      var cls=x.met?(x.gold?"met-gold":"met"):"";
+      var statusCol=x.met?(x.gold?"#7A5100":x.blue?"#0369A1":"#0E6B3B"):"#C0C0C0";
+      return'<div class="dist-card '+cls+'">'
+        +'<div class="dist-name">'+hesc(x.name)+'</div>'
+        +'<div class="dist-desc">'+hesc(x.desc)+'</div>'
+        +'<div class="dist-status" style="color:'+statusCol+'">'+(x.met?"✓ Qualified":"Not yet met")+'</div>'
+        +'</div>';
+    }).join("")
+    +'</div>'
+    +'</div>'
+
+    // ── DE / Early College ─────────────────────────────────────
+    +(d.deTotal>0?
+      '<div class="section-block">'
+      +'<h2>Early College Program — Dual Enrollment</h2>'
+      +'<table><thead><tr><th>Course</th><th>Subject Area</th><th style="text-align:center">HS Credits</th><th style="text-align:center">College Credits</th></tr></thead><tbody>'
+      +courses.filter(function(c){return c.type==="DE"||c.type==="EC";}).concat(
+        trans.filter(function(t){return t.type==="DE"||t.type==="EC";}).map(function(t){
+          return{title:t.origTitle||t.title||"Transfer",area:t.area||"Electives",creditsEarned:t.creditsAwarded};
+        })
+      ).map(function(c){
+        var hs=parseFloat(c.creditsEarned)||0;
+        var col=deHsToCollege(hs,c.area||"Electives");
+        return'<tr><td>'+hesc(c.title)+'</td><td>'+hesc(c.area||"Electives")+'</td>'
+          +'<td style="text-align:center;font-weight:700">'+hs+'</td>'
+          +'<td style="text-align:center;font-weight:700;color:#0369A1">'+col+'</td></tr>';
+      }).join("")
+      +'<tr style="background:#EFF8FF"><td style="font-weight:800">TOTAL</td><td></td>'
+      +'<td style="text-align:center;font-weight:900">'+d.deTotal+'</td>'
+      +'<td style="text-align:center;font-weight:900;color:#0369A1">'+d.deCollegeTotal+'</td></tr>'
+      +'</tbody></table>'
+      +'<p style="font-size:10px;color:#0369A1;margin-top:4px">Associate Degree Track: '+d.deCollegeTotal+' of 60 college credits earned ('+Math.round(d.deCollegeTotal/60*100)+'%)</p>'
+      +'</div>'
+    :"")
+
+    // ── Signature block ────────────────────────────────────────
+    +'<div class="sig-block">'
+    +'<div>'
+    +'<div class="sig-line"></div>'
+    +'<div class="sig-label">School Counselor / Academic Advisor</div>'
+    +'<div class="sig-label" style="margin-top:3px">Date: ___________________</div>'
+    +'</div>'
+    +'<div>'
+    +'<div class="sig-line"></div>'
+    +'<div class="sig-label">Parent / Guardian Signature</div>'
+    +'<div class="sig-label" style="margin-top:3px">Date: ___________________</div>'
+    +'</div>'
+    +'</div>'
+
+    // ── Footer ─────────────────────────────────────────────────
+    +'<div class="footer">'
+    +'American World School · 24-Credit Graduation Program · '+hesc(acYear)+' · Generated '+issueDate
+    +'<br>This document is for informational purposes. Contact your academic counselor for official records.'
+    +'</div>'
+
+    +'</body></html>';
+
+  var win=window.open("","_blank","width=860,height=950,menubar=yes,toolbar=yes,scrollbars=yes");
+  if(!win){toast("Pop-up blocked — please allow pop-ups for this page","err");return;}
+  win.document.write(doc);
+  win.document.close();
+  win.focus();
 }
 
 // ─── TRANSFER CREDITS ─────────────────────────────────────────────────────
@@ -2936,11 +3420,11 @@ function rGmsCatalog(body){
   body.innerHTML=html;
   document.getElementById("add-cat-btn").addEventListener("click",function(){openCatalogModal();});
   document.getElementById("reset-cat-btn").addEventListener("click",function(){
-    if(confirm("Reset catalog to defaults? This cannot be undone.")){localStorage.removeItem("aws_catalog_v5");toast("Catalog reset to defaults","ok");render();}
+    if(confirm("Reset catalog to defaults? This cannot be undone.")){localStorage.removeItem("aws_catalog_v5");if(webUrl)gmsSheetRequest("saveCatalog",{catalog:COURSE_CATALOG},null);toast("Catalog reset to defaults","ok");render();}
   });
   body.querySelectorAll(".cat-del").forEach(function(b){b.addEventListener("click",function(){
     if(!confirm("Remove this course from catalog?"))return;
-    var cat=loadCatalog();cat.splice(parseInt(b.dataset.idx),1);localStorage.setItem("aws_catalog_v5",JSON.stringify(cat));toast("Course removed","ok");render();
+    var cat=loadCatalog();cat.splice(parseInt(b.dataset.idx),1);localStorage.setItem("aws_catalog_v5",JSON.stringify(cat));if(webUrl)gmsSheetRequest("saveCatalog",{catalog:cat},null);toast("Course removed","ok");render();
   });});
 }
 
@@ -2968,7 +3452,7 @@ function openCatalogModal(){
     if(!title){toast("Title required","err");return;}
     var cat=loadCatalog();
     cat.push({code:document.getElementById("nc-code").value.trim(),title:title,type:document.getElementById("nc-type").value,area:document.getElementById("nc-ag").value,credits:parseFloat(document.getElementById("nc-credits").value)||1,grade:document.getElementById("nc-grade").value});
-    localStorage.setItem("aws_catalog_v5",JSON.stringify(cat));ov.remove();toast("Course added to catalog ✓","ok");render();
+    localStorage.setItem("aws_catalog_v5",JSON.stringify(cat));if(webUrl)gmsSheetRequest("saveCatalog",{catalog:cat},null);ov.remove();toast("Course added to catalog ✓","ok");render();
   });
 }
 
@@ -3244,6 +3728,123 @@ function rAnalytics(c){
   document.getElementById("exp-enr").addEventListener("click",function(){exportCSV(students.filter(function(s){return s.status==="Enrolled";}),"AWS_Enrolled.csv");});
   document.getElementById("exp-pend").addEventListener("click",function(){exportCSV(students.filter(function(s){return["Applied","Under Review"].includes(s.status);}),"AWS_Pending.csv");});
   document.getElementById("exp-wl").addEventListener("click",function(){exportCSV(students.filter(function(s){return s.status==="Waitlisted";}),"AWS_Waitlist.csv");});
+}
+
+// ════════════════════════════════════════════════════════════════
+// USER MANAGEMENT (admin only)
+// ════════════════════════════════════════════════════════════════
+function rUsers(c){
+  if(!_currentUser||_currentUser.role!=="admin"){
+    c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">⛔ Admin access required.</div>';return;
+  }
+  if(!webUrl){c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">User management requires Google Sheets connection.</div>';return;}
+
+  // Load users from Sheets
+  var token=encodeURIComponent(_sessionToken);
+  fetch(webUrl+"?action=getUsers&token="+token,{mode:"cors"})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.status!=="ok"){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Error: '+esc(d.message)+'</div>';return;}
+      var users=d.users||[];
+      var html='<div style="display:flex;flex-direction:column;gap:14px">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center">';
+      html+='<div><div style="font-size:15px;font-weight:800;color:#1A365E">👤 User Management</div><div style="font-size:12px;color:#7A92B0;margin-top:2px">Manage team access · '+users.length+' account'+(users.length!==1?"s":"")+'</div></div>';
+      html+='<button id="add-user-btn" style="padding:8px 18px;background:#D61F31;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">+ Add User</button>';
+      html+='</div>';
+      html+='<div class="card" style="overflow:hidden">';
+      html+='<table class="tbl"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Last Login</th><th></th></tr></thead><tbody>';
+      users.forEach(function(u,i){
+        var isMe=u.username===(_currentUser&&_currentUser.username);
+        var active=u.active!=="false";
+        var role=u.role||"staff";
+        var roleBg=role==="admin"?"#EEF3FF":"#F0FFF4";var roleCol=role==="admin"?"#1A365E":"#0E6B3B";
+        var lastLogin=u.lastlogin?new Date(u.lastlogin).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Never";
+        html+='<tr>'
+          +'<td><span style="font-family:monospace;font-weight:700;color:#1A365E">'+esc(u.username)+'</span>'+(isMe?' <span style="font-size:9px;background:#FAC600;color:#7A5100;padding:1px 5px;border-radius:4px;font-weight:700">YOU</span>':'')+'</td>'
+          +'<td style="font-weight:600">'+esc(u.name||"—")+'</td>'
+          +'<td><span style="background:'+roleBg+';color:'+roleCol+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase">'+esc(role)+'</span></td>'
+          +'<td style="color:#7A92B0;font-size:11px">'+esc(u.email||"—")+'</td>'
+          +'<td><span style="font-size:11px;font-weight:700;color:'+(active?"#1DBD6A":"#D61F31")+'">'+(active?"✓ Active":"✕ Inactive")+'</span></td>'
+          +'<td style="font-size:11px;color:#7A92B0">'+lastLogin+'</td>'
+          +'<td style="text-align:right">'
+          +(isMe?'<span style="font-size:11px;color:#7A92B0">—</span>':
+            '<button class="edit-user-btn sedit" data-idx="'+i+'" style="margin-right:5px">Edit</button>'
+            +'<button class="del-user-btn sedit" data-username="'+esc(u.username)+'" style="color:#D61F31;border-color:#F5C2C7">Remove</button>')
+          +'</td></tr>';
+      });
+      html+='</tbody></table></div></div>';
+      c.innerHTML=html;
+
+      // Add user button
+      document.getElementById("add-user-btn").addEventListener("click",function(){openUserModal(null,null);});
+      c.querySelectorAll(".edit-user-btn").forEach(function(b){
+        b.addEventListener("click",function(e){e.stopPropagation();openUserModal(users[parseInt(b.dataset.idx)],b.dataset.idx);});
+      });
+      c.querySelectorAll(".del-user-btn").forEach(function(b){
+        b.addEventListener("click",function(e){
+          e.stopPropagation();
+          if(!confirm("Remove user '"+b.dataset.username+"'? They will no longer be able to sign in."))return;
+          var payload=encodeURIComponent(JSON.stringify({username:b.dataset.username,token:_sessionToken}));
+          fetch(webUrl+"?action=deleteUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+            .then(function(r){return r.json();})
+            .then(function(d){if(d.status==="ok"){toast("User removed","ok");rUsers(c);}else toast(d.message||"Error","err");});
+        });
+      });
+    })
+    .catch(function(e){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Could not load users. Check connection.</div>';});
+}
+
+function openUserModal(user,idx){
+  var isNew=!user;
+  var ov=document.createElement("div");
+  ov.style.cssText="display:flex;position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:300;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)";
+  ov.innerHTML='<div style="background:#fff;border-radius:18px;width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
+    +'<div style="background:linear-gradient(135deg,#0F2240,#1A365E);padding:18px 22px;border-radius:18px 18px 0 0;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:15px;font-weight:700;color:#fff">'+(isNew?"Add New User":"Edit User")+'</div>'
+    +'<button id="um-close" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:7px;font-size:14px;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div style="padding:20px 22px;display:flex;flex-direction:column;gap:12px">'
+    +'<div class="fg c2">'
+    +'<div class="fl"><label class="flb">Username *</label><input class="fi" id="um-user" value="'+esc(user?user.username:"")+'" placeholder="e.g. jsmith" '+(isNew?"":"readonly style=\"background:#F7F9FC\"")+'/></div>'
+    +'<div class="fl"><label class="flb">Full Name</label><input class="fi" id="um-name" value="'+esc(user?user.name:"")+'\" placeholder=\"e.g. Jane Smith\"/></div>'
+    +'</div>'
+    +'<div class="fg c2">'
+    +'<div class="fl"><label class="flb">Password '+(isNew?"*":"(leave blank to keep)")+'</label><input class="fi" id="um-pass" type="password" placeholder="'+(isNew?"Set password":"Leave blank to keep")+'"/></div>'
+    +'<div class="fl"><label class="flb">Role</label><select class="fsel2" id="um-role"><option value="staff" '+((!user||user.role==="staff")?"selected":"")+'>Staff</option><option value="admin" '+(user&&user.role==="admin"?"selected":"")+'>Admin</option></select></div>'
+    +'</div>'
+    +'<div class="fl"><label class="flb">Email</label><input class="fi" id="um-email" value="'+esc(user?user.email:"")+'\" placeholder=\"user@school.edu\"/></div>'
+    +(isNew?"":
+      '<div class="fl"><label class="flb">Account Status</label><select class="fsel2" id="um-active"><option value="true" '+(user.active!=="false"?"selected":"")+'>Active</option><option value="false" '+(user.active==="false"?"selected":"")+'>Inactive (cannot log in)</option></select></div>'
+    )
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #E4EAF2">'
+    +'<button class="btn-c" id="um-cancel">Cancel</button>'
+    +'<button class="btn-s" id="um-save">'+(isNew?"Add User":"Save Changes")+'</button>'
+    +'</div></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector("#um-close").addEventListener("click",function(){ov.remove();});
+  ov.querySelector("#um-cancel").addEventListener("click",function(){ov.remove();});
+  ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
+  ov.querySelector("#um-save").addEventListener("click",function(){
+    var uData={
+      username:ov.querySelector("#um-user").value.trim().toLowerCase(),
+      name:ov.querySelector("#um-name").value.trim(),
+      role:ov.querySelector("#um-role").value,
+      email:ov.querySelector("#um-email").value.trim()
+    };
+    var pass=ov.querySelector("#um-pass").value;
+    if(pass) uData.password=pass;
+    var actEl=ov.querySelector("#um-active");
+    if(actEl) uData.active=actEl.value;
+    if(!uData.username){toast("Username is required","err");return;}
+    if(isNew&&!pass){toast("Password is required for new users","err");return;}
+    var payload=encodeURIComponent(JSON.stringify({user:uData,token:_sessionToken}));
+    fetch(webUrl+"?action=saveUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status==="ok"){toast((isNew?"User added":"Changes saved")+" ✓","ok");ov.remove();rUsers(document.getElementById("content"));}
+        else toast(d.message||"Error","err");
+      });
+  });
 }
 
 function rNotifs(c){
@@ -4052,50 +4653,150 @@ function exportRecord(s){
   var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/plain"}));a.download=s.firstName+"_"+s.lastName+"_AWS_Record.txt";a.click();toast("Record exported","ok");
 }
 
+// ════════════════════════════════════════════════════════════════
+// LOGIN / SESSION MANAGEMENT
+// ════════════════════════════════════════════════════════════════
 function launchApp(){
-  document.getElementById("setup").style.display="none";
+  document.getElementById("login").style.display="none";
   document.getElementById("app").classList.add("on");
-  document.getElementById("sb-yr").textContent=SETT.academicYear+" · Admissions SIS";
+  document.getElementById("sb-yr").textContent=(SETT.academicYear||"2024–2025")+" · Admissions SIS";
+  if(_currentUser) updateUserUI(_currentUser);
   render();
 }
 
-document.getElementById("conn-btn").addEventListener("click",function(){
-  var url=document.getElementById("url-inp").value.trim();
-  if(!url){showStatus("Please paste your Apps Script URL above.","err");return;}
-  if(!url.startsWith("https://script.google.com")){showStatus("URL must start with https://script.google.com","err");return;}
-  var btn=document.getElementById("conn-btn");
-  btn.disabled=true;btn.textContent="Testing connection...";
-  showStatus("Connecting — please wait up to 8 seconds...","info");
-  webUrl=url;
-  sheetFetch().then(function(ok){
-    btn.disabled=false;btn.textContent="Connect & Test";
-    if(ok){
-      localStorage.setItem("aws_url",url);
-      showStatus("Connected successfully! Opening app...","ok");
-      setTimeout(function(){launchApp();},600);
-    } else {
-      webUrl="";
-      showStatus("Could not connect. Check your URL and try again, or use Skip below.","err");
-      document.getElementById("clear-btn").style.display="block";
-    }
+function updateUserUI(user){
+  _currentUser=user;
+  localStorage.setItem("aws_user",JSON.stringify(user));
+  var name=user.name||user.username||"User";
+  var initials=(name.split(" ").map(function(w){return w[0]||"";}).join("").substring(0,2)||"?").toUpperCase();
+  document.getElementById("user-ava").textContent=initials;
+  document.getElementById("user-name").textContent=name;
+  document.getElementById("user-role").textContent=(user.role||"staff").toUpperCase();
+  // Show admin-only nav items
+  document.querySelectorAll(".admin-only").forEach(function(el){
+    el.style.display=user.role==="admin"?"flex":"none";
   });
-});
-function showStatus(msg,type){
-  var el=document.getElementById("conn-status");
-  if(!el)return;
-  el.style.display="block";
-  el.textContent=msg;
-  el.style.background=type==="ok"?"#E8FBF0":type==="err"?"#FFF0F1":"#EEF3FF";
-  el.style.color=type==="ok"?"#0E6B3B":type==="err"?"#D61F31":"#1A365E";
-  el.style.border="1px solid "+(type==="ok"?"#90DFB8":type==="err"?"#F5C2C7":"#C8D8F0");
 }
-document.getElementById("skip-btn").addEventListener("click",function(){launchApp();setLoc();});
-document.getElementById("clear-btn").addEventListener("click",function(){
-  localStorage.removeItem("aws_url"); webUrl="";
-  document.getElementById("url-inp").value="";
-  document.getElementById("clear-btn").style.display="none";
-  showStatus("URL cleared. Paste a new URL above.","info");
-});
+
+function handleSessionExpired(){
+  _sessionToken="";_currentUser=null;
+  localStorage.removeItem("aws_token");localStorage.removeItem("aws_user");
+  toast("Session expired — please sign in again.","err");
+  setTimeout(function(){
+    document.getElementById("app").classList.remove("on");
+    document.getElementById("login").style.display="flex";
+    document.getElementById("login-pass").value="";
+    document.getElementById("login-err").style.display="none";
+  },1500);
+}
+
+function doLogin(){
+  var username=document.getElementById("login-user").value.trim();
+  var password=document.getElementById("login-pass").value.trim();
+  var btn=document.getElementById("login-btn");
+  var err=document.getElementById("login-err");
+  if(!username||!password){showLoginErr("Please enter your username and password.");return;}
+  if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
+  btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
+  var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},12000);
+  fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+    .then(function(r){clearTimeout(t);return r.json();})
+    .then(function(d){
+      btn.disabled=false;btn.textContent="Sign In";
+      if(d.status==="ok"&&d.token){
+        _sessionToken=d.token;
+        localStorage.setItem("aws_token",d.token);
+        updateUserUI(d.user||{username:username,role:"staff",name:username});
+        toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+        // Fetch all data then launch
+        SETT=loadS();loadLocal();
+        sheetFetch().then(function(){launchApp();});
+      } else {
+        showLoginErr(d.message||"Incorrect username or password.");
+      }
+    })
+    .catch(function(e){
+      btn.disabled=false;btn.textContent="Sign In";
+      showLoginErr("Could not reach server. Check your API URL and internet connection.");
+    });
+}
+
+function showLoginErr(msg){
+  var el=document.getElementById("login-err");
+  el.textContent=msg;el.style.display="block";
+}
+
+function doLogout(){
+  if(webUrl&&_sessionToken){
+    fetch(webUrl+"?action=logout&token="+encodeURIComponent(_sessionToken),{mode:"cors"}).catch(function(){});
+  }
+  _sessionToken="";_currentUser=null;
+  localStorage.removeItem("aws_token");localStorage.removeItem("aws_user");
+  document.getElementById("app").classList.remove("on");
+  document.getElementById("login").style.display="flex";
+  document.getElementById("login-user").value="";
+  document.getElementById("login-pass").value="";
+  document.getElementById("login-err").style.display="none";
+  toast("Signed out.","ok");
+}
+
+// Login form events — url buttons handled by bootstrap script above
+document.getElementById("login-btn").removeEventListener("click",doLogin); // clear bootstrap handler
+document.getElementById("login-btn").addEventListener("click",doLogin);
+document.getElementById("login-pass").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
+document.getElementById("login-user").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("login-pass").focus();});
+document.getElementById("logout-btn").addEventListener("click",doLogout);
+
+// URL config toggle (backup handler — inline onclick on button handles it too)
+var _showUrlBtn=document.getElementById("show-url-btn");
+if(_showUrlBtn&&!_showUrlBtn.dataset.bound){_showUrlBtn.dataset.bound="1";_showUrlBtn.addEventListener("click",function(){
+  var sec=document.getElementById("url-section");
+  sec.style.display=sec.style.display==="none"?"block":"none";
+  if(sec.style.display==="block") document.getElementById("url-inp").value=webUrl;
+});}
+var _saveUrlBtn=document.getElementById("save-url-btn");
+if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveUrlBtn.addEventListener("click",function(){
+  var url=document.getElementById("url-inp").value.trim();
+  if(!url||!url.startsWith("https://script.google.com")){showLoginErr("URL must start with https://script.google.com");return;}
+  webUrl=url;localStorage.setItem("aws_url",url);
+  document.getElementById("url-section").style.display="none";
+  document.getElementById("login-err").style.display="none";
+  toast("API URL saved.","ok");
+});}
+
+// Auto-login if session token exists
+(function(){
+  SETT=loadS();loadLocal();
+  // Pre-fill URL input if saved
+  if(webUrl) document.getElementById("url-inp").value=webUrl;
+  if(_sessionToken&&webUrl){
+    // Validate existing session silently
+    var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
+    fetch(webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken),{signal:c.signal,mode:"cors"})
+      .then(function(r){clearTimeout(t);return r.json();})
+      .then(function(d){
+        if(d&&d.status==="ok"){
+          if(d.user)updateUserUI(d.user);
+          // Process data same as sheetFetch
+          if(Array.isArray(d.students)&&d.students.length){
+            students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});});
+            nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
+            saveLocal();
+          }
+          if(d.settings&&Object.keys(d.settings).length){SETT=Object.assign(defS(),d.settings);saveS(SETT);}
+          setLive();launchApp();
+        } else {
+          // Token invalid — show login
+          _sessionToken="";localStorage.removeItem("aws_token");
+        }
+      })
+      .catch(function(){
+        // Network error — still show login
+        _sessionToken="";localStorage.removeItem("aws_token");
+      });
+  }
+})();
 document.getElementById("form-close").addEventListener("click",closeModal);
 document.getElementById("form-cancel").addEventListener("click",closeModal);
 document.getElementById("form-modal").addEventListener("click",function(e){if(e.target===this)closeModal();});
@@ -5391,48 +6092,71 @@ function rComms(c){
 // Push all records for a specific date to Sheets
 function syncAttendanceForDate(date){
   if(!webUrl)return;
-  // Collect all ATT records for this date
-  var records={};
+  var records=[];
   Object.keys(ATT).forEach(function(k){
-    if(k.startsWith(date+"_"))records[k]=ATT[k];
+    if(k.startsWith(date+"_")){
+      var parts=k.split("_");
+      records.push({attKey:k,studentId:parts[1],date:date,status:ATT[k].status,note:ATT[k].note||""});
+    }
   });
-  gmsSheetRequest("saveAttendance",{date:date,records:records},null);
+  gmsSheetRequest("saveAttendance",{records:records},null);
 }
 
-// ── INTERVIEW SYNC ────────────────────────────────────────────
 function syncInterviews(){
   if(!webUrl)return;
-  // Serialize scores array to JSON string for Sheets
-  var payload=INT.map(function(inv){
-    return Object.assign({},inv,{scores:JSON.stringify(inv.scores||[])});
-  });
+  var payload=INT.map(function(inv){return Object.assign({},inv,{scores:JSON.stringify(inv.scores||[])});});
   gmsSheetRequest("saveInterviews",{interviews:payload},null);
 }
 
-// ── FEE SYNC ──────────────────────────────────────────────────
 function syncFees(){
   if(!webUrl)return;
   gmsSheetRequest("saveFees",{fees:FEE},null);
 }
 
-// ── COMMS SYNC ────────────────────────────────────────────────
 function syncComms(){
   if(!webUrl)return;
   gmsSheetRequest("saveComms",{comms:COM},null);
 }
 
 // ── FULL SYNC (all data) ──────────────────────────────────────
-// Expose syncAllGMS globally for the button
 window.syncAllGMS = function(){ syncAllGMS(); };
 window.syncAll = function(){
-  syncAllGMS();
-  syncInterviews();
-  syncFees();
-  syncComms();
-  // Sync all attendance dates present in ATT
+  if(!webUrl){toast("Connect to Google Sheets first","err");return;}
+  toast("Syncing all data to Sheets…","");
+  // Students
+  students.forEach(function(s){sheetPush(s,"update");});
+  // Courses & transfers per student
+  var courses=loadCourses(),transfers=loadTransfer();
+  var sids=[...new Set(students.map(function(s){return s.id;}))];
+  sids.forEach(function(sid){
+    var sc=courses.filter(function(c){return String(c.studentId)===String(sid);});
+    var st=transfers.filter(function(t){return String(t.studentId)===String(sid);});
+    if(sc.length||st.length){
+      if(sc.length) gmsSheetRequest("saveCourses",{studentId:sid,courses:sc},null);
+      if(st.length) gmsSheetRequest("saveTransfer",{studentId:sid,transfers:st},null);
+    }
+  });
+  // Attendance
   var dates=[...new Set(Object.keys(ATT).map(function(k){return k.split("_")[0];}))];
   dates.forEach(function(d){syncAttendanceForDate(d);});
-  toast("Full sync sent ↑","ok");
+  // Interviews, fees, comms
+  syncInterviews(); syncFees(); syncComms();
+  // Staff
+  gmsSheetRequest("saveStaff",{staff:_STAFF},null);
+  // Calendar
+  gmsSheetRequest("saveCalendar",{events:_CAL},null);
+  // Catalog
+  var cat=loadCatalog();gmsSheetRequest("saveCatalog",{catalog:cat},null);
+  // Settings
+  gmsSheetRequest("saveSettings",{settings:SETT},null);
+  // TPMS
+  gmsSheetRequest("saveTPMS",{
+    lessons:loadLessons(),
+    units:loadUnits(),
+    events:loadTpmsEvents().filter(function(e){return e.layer!=="school";}),
+    pd:loadPdRecords()
+  },null);
+  setTimeout(function(){toast("Full sync complete ✓","ok");},1500);
 };
 
 // ── Keyboard shortcuts ────────────────────────────────────────
@@ -5455,13 +6179,8 @@ document.addEventListener("keydown",function(e){
 });
 
 (function init(){
-  loadLocal();
   var sl=document.getElementById("sb-logo");if(sl)sl.src=AWS_LOGO;
-  var setupl=document.getElementById("setup-logo");if(setupl)setupl.src=AWS_LOGO;
-  // Pre-fill URL input if one was saved before
-  if(webUrl) document.getElementById("url-inp").value=webUrl;
-  // NEVER auto-launch - always show setup screen so user can verify
-  // This prevents the freeze when a saved URL is unreachable
+  var ll=document.getElementById("login-logo-img");if(ll)ll.src=AWS_LOGO;
 })();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -5471,8 +6190,8 @@ function rStaff(c){
   var STAFF_ROLES=["Principal","Vice Principal","Teacher","Counselor","Admissions Officer","Administrative Staff","Support Staff","IT","Finance","Other"];
   var STAFF_DEPTS=["Administration","Academics","Admissions","Counseling","Finance","IT","Operations","Other"];
 
-  var staffList=JSON.parse(localStorage.getItem("aws_staff_v5")||"[]");
-  function saveStaff(){localStorage.setItem("aws_staff_v5",JSON.stringify(staffList));}
+  var staffList=_STAFF.slice();
+  function saveStaffAndSync(){_STAFF=staffList;saveStaff(staffList);}
   var nextId=staffList.length?Math.max.apply(null,staffList.map(function(x){return x.id||0;}))+1:1;
 
   var wrap=document.createElement("div");
@@ -5638,7 +6357,7 @@ function rStaff(c){
       notes:document.getElementById("sf-notes").value};
     if(editId){var idx=staffList.findIndex(function(x){return x.id===editId;});if(idx>-1)staffList[idx]=obj;}
     else staffList.push(obj);
-    saveStaff(); modal.style.display="none"; modal.remove();
+    saveStaffAndSync(); modal.style.display="none"; modal.remove();
     toast((editId?"Updated":"Added")+" "+fn+" "+ln,"ok"); rStaff(c);
   });
   wrap.querySelectorAll(".staff-edit").forEach(function(btn){btn.addEventListener("click",function(){openStaffModal(parseInt(this.dataset.id));});});
@@ -5646,7 +6365,7 @@ function rStaff(c){
     var id=parseInt(this.dataset.id);
     if(!confirm("Remove this staff member?"))return;
     staffList=staffList.filter(function(x){return x.id!==id;});
-    saveStaff(); rStaff(c); toast("Staff member removed","ok");
+    saveStaffAndSync(); rStaff(c); toast("Staff member removed","ok");
   });});
   // Search/filter listeners
   var ss=document.getElementById("staff-srch");
@@ -5663,8 +6382,8 @@ function rStaff(c){
 function rCalendar(c){
   var EVENT_TYPES=["Holiday","Term Start","Term End","Exam","Event","Deadline","Meeting","Other"];
   var TYPE_COLORS={"Holiday":"#D61F31","Term Start":"#1DBD6A","Term End":"#F5A623","Exam":"#A36CFF","Event":"#0EA5E9","Deadline":"#FF7043","Meeting":"#1A365E","Other":"#7A92B0"};
-  var EVENTS=JSON.parse(localStorage.getItem("aws_cal_v5")||"[]");
-  function saveEvents(){localStorage.setItem("aws_cal_v5",JSON.stringify(EVENTS));}
+  var EVENTS=_CAL.slice();
+  function saveEvents(){_CAL=EVENTS;saveCal(EVENTS);}
   var nextId=EVENTS.length?Math.max.apply(null,EVENTS.map(function(x){return x.id||0;}))+1:1;
 
   var today=new Date();
@@ -5948,7 +6667,7 @@ function rReportCards(c){
     // Teacher comment
     +'<div style="background:#F7F9FC;border-radius:10px;padding:16px;margin-bottom:24px">'
     +'<div style="font-size:10px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Teacher / Counselor Remarks</div>'
-    +'<textarea id="rc-remarks" style="width:100%;min-height:80px;border:1px solid #E4EAF2;border-radius:8px;padding:10px;font-size:13px;color:#1A365E;resize:vertical;box-sizing:border-box" placeholder="Enter remarks for this term...">'+esc(localStorage.getItem("aws_rc_remarks_"+s.id+"_"+selTerm)||"")+'</textarea>'
+    +'<textarea id="rc-remarks" style="width:100%;min-height:80px;border:1px solid #E4EAF2;border-radius:8px;padding:10px;font-size:13px;color:#1A365E;resize:vertical;box-sizing:border-box" placeholder="Enter remarks for this term...">'+esc(getRemark(s.id,selTerm))+'</textarea>'
     +'</div>'
     // Signature block
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:24px">'
@@ -5965,7 +6684,7 @@ function rReportCards(c){
   document.getElementById("rc-term").addEventListener("change",function(){localStorage.setItem("aws_rc_term",this.value);rReportCards(c);});
   var remarksEl=document.getElementById("rc-remarks");
   if(remarksEl)remarksEl.addEventListener("blur",function(){
-    localStorage.setItem("aws_rc_remarks_"+selId+"_"+selTerm,this.value);
+    saveRemark(selId,selTerm,this.value);
   });
   var printBtn=document.getElementById("rc-print");
   if(printBtn)printBtn.addEventListener("click",function(){
@@ -6031,19 +6750,19 @@ var TPMS_ACADEMIC_YEAR=[
 function tLoad(k){try{return JSON.parse(localStorage.getItem("tpms_"+k)||"null");}catch(e){return null;}}
 function tSave(k,v){localStorage.setItem("tpms_"+k,JSON.stringify(v));}
 function loadUnits(){return tLoad("units")||[];}
-function saveUnits(v){tSave("units",v);}
+function saveUnits(v){tSave("units",v);if(webUrl)gmsSheetRequest("saveUnits",{units:v},null);}
 function loadLessons(){return tLoad("lessons")||[];}
-function saveLessons(v){tSave("lessons",v);}
+function saveLessons(v){tSave("lessons",v);if(webUrl)gmsSheetRequest("saveLessons",{lessons:v},null);}
 function loadTpmsEvents(){
   var ev=tLoad("events");
   if(!ev){ev=TPMS_ACADEMIC_YEAR.map(function(e,i){return Object.assign({},e,{id:"ev"+i});});tSave("events",ev);}
   return ev;
 }
-function saveTpmsEvents(v){tSave("events",v);}
+function saveTpmsEvents(v){tSave("events",v);if(webUrl)gmsSheetRequest("saveTPMSEvents",{events:v.filter(function(e){return e.layer!=="school";})},null);}
 function loadCurriculumMaps(){return tLoad("currmaps")||[];}
 function saveCurriculumMaps(v){tSave("currmaps",v);}
 function loadPdRecords(){return tLoad("pdrecords")||[];}
-function savePdRecords(v){tSave("pdrecords",v);}
+function savePdRecords(v){tSave("pdrecords",v);if(webUrl)gmsSheetRequest("savePD",{pd:v},null);}
 function tpmsId(){return "t"+Date.now().toString(36)+(Math.random()*1000|0);}
 
 // ── TPMS TAB STATE ────────────────────────────────────────────────────────────
