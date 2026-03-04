@@ -196,6 +196,8 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
       <div style="font-size:11px;color:#7A92B0;margin-bottom:7px">Paste your Google Apps Script Web App URL:</div>
       <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/>
       <button id="save-url-btn">Save URL</button>
+      <button id="test-url-btn" style="background:#0369A1;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;margin-top:6px;width:100%">🔌 Test Connection</button>
+      <div id="test-result" style="font-size:11px;margin-top:6px;display:none;padding:6px 10px;border-radius:6px;"></div>
     </div>
   </div>
 </div>
@@ -245,6 +247,30 @@ document.addEventListener("DOMContentLoaded",function(){
     btn.style.background="#1DBD6A";
     btn.textContent="✓ URL Saved — Sign In";
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
+  });
+
+  // Test Connection button
+  el("test-url-btn").addEventListener("click",function(e){
+    e.preventDefault();
+    var url=(el("url-inp").value||localStorage.getItem("aws_url")||"").trim();
+    var res=el("test-result");
+    if(!url){res.style.display="block";res.style.background="#FEE2E2";res.style.color="#B91C1C";res.textContent="⚠ No URL entered.";return;}
+    res.style.display="block";res.style.background="#F0F4FF";res.style.color="#1A365E";res.textContent="⏳ Testing...";
+    fetch(url,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"ping"})})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status==="ok"){
+          res.style.background="#D1FAE5";res.style.color="#065F46";
+          res.textContent="✅ Connected! Apps Script v"+( d.version||"?")+" is reachable.";
+        } else {
+          res.style.background="#FEE2E2";res.style.color="#B91C1C";
+          res.textContent="⚠ Connected but got error: "+(d.message||JSON.stringify(d));
+        }
+      })
+      .catch(function(err){
+        res.style.background="#FEE2E2";res.style.color="#B91C1C";
+        res.textContent="❌ Cannot reach server. Check URL and redeploy. ("+err.message+")";
+      });
   });
 
   // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
@@ -1053,6 +1079,20 @@ function sheetFetch(){
         }
         if(Array.isArray(d.ptEvaluations)&&d.ptEvaluations.length){
           try{localStorage.setItem("aws_pt_evaluations",JSON.stringify(d.ptEvaluations));}catch(e){}
+        }
+        // Health Records
+        if(Array.isArray(d.health)){
+          _HEALTH=d.health;
+          try{localStorage.setItem("aws_health_v5",JSON.stringify(_HEALTH));}catch(e){}
+        }
+        // Behaviour Log
+        if(Array.isArray(d.behaviour)){
+          _BEHAVIOUR=d.behaviour;
+          try{localStorage.setItem("aws_beh_v5",JSON.stringify(_BEHAVIOUR));}catch(e){}
+        }
+        // Timetable Blocks
+        if(Array.isArray(d.blocks)&&d.blocks.length){
+          saveBlocks(d.blocks);
         }
         saveLocal();setLive();return true;
       }return false;
@@ -4911,7 +4951,7 @@ function saveStudent(){
     alumniNotes:stype==="Alumni"?document.getElementById("f-alumni-notes").value.trim():""};
   var toastMsg=stype==="Alumni"?"Alumni record saved · ID: "+sid+" ✓":stype==="Existing"?"Existing student added · ID: "+sid+" ✓":st==="Enrolled"?"Student enrolled · ID: "+sid+" ✓":"Application submitted ✓";
   if(editId){data.id=editId;students=students.map(function(x){return x.id===editId?data:x;});saveLocal();sheetPush(data,"update");toast("Record updated ✓","ok");}
-  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"create");toast(toastMsg,"ok");}
+  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"add");toast(toastMsg,"ok");}
   closeModal();render();
 }
 
@@ -5253,6 +5293,33 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
           // AWSC-27 Project Tracker
           if(Array.isArray(d.ptAssignments)&&d.ptAssignments.length){try{localStorage.setItem("aws_pt_assignments",JSON.stringify(d.ptAssignments));}catch(e){}}
           if(Array.isArray(d.ptEvaluations)&&d.ptEvaluations.length){try{localStorage.setItem("aws_pt_evaluations",JSON.stringify(d.ptEvaluations));}catch(e){}}
+          // Courses & Transfer
+          if(Array.isArray(d.courses)&&d.courses.length){saveCourses(d.courses.map(function(c){return Object.assign({},c,{creditsAttempted:parseFloat(c.creditsAttempted)||0,creditsEarned:parseFloat(c.creditsEarned)||0});}));}
+          if(Array.isArray(d.transfer)&&d.transfer.length){saveTransfer(d.transfer.map(function(t){return Object.assign({},t,{creditsAwarded:parseFloat(t.creditsAwarded)||0});}));}
+          // Attendance
+          if(Array.isArray(d.attendance)&&d.attendance.length){var ao={};d.attendance.forEach(function(r){if(r.attKey&&r.status)ao[r.attKey]={status:r.status,note:r.note||""};});ATT=ao;localStorage.setItem("aws_att_v5",JSON.stringify(ATT));}
+          // Interviews
+          if(Array.isArray(d.interviews)&&d.interviews.length){INT=d.interviews.map(function(inv){try{inv.scores=JSON.parse(String(inv.scores||"[]"));}catch(e){inv.scores=[];}return inv;});localStorage.setItem("aws_int_v5",JSON.stringify(INT));}
+          // Fees
+          if(Array.isArray(d.fees)&&d.fees.length){FEE=d.fees.map(function(f){return Object.assign({},f,{amount:parseFloat(f.amount)||0});});localStorage.setItem("aws_fee_v5",JSON.stringify(FEE));}
+          // Communications
+          if(Array.isArray(d.comms)&&d.comms.length){COM=d.comms;localStorage.setItem("aws_com_v5",JSON.stringify(COM));}
+          // Staff
+          if(Array.isArray(d.staff)){_STAFF=d.staff.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id});});}
+          // Catalog
+          if(Array.isArray(d.catalog)&&d.catalog.length){localStorage.setItem("aws_catalog_v5",JSON.stringify(d.catalog));}
+          // Remarks
+          if(Array.isArray(d.remarks)){_REMARKS={};d.remarks.forEach(function(r){if(r.studentId&&r.term)_REMARKS[r.studentId+"_"+r.term]=r.remarks||"";});}
+          // Calendar
+          if(Array.isArray(d.calendar)){_CAL=d.calendar.map(function(e){return Object.assign({},e,{id:e.id||("cal"+Date.now()+Math.random())});});}
+          // TPMS
+          if(d.tpms){if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length)saveLessons(d.tpms.lessons);if(Array.isArray(d.tpms.units)&&d.tpms.units.length)saveUnits(d.tpms.units);if(Array.isArray(d.tpms.pd)&&d.tpms.pd.length)savePdRecords(d.tpms.pd);}
+          // Health
+          if(Array.isArray(d.health)){_HEALTH=d.health;try{localStorage.setItem("aws_health_v5",JSON.stringify(_HEALTH));}catch(e){}}
+          // Behaviour
+          if(Array.isArray(d.behaviour)){_BEHAVIOUR=d.behaviour;try{localStorage.setItem("aws_beh_v5",JSON.stringify(_BEHAVIOUR));}catch(e){}}
+          // Blocks
+          if(Array.isArray(d.blocks)&&d.blocks.length){saveBlocks(d.blocks);}
           setLive();launchApp();
         } else {
           // Token invalid — show login
@@ -9425,9 +9492,9 @@ function rGmsGPA(body,s){
 // ═══════════════════════════════════════════════════════════════════════════
 // HEALTH RECORDS MODULE
 // ═══════════════════════════════════════════════════════════════════════════
-var _HEALTH=[];
+var _HEALTH=(function(){try{return JSON.parse(localStorage.getItem("aws_health_v5")||"[]");}catch(e){return [];}})();
 function loadHealth(){return _HEALTH.slice();}
-function saveHealth(v){_HEALTH=v;if(webUrl)gmsSheetRequest("saveHealth",{health:v},null);}
+function saveHealth(v){_HEALTH=v;try{localStorage.setItem("aws_health_v5",JSON.stringify(v));}catch(e){}if(webUrl)gmsSheetRequest("saveHealth",{health:v},null);}
 
 function rHealth(c){
   var enrolled=students.filter(function(s){return s.status==="Enrolled"||s.status==="Accepted";});
@@ -9516,9 +9583,9 @@ function rHealth(c){
 // ═══════════════════════════════════════════════════════════════════════════
 // BEHAVIOUR LOG MODULE
 // ═══════════════════════════════════════════════════════════════════════════
-var _BEHAVIOUR=[];
+var _BEHAVIOUR=(function(){try{return JSON.parse(localStorage.getItem("aws_beh_v5")||"[]");}catch(e){return [];}})();
 function loadBehaviour(){return _BEHAVIOUR.slice();}
-function saveBehaviour(v){_BEHAVIOUR=v;if(webUrl)gmsSheetRequest("saveBehaviour",{behaviour:v},null);}
+function saveBehaviour(v){_BEHAVIOUR=v;try{localStorage.setItem("aws_beh_v5",JSON.stringify(v));}catch(e){}if(webUrl)gmsSheetRequest("saveBehaviour",{behaviour:v},null);}
 
 function rBehaviour(c){
   var enrolled=students.filter(function(s){return s.status==="Enrolled";});
