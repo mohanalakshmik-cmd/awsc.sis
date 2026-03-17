@@ -438,11 +438,31 @@ document.addEventListener("DOMContentLoaded",function(){
             if(typeof updateUserUI==="function") updateUserUI(loginUser);
             window._sessionToken=d.token;
             if(typeof loadLocal==="function") loadLocal();
-            if(typeof sheetFetch==="function") sheetFetch().then(function(){launchApp();});
-            else launchApp();
+            if(typeof sheetFetch==="function"){
+              sheetFetch().then(function(){launchApp();}).catch(function(){launchApp();});
+            } else { launchApp(); }
           } else {
-            showErr("Logged in! Reloading...");
-            setTimeout(function(){location.reload();},800);
+            // launchApp not yet defined — wait up to 15s for scripts to load
+            showErr("Logging in...");
+            var _loginToken = d.token;
+            var _loginUser = d.user||{username:username,role:"staff",name:username};
+            var _waitAttempts = 0;
+            var _waitInterval = setInterval(function(){
+              _waitAttempts++;
+              if(typeof launchApp === "function" && typeof sheetFetch === "function"){
+                clearInterval(_waitInterval);
+                showErr("");
+                window._sessionToken = _loginToken;
+                if(typeof updateUserUI==="function") updateUserUI(_loginUser);
+                if(typeof loadLocal==="function") loadLocal();
+                sheetFetch().then(function(){launchApp();}).catch(function(){launchApp();});
+              } else if(_waitAttempts > 150){
+                // After 15 seconds still not ready — show error, do NOT reload
+                clearInterval(_waitInterval);
+                btn.disabled=false; btn.textContent="Sign In";
+                showErr("Page is taking too long to load. Please refresh the page manually and try again.");
+              }
+            }, 100);
           }
         } else {
           showErr(d.message||"Incorrect username or password.");
@@ -2324,7 +2344,7 @@ function sheetFetch(){
   if(!webUrl)return Promise.resolve(false);
   var done=false;
   var c=new AbortController();
-  var t=setTimeout(function(){if(!done){c.abort();}},12000);
+  var t=setTimeout(function(){if(!done){c.abort();}},25000);
   var url=webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken);
   return fetch(url,{signal:c.signal,mode:"cors"})
     .then(function(r){clearTimeout(t);done=true;return r.json();})
@@ -2526,7 +2546,7 @@ function sheetPush(student,action){
   if(!webUrl)return;
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},20000);
   fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
 }
 function sheetDel(id){
@@ -7839,9 +7859,15 @@ function doLogin(){
         localStorage.setItem("aws_token",d.token);
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-        // Fetch all data then launch
+        // Fetch all data then launch — always launch even if sheet sync fails
         SETT=loadS();loadLocal();
-        sheetFetch().then(function(){launchApp();});
+        sheetFetch().then(function(ok){
+          launchApp();
+          if(!ok) toast("Loaded from local cache. Sheet sync failed — data may not be current.","");
+        }).catch(function(){
+          launchApp();
+          toast("Loaded from local cache. Could not reach sheet.","");
+        });
       } else {
         // Show the exact server message so we know what went wrong
         var msg = d.message || "No error message returned from server.";
@@ -7906,28 +7932,26 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   if(_sessionToken&&webUrl){
     // Validate existing session silently
     var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
-    fetch(webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken),{signal:c.signal,mode:"cors"})
-      .then(function(r){clearTimeout(t);return r.json();})
-      .then(function(d){
-        if(d&&d.status==="ok"){
-          if(d.user)updateUserUI(d.user);
-          // Process data same as sheetFetch
-          if(Array.isArray(d.students)&&d.students.length){
-            students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});});
-            nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
-            saveLocal();
-          }
-          if(d.settings&&Object.keys(d.settings).length){SETT=Object.assign(defS(),d.settings);saveS(SETT);}
+    // Use sheetFetch for full data load — it handles all 20 data tables
+    sheetFetch().then(function(ok){
+      clearTimeout(t);
+      if(ok){
+        setLive();launchApp();
+      } else {
+        // Session invalid or fetch failed — try launching with cached data
+        if(_sessionToken){
           setLive();launchApp();
+          toast("Loaded from local cache.","");
         } else {
-          // Token invalid — show login
           _sessionToken="";localStorage.removeItem("aws_token");
         }
-      })
-      .catch(function(){
-        // Network error — still show login
-        _sessionToken="";localStorage.removeItem("aws_token");
-      });
+      }
+    }).catch(function(){
+      clearTimeout(t);
+      // Launch with cache on any error
+      setLive();launchApp();
+      toast("Loaded from local cache — sheet sync failed.","");
+    });
   }
 })();
 document.getElementById("form-close").addEventListener("click",closeModal);
