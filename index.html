@@ -442,36 +442,12 @@ document.addEventListener("DOMContentLoaded",function(){
               sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
             } else { launchApp(); }
           } else {
-            // launchApp not yet defined — wait up to 15s for scripts to load
+            // Main JS not yet parsed — save token and reload.
+            // On reload auto-login will run with the full app loaded.
             showErr("Logging in...");
-            var _loginToken = d.token;
-            var _loginUser = d.user||{username:username,role:"staff",name:username};
-            var _waitAttempts = 0;
-            var _waitInterval = setInterval(function(){
-              _waitAttempts++;
-              if(typeof launchApp === "function" && typeof sheetFetch === "function"){
-                clearInterval(_waitInterval);
-                showErr("");
-                window._sessionToken = _loginToken;
-                if(typeof updateUserUI==="function") updateUserUI(_loginUser);
-                if(typeof loadLocal==="function") loadLocal();
-                // Use fast fetch (students+settings only), rest loads in background
-                var fetchFn = typeof sheetFetchFast==="function" ? sheetFetchFast : sheetFetch;
-                fetchFn().then(function(){launchApp();}).catch(function(){launchApp();});
-              } else if(_waitAttempts > 150){
-                // 15s passed — launch with cached local data, don't wait for full JS
-                clearInterval(_waitInterval);
-                showErr("");
-                window._sessionToken = _loginToken;
-                // Try to load cached data and launch
-                try {
-                  if(typeof loadLocal==="function") loadLocal();
-                  if(typeof setLive==="function") setLive();
-                  if(typeof launchApp==="function") launchApp();
-                  else { location.reload(); }
-                } catch(ex) { location.reload(); }
-              }
-            }, 100);
+            localStorage.setItem("aws_token", d.token);
+            if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
+            setTimeout(function(){ location.reload(); }, 300);
           }
         } else {
           showErr(d.message||"Incorrect username or password.");
