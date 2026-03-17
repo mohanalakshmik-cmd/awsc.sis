@@ -2304,8 +2304,20 @@ function setLoc(){var p=document.getElementById("spill");p.className="spill";doc
 
 function genSID(){
   var yr=new Date().getFullYear();
-  var nums=students.filter(function(s){return s.studentId&&s.studentId.startsWith(SETT.sidPrefix);}).map(function(s){var m=s.studentId.match(/(\d+)$/);return m?parseInt(m[1]):0;});
-  return SETT.sidPrefix+"-"+yr+"-"+String((Math.max.apply(null,nums.concat([0]))+1)).padStart(3,"0");
+  // Use partner's campus sidPrefix if set, otherwise use global school prefix
+  var prefix=SETT.sidPrefix||"AWS";
+  if(isPartner()&&_currentUser&&_currentUser.sidPrefix){
+    prefix=_currentUser.sidPrefix;
+  }
+  // Find the highest existing number for this prefix to avoid duplicates
+  var allStudentsForSID=isPartner()?students:students; // partners see scoped students
+  var nums=allStudentsForSID.filter(function(s){
+    return s.studentId&&s.studentId.toUpperCase().startsWith(prefix.toUpperCase());
+  }).map(function(s){
+    var m=s.studentId.match(/(\d+)$/);
+    return m?parseInt(m[1]):0;
+  });
+  return prefix+"-"+yr+"-"+String((Math.max.apply(null,nums.concat([0]))+1)).padStart(3,"0");
 }
 
 function sheetFetch(){
@@ -4439,9 +4451,18 @@ function getGradCredits(courses,transfers){
   all.forEach(function(cr){
     var grade=cr.grade||"";
     // Approved transfers are always earned — grade is informational only
-    var isPending=!cr._isTransfer&&(!grade||grade==="IP");
+    var st=cr.courseStatus||"Completed";
+    // A course is pending (planned credit) if:
+    // - no grade entered yet, OR grade is "IP", OR
+    // - courseStatus is In Progress / Assigned / Not Started
+    var isPending=!cr._isTransfer&&(
+      !grade||grade==="IP"||
+      st==="In Progress"||st==="Assigned"||st==="Not Started"
+    );
     // AWS policy: F grade = 0 credit, must repeat
     if(grade==="F"&&!cr._isTransfer)return;
+    // Withdrawn courses count for nothing
+    if(st==="Withdrawn"&&!cr._isTransfer)return;
     var e=parseFloat(cr.creditsEarned||cr.credits)||0;
     // For in-progress courses, use creditsAttempted as pending
     var p=isPending?parseFloat(cr.creditsAttempted||cr.credits||e)||0:0;
@@ -4593,7 +4614,7 @@ function rGmsCourses(body,s){
   years.forEach(function(yr){
     var yc=byYear[yr];var yrUGPA=calcGPA(yc),yrWGPA=calcWeightedGPA(yc);
     html+='<div class="card" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="background:linear-gradient(135deg,#0F2240,#1A365E);padding:11px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:700;color:#fff">📅 '+esc(yr)+'</span><div style="display:flex;gap:12px"><span style="font-size:11px;color:rgba(255,255,255,.6)">Unweighted: <strong style="color:#fff">'+yrUGPA.toFixed(2)+'</strong></span><span style="font-size:11px;color:rgba(255,255,255,.6)">Weighted: <strong style="color:#FAC600">'+yrWGPA.toFixed(2)+'</strong></span></div></div>';
-    html+='<table class="tbl" style="border:none"><thead><tr><th>Course</th><th>Type</th><th>Subject Area</th><th>Duration</th><th>Credits</th><th>Grade</th><th>Wt. Pts</th><th>AP/IB Score</th><th></th></tr></thead><tbody>';
+    html+='<table class="tbl" style="border:none"><thead><tr><th>Course</th><th>Type</th><th>Subject Area</th><th>Duration</th><th>Credits</th><th>Grade</th><th>Status</th><th>Wt. Pts</th><th>AP/IB Score</th><th></th></tr></thead><tbody>';
     yc.forEach(function(cr){
       var wp=getWeightedPts(cr.grade,cr.type);var bc=GRADE_PTS[cr.grade]||0;
       var gcol=bc>=3.5?"#1DBD6A":bc>=2?"#F5A623":"#D61F31";
@@ -4604,6 +4625,18 @@ function rGmsCourses(body,s){
         +'<td style="font-size:11px;color:#7A92B0">'+esc(cr.semester||"")+'</td>'
         +'<td style="font-weight:700;color:#1A365E">'+esc(String(cr.creditsEarned||0))+'</td>'
         +'<td><span style="font-size:15px;font-weight:800;color:'+gcol+'">'+esc(cr.grade||"—")+'</span></td>'
+        +(function(){
+          var st=cr.courseStatus||"Completed";
+          var stMap={
+            "Completed"    :{bg:"#DCFCE7",col:"#166534",icon:"✅"},
+            "In Progress"  :{bg:"#DBEAFE",col:"#1E40AF",icon:"🔄"},
+            "Assigned"     :{bg:"#FEF3C7",col:"#92400E",icon:"📋"},
+            "Not Started"  :{bg:"#F3F4F6",col:"#6B7280",icon:"⏳"},
+            "Withdrawn"    :{bg:"#FEE2E2",col:"#991B1B",icon:"❌"}
+          };
+          var sc=stMap[st]||stMap["Not Started"];
+          return'<td><span style="background:'+sc.bg+';color:'+sc.col+';padding:3px 9px;border-radius:8px;font-size:10px;font-weight:700;white-space:nowrap">'+sc.icon+' '+esc(st)+'</span></td>';
+        })()
         +'<td style="font-weight:700;color:#7040CC">'+(wp!==null?wp.toFixed(2):"—")+'</td>'
         +'<td style="font-size:12px;font-weight:700;color:#0EA5E9">'+(cr.apScore?esc(String(cr.apScore)):"—")+'</td>'
         +'<td><div style="display:flex;gap:3px"><button class="cr-edit" data-idx="'+cr._idx+'" style="padding:3px 7px;border:1px solid #E4EAF2;border-radius:5px;background:#fff;font-size:10px;cursor:pointer">✏️</button><button class="cr-del" data-idx="'+cr._idx+'" style="padding:3px 7px;border:1px solid #F5C2C7;border-radius:5px;background:#FFF0F1;font-size:10px;cursor:pointer">🗑</button></div></td></tr>';
@@ -4644,6 +4677,7 @@ function openCourseModal(studentId,idx){
     +'<div class="fl"><label class="flb">Credits Attempted</label><input class="fi" type="number" id="cm-cra" value="'+(cr?cr.creditsAttempted:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Credits Earned</label><input class="fi" type="number" id="cm-cre" value="'+(cr?cr.creditsEarned:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Final Grade</label><select class="fsel2" id="cm-grade">'+grades.map(function(g){return'<option '+(cr&&cr.grade===g?"selected":"")+'>'+g+'</option>';}).join("")+'</select></div>'
+    +'<div class="fl"><label class="flb">📋 Course Status</label><select class="fsel2" id="cm-status">'+["Completed","In Progress","Assigned","Not Started","Withdrawn"].map(function(st){var sel=(cr&&cr.courseStatus===st)?"selected":(!cr&&st==="Not Started"?"selected":"");return'<option value="'+st+'" '+sel+'>'+st+'</option>';}).join("")+'</select></div>
     +'<div class="fl"><label class="flb">AP/IB Exam Score (1–5/7)</label><select class="fsel2" id="cm-ap"><option value="">—</option>'+[1,2,3,4,5,6,7].map(function(n){return'<option '+(cr&&cr.apScore==n?"selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
     +'<div class="fl"><label class="flb">Instructor</label><input class="fi" id="cm-instr" value="'+esc(cr?cr.instructor:"")+'"/></div>'
     +'<div class="fl"><label class="flb">Room / Section</label><input class="fi" id="cm-sec" value="'+esc(cr?cr.section:"")+'"/></div>'
@@ -4684,6 +4718,7 @@ function openCourseModal(studentId,idx){
       creditsAttempted:parseFloat(document.getElementById("cm-cra").value)||0,
       creditsEarned:parseFloat(document.getElementById("cm-cre").value)||0,
       grade:document.getElementById("cm-grade").value,
+      courseStatus:document.getElementById("cm-status").value||"Not Started",
       apScore:document.getElementById("cm-ap").value,
       instructor:document.getElementById("cm-instr").value.trim(),
       section:document.getElementById("cm-sec").value.trim()
@@ -5015,36 +5050,77 @@ function printGraduationAudit(s,courses,trans,credits,d){
   function hesc(str){return String(str||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
   // ── subject area course table rows ────────────────────────────
+  // Status colour helper for audit
+  var STATUS_AUDIT_STYLE={
+    "Completed"  :"background:#DCFCE7;color:#166534",
+    "In Progress":"background:#DBEAFE;color:#1E40AF",
+    "Assigned"   :"background:#FEF3C7;color:#92400E",
+    "Not Started":"background:#F3F4F6;color:#6B7280",
+    "Withdrawn"  :"background:#FEE2E2;color:#991B1B"
+  };
+
   function courseRows(area){
     var areaLabel=area||"Electives";
-    var list=courses.filter(function(c){
-      return (c.area||"Electives")===area&&c.grade!=="F";
+    // Completed courses (grade exists + not F, OR status=Completed)
+    var completed=courses.filter(function(c){
+      var st=c.courseStatus||"Completed";
+      return (c.area||"Electives")===area && c.grade!=="F" && st==="Completed";
     });
+    // In-progress tracking courses (Assigned / In Progress / Not Started)
+    var inProgress=courses.filter(function(c){
+      var st=c.courseStatus||"Completed";
+      return (c.area||"Electives")===area &&
+        (st==="In Progress"||st==="Assigned"||st==="Not Started");
+    });
+    // Transfer rows
     var tRows=trans.filter(function(t){
       return (t.area||"Electives")===area;
     });
     var rows="";
-    list.forEach(function(c){
+
+    // ── Completed course rows ──────────────────────────────────────────────
+    completed.forEach(function(c){
       var earned=parseFloat(c.creditsEarned)||0;
-      var grade=c.grade||"IP";
       rows+='<tr>'
         +'<td>'+hesc(c.title||"—")+'</td>'
         +'<td style="text-align:center">'+hesc(c.year||"—")+'</td>'
         +'<td style="text-align:center">'+hesc(c.type||"—")+'</td>'
-        +'<td style="text-align:center;font-weight:700">'+hesc(grade)+'</td>'
+        +'<td style="text-align:center;font-weight:700">'+hesc(c.grade||"—")+'</td>'
         +'<td style="text-align:center;font-weight:700">'+earned+'</td>'
+        +'<td style="text-align:center"><span style="font-size:9px;padding:2px 6px;border-radius:5px;background:#DCFCE7;color:#166534;font-weight:700">✅ Completed</span></td>'
         +'</tr>';
     });
+
+    // ── Transfer credit rows ───────────────────────────────────────────────
     tRows.forEach(function(t){
       var earned=parseFloat(t.creditsAwarded)||0;
       rows+='<tr style="background:#F0F9FF">'
-        +'<td>'+hesc(t.origTitle||t.title||"Transfer Credit")+'<span style="font-size:9px;color:#0369A1;margin-left:4px">[Transfer — '+hesc(t.sourceSchool||"External")+'</span></td>'
+        +'<td>'+hesc(t.origTitle||t.title||"Transfer Credit")+'<span style="font-size:9px;color:#0369A1;margin-left:4px">[Transfer — '+hesc(t.sourceSchool||"External")+']</span></td>'
         +'<td style="text-align:center">'+hesc(t.year||"—")+'</td>'
         +'<td style="text-align:center">TR</td>'
         +'<td style="text-align:center;font-weight:700">'+hesc(t.origGrade||"—")+'</td>'
         +'<td style="text-align:center;font-weight:700">'+earned+'</td>'
+        +'<td style="text-align:center"><span style="font-size:9px;padding:2px 6px;border-radius:5px;background:#DBEAFE;color:#1E40AF;font-weight:700">🏛 Transfer</span></td>'
         +'</tr>';
     });
+
+    // ── In-Progress / Assigned / Not Started rows (tracked credits) ────────
+    if(inProgress.length){
+      rows+='<tr><td colspan="6" style="padding:4px 8px;background:#FFFBEB;font-size:10px;font-weight:700;color:#92400E;letter-spacing:.5px">▸ CREDITS IN PROGRESS / PLANNED</td></tr>';
+      inProgress.forEach(function(c){
+        var planned=parseFloat(c.creditsAttempted)||0;
+        var st=c.courseStatus||"Assigned";
+        var sStyle=STATUS_AUDIT_STYLE[st]||STATUS_AUDIT_STYLE["Not Started"];
+        rows+='<tr style="opacity:.85">'
+          +'<td><span style="font-style:italic">'+hesc(c.title||"—")+'</span></td>'
+          +'<td style="text-align:center;font-size:10px;color:#7A92B0">'+hesc(c.year||"—")+'</td>'
+          +'<td style="text-align:center;font-size:10px;color:#7A92B0">'+hesc(c.type||"—")+'</td>'
+          +'<td style="text-align:center;font-size:11px;color:#7A92B0">—</td>'
+          +'<td style="text-align:center;font-weight:700;color:#7A92B0">('+planned+' planned)</td>'
+          +'<td style="text-align:center"><span style="font-size:9px;padding:2px 6px;border-radius:5px;'+sStyle+';font-weight:700">'+hesc(st)+'</span></td>'
+          +'</tr>';
+      });
+    }
     return rows;
   }
 
@@ -6279,7 +6355,7 @@ function renderUserTable(c, users){
         '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'+
           '<span style="font-size:10px;font-weight:700;color:var(--text3)">MODULE ACCESS:</span>'+
           '<span style="font-size:11px;font-weight:700;color:'+(isFullAccess?"var(--navy)":"var(--teal)")+'">'+permCount+'</span>'+
-          (isCampusPartner?'<span style="font-size:10px;font-weight:800;background:#FFF7ED;color:#C2500A;border:1px solid #FCD34D;padding:2px 8px;border-radius:6px;margin-left:4px">🏫 Campus: '+esc(campusLabel)+'</span>':"")+ 
+          (isCampusPartner?'<span style="font-size:10px;font-weight:800;background:#FFF7ED;color:#C2500A;border:1px solid #FCD34D;padding:2px 8px;border-radius:6px;margin-left:4px">🏫 Campus: '+esc(campusLabel)+'</span>'+(u.sidPrefix?'<span style="font-size:10px;font-weight:800;background:#EFF6FF;color:#1A365E;border:1px solid #BFDBFE;padding:2px 8px;border-radius:6px;margin-left:4px">🎓 ID Prefix: '+esc(u.sidPrefix)+'</span>':""):"")+ 
         '</div>'+
         (!isMe?
           '<div style="display:flex;gap:6px">'+
@@ -6341,7 +6417,8 @@ function openUserModal(user,idx,container){
           }).join("")+
         '</select></div>'+
         '<div class="fl"><label class="flb">Email</label><input class="fi" id="um-email" value="'+esc(user?user.email:"")+'" placeholder="user@school.edu"/></div>'+
-        '<div class="fl"><label class="flb">Campus <span id="um-campus-req" style="color:#D61F31;display:none">*</span> <span id="um-campus-hint" style="font-size:10px;color:#C2500A;font-weight:700;display:none">(required for Partner)</span></label>'+'<select class="fsel2" id="um-campus">'+'<option value="">— No campus restriction —</option>'+SETT.campuses.map(function(x){return'<option value="'+esc(x)+'" '+(user&&user.campus===x?'selected':'')+'>'+esc(x)+'</option>';}).join("")+'</select></div>'+
+        '<div class="fl"><label class="flb">Campus <span id="um-campus-req" style="color:#D61F31;display:none">*</span> <span id="um-campus-hint" style="font-size:10px;color:#C2500A;font-weight:700;display:none">(required for Partner)</span></label>'+'<select class="fsel2" id="um-campus">'+'<option value="">— No campus restriction —</option>'+SETT.campuses.map(function(x){return'<option value="'+esc(x)+'" '+(user&&user.campus===x?'selected':'')+'>'+esc(x)+'</option>';}).join("")+'</select></div>'+'<div class="fl" id="um-sid-row" style="display:none">'+'<label class="flb">Student ID Prefix <span style="font-size:10px;color:#C2500A;font-weight:700">(Partner only)</span></label>'+'<input class="fi" id="um-sid-prefix" value="'+esc(user&&user.sidPrefix?user.sidPrefix:"")+'" '+'placeholder="e.g. UAE, LK, ES — unique prefix for this campus"/>'+'<div style="font-size:10px;color:#7A92B0;margin-top:3px">'+'IDs will be generated as: PREFIX-YEAR-001. Must be unique per campus to avoid duplicates.</div>'+'</div>'+
+        '<div class="fl" id="um-sid-wrap" style="display:none"><label class="flb">Student ID Prefix <span style="font-size:10px;color:#C2500A;font-weight:700">(Partner only — e.g. UAE, LK, ESP)</span></label><input class="fi" id="um-sidprefix" value="'+(user&&user.sidPrefix?esc(user.sidPrefix):'')+'"/><div style="font-size:10px;color:#7A92B0;margin-top:3px">IDs generated as: PREFIX-YYYY-001 · unique series per campus</div></div>'+
       '</div>'+
       (!isNew?
         '<div class="fl"><label class="flb">Account Status</label><select class="fsel2" id="um-active"><option value="true" '+(user.active!=="false"?"selected":"")+'>Active</option><option value="false" '+(user.active==="false"?"selected":"")+'>Inactive (cannot log in)</option></select></div>'
@@ -6365,7 +6442,10 @@ function openUserModal(user,idx,container){
       umCampusSel.style.borderColor=isP?"#F5A623":"";
       umCampusSel.style.background=isP?"#FFFBEB":"";
     }
-  }
+    // Show/hide Student ID Prefix field
+    // Show/hide Student ID Prefix field for partner role
+    var sidWrap=ov.querySelector("#um-sid-wrap");
+    if(sidWrap) sidWrap.style.display=isP?"block":"none";
   if(umRole){umRole.addEventListener("change",updateCampusHint);updateCampusHint();}
   ov.querySelector("#um-close").addEventListener("click",function(){ov.remove();});
   ov.querySelector("#um-cancel").addEventListener("click",function(){ov.remove();});
@@ -6376,13 +6456,15 @@ function openUserModal(user,idx,container){
       name:ov.querySelector("#um-name").value.trim(),
       role:ov.querySelector("#um-role").value,
       email:ov.querySelector("#um-email").value.trim(),
-      campus:ov.querySelector("#um-campus").value.trim()
+      campus:ov.querySelector("#um-campus").value.trim(),
+      sidPrefix:(ov.querySelector("#um-sidprefix")?ov.querySelector("#um-sidprefix").value.trim().toUpperCase():"")
     };
     var pass=ov.querySelector("#um-pass").value;
     if(pass) uData.password=pass;
     var actEl=ov.querySelector("#um-active");
     if(actEl) uData.active=actEl.value;
     if(uData.role==="partner"&&!uData.campus){toast("Campus is required for Partner role","err");return;}
+    if(uData.role==="partner"&&!uData.sidPrefix){toast("Student ID Prefix is required for Partner role","err");return;}
     if(!uData.username){toast("Username is required","err");return;}
     if(isNew&&!pass){toast("Password is required for new users","err");return;}
     if(!webUrl){toast("Google Sheets connection required to save users","err");return;}
@@ -12556,19 +12638,19 @@ function atLoadObj(k){try{var v=localStorage.getItem("aws_at_"+k);return v?JSON.
 function atSaveObj(k,v){try{localStorage.setItem("aws_at_"+k,JSON.stringify(v));}catch(e){}}
 
 function getATAssignments(){return atLoad("assignments");}
-function saveATAssignments(v){atSave("assignments",v);}
+function saveATAssignments(v){atSave("assignments",v);if(webUrl)gmsSheetRequest("saveATAssignments",{assignments:v},null);}
 function getATSubmissions(){return atLoadObj("submissions");}
-function saveATSubmissions(v){atSaveObj("submissions",v);}
+function saveATSubmissions(v){atSaveObj("submissions",v);if(webUrl)gmsSheetRequest("saveATSubmissions",{submissions:v},null);}
 function getATEP(){return atLoad("exactpath");}
-function saveATEP(v){atSave("exactpath",v);}
+function saveATEP(v){atSave("exactpath",v);if(webUrl)gmsSheetRequest("saveATExactPath",{exactpath:v},null);}
 function getATAssess(){return atLoad("assessments");}
-function saveATAssess(v){atSave("assessments",v);}
+function saveATAssess(v){atSave("assessments",v);if(webUrl)gmsSheetRequest("saveATAssessments",{assessments:v},null);}
 function getATNotes(){return atLoad("notes");}
-function saveATNotes(v){atSave("notes",v);}
+function saveATNotes(v){atSave("notes",v);if(webUrl)gmsSheetRequest("saveATNotes",{notes:v},null);}
 function getATCorrections(){return atLoad("corrections");}
 function saveATCorrections(v){atSave("corrections",v);}
 function getATReports(){return atLoad("reports");}
-function saveATReports(v){atSave("reports",v);}
+function saveATReports(v){atSave("reports",v);if(webUrl)gmsSheetRequest("saveATReports",{reports:v},null);}
 
 function atId(){return "A"+Date.now().toString(36).toUpperCase()+(Math.random()*999|0);}
 
@@ -14218,8 +14300,8 @@ var PTDELIV=["Report","Prototype","Presentation","Video","Portfolio","Exhibition
 
 function ptg(k){try{var v=localStorage.getItem("pt4_"+k);return v?JSON.parse(v):[];}catch(e){return[];}}
 function pts(k,v){try{localStorage.setItem("pt4_"+k,JSON.stringify(v));}catch(e){}}
-function ptGA(){return ptg("a");}function ptSA(v){pts("a",v);}
-function ptGE(){return ptg("e");}function ptSE(v){pts("e",v);}
+function ptGA(){return ptg("a");}function ptSA(v){pts("a",v);if(webUrl)gmsSheetRequest("savePTAssignments",{assignments:v},null);}
+function ptGE(){return ptg("e");}function ptSE(v){pts("e",v);if(webUrl)gmsSheetRequest("savePTEvaluations",{evaluations:v},null);}
 function ptID(){return"P"+Date.now().toString(36).toUpperCase()+(Math.random()*9999|0);}
 
 // Seed
