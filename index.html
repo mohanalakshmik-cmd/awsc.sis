@@ -455,12 +455,21 @@ document.addEventListener("DOMContentLoaded",function(){
                 window._sessionToken = _loginToken;
                 if(typeof updateUserUI==="function") updateUserUI(_loginUser);
                 if(typeof loadLocal==="function") loadLocal();
-                sheetFetch().then(function(){launchApp();}).catch(function(){launchApp();});
-              } else if(_waitAttempts > 300){
-                // After 15 seconds still not ready — show error, do NOT reload
+                // Use fast fetch (students+settings only), rest loads in background
+                var fetchFn = typeof sheetFetchFast==="function" ? sheetFetchFast : sheetFetch;
+                fetchFn().then(function(){launchApp();}).catch(function(){launchApp();});
+              } else if(_waitAttempts > 150){
+                // 15s passed — launch with cached local data, don't wait for full JS
                 clearInterval(_waitInterval);
-                btn.disabled=false; btn.textContent="Sign In";
-                showErr("Page is taking too long to load. Please refresh the page manually and try again.");
+                showErr("");
+                window._sessionToken = _loginToken;
+                // Try to load cached data and launch
+                try {
+                  if(typeof loadLocal==="function") loadLocal();
+                  if(typeof setLive==="function") setLive();
+                  if(typeof launchApp==="function") launchApp();
+                  else { location.reload(); }
+                } catch(ex) { location.reload(); }
               }
             }, 100);
           }
@@ -7966,27 +7975,11 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
   if(_sessionToken&&webUrl){
-    // Validate existing session silently
-    var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
-    // Fast login: students+settings first, then background sync rest
     sheetFetchFast().then(function(ok){
-      clearTimeout(t);
-      if(ok){
-        setLive();launchApp();
-      } else {
-        // Session invalid or fetch failed — try launching with cached data
-        if(_sessionToken){
-          setLive();launchApp();
-          toast("Loaded from local cache.","");
-        } else {
-          _sessionToken="";localStorage.removeItem("aws_token");
-        }
-      }
-    }).catch(function(){
-      clearTimeout(t);
-      // Launch with cache on any error
       setLive();launchApp();
-      toast("Loaded from local cache — sheet sync failed.","");
+      if(!ok) toast("Loaded from cache. Sync failed.","");
+    }).catch(function(){
+      setLive();launchApp();
     });
   }
 })();
