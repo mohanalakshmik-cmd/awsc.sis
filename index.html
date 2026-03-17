@@ -2006,7 +2006,7 @@ var SM={
 };
 var PM={"Low":{bg:"#F4F6F8",tc:"#5A6E86"},"Normal":{bg:"#EEF3FF",tc:"#1A365E"},"High":{bg:"#FFF6E0",tc:"#8A5F00"},"Urgent":{bg:"#FFF0F1",tc:"#D61F31"}};
 
-function defS(){return{academicYear:"2024 - 2025",campuses:["Main Campus","North Campus","South Campus","Online"],capacity:"Pre-K–5: 120 | 6–8: 80 | 9–12: 100",docs:["Birth Certificate","Immunization Records","Prior School Transcript","Passport / ID Copy","Medical Form","Recommendation Letter","Emergency Contact Form","Technology Agreement"],emailNotif:"Enabled for status changes and document requests",cohorts:["Grade 1A","Grade 1B","Grade 5A","Grade 5B","Grade 9A","Grade 9B","Grade 10A"],sidPrefix:"AWS",gradeScale:"A/B/C/D/F",feeCurrency:{base:"INR",rates:{"USD":1,"INR":83.2}},blocks:[]};}
+function defS(){return{academicYear:"2024 - 2025",campuses:["Chennai","Sri Lanka","UAE","Spain","Online"],capacity:"Pre-K–5: 120 | 6–8: 80 | 9–12: 100",docs:["Birth Certificate","Immunization Records","Prior School Transcript","Passport / ID Copy","Medical Form","Recommendation Letter","Emergency Contact Form","Technology Agreement"],emailNotif:"Enabled for status changes and document requests",cohorts:["Pre-K A","Kindergarten A","Grade 1A","Grade 1B","Grade 2A","Grade 2B","Grade 3A","Grade 3B","Grade 4A","Grade 4B","Grade 5A","Grade 5B","Grade 6A","Grade 6B","Grade 7A","Grade 7B","Grade 8A","Grade 8B","Grade 9A","Grade 9B","Grade 10A","Grade 10B","Grade 11A","Grade 12A"],sidPrefix:"AWS",gradeScale:"A/B/C/D/F",feeCurrency:{base:"INR",rates:{"USD":1,"INR":83.2}},blocks:[]};}
 // ── Settings: localStorage cache + background Sheets push ─────────────────
 function loadS(){try{var s=localStorage.getItem("aws_sett_v5");return s?Object.assign(defS(),JSON.parse(s)):defS();}catch(e){return defS();}}
 function saveS(s){
@@ -3893,9 +3893,15 @@ function rWaitlist(c){
 function rCohorts(c){
   var html='<div style="display:flex;flex-direction:column;gap:14px">';
 
+  // Build full cohorts list: Settings + any used by students not in Settings list
+  var allCohorts=SETT.cohorts.slice();
+  students.forEach(function(s){
+    if(s.cohort&&s.cohort!==""&&allCohorts.indexOf(s.cohort)<0) allCohorts.push(s.cohort);
+  });
+
   // Summary cards
   html+='<div class="g4">';
-  html+=sc("Total Cohorts", SETT.cohorts.length, "#1A365E");
+  html+=sc("Total Cohorts", allCohorts.length, "#1A365E");
   var totalCohortStudents=students.filter(function(s){return s.cohort&&s.cohort!=="";}).length;
   html+=sc("Assigned Students", totalCohortStudents, "#0EA5E9");
   var unassigned=students.filter(function(s){return s.status==="Enrolled"&&(!s.cohort||s.cohort==="");}).length;
@@ -3913,7 +3919,7 @@ function rCohorts(c){
     html+='<div class="card" style="padding:40px;text-align:center;color:#7A92B0">No cohorts configured. Click <strong>+ New Cohort</strong> to create one.</div>';
   }
 
-  SETT.cohorts.forEach(function(coh,cohIdx){
+  allCohorts.forEach(function(coh,cohIdx){
     var members=students.filter(function(s){return s.cohort===coh;});
     var enrolled=members.filter(function(s){return s.status==="Enrolled";});
     var grades=[];members.forEach(function(s){if(s.grade&&!grades.includes(s.grade))grades.push(s.grade);});
@@ -5889,9 +5895,21 @@ function rAnalytics(c){
   // By gender
   var byGender={};students.forEach(function(s){var g=s.gender||"Unknown";byGender[g]=(byGender[g]||0)+1;});
 
-  // By campus
+  // By campus — include ALL campuses found in student records
+  // (catches campuses added by partners not yet in Settings list)
   var byCampus={};
-  SETT.campuses.forEach(function(ca){byCampus[ca]=students.filter(function(s){return s.campus===ca;}).length;});
+  // First seed from Settings campuses
+  SETT.campuses.forEach(function(ca){byCampus[ca]=0;});
+  // Then count all students including those with unlisted campus values
+  students.forEach(function(s){
+    var ca=(s.campus||"No Campus").trim();
+    byCampus[ca]=(byCampus[ca]||0)+1;
+  });
+  // Build a combined sorted campuses list (Settings order first, then any extras)
+  var allCampuses=SETT.campuses.slice();
+  Object.keys(byCampus).forEach(function(ca){
+    if(allCampuses.indexOf(ca)<0&&byCampus[ca]>0) allCampuses.push(ca);
+  });
 
   // By priority
   var byPri={};["Urgent","High","Normal","Low"].forEach(function(p){byPri[p]=students.filter(function(s){return s.priority===p;}).length;});
@@ -5983,8 +6001,8 @@ function rAnalytics(c){
   // Campus breakdown
   html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">🏫 Enrollment by Campus</div>';
   var maxCa=Math.max.apply(null,Object.values(byCampus).concat([1]));
-  SETT.campuses.forEach(function(ca,i){
-    var n=byCampus[ca]||0;var col=CHARTCOLS[i%CHARTCOLS.length];
+  allCampuses.forEach(function(ca,i){
+    var n=byCampus[ca]||0;if(n===0)return;var col=CHARTCOLS[i%CHARTCOLS.length];
     var enrN=students.filter(function(s){return s.campus===ca&&s.status==="Enrolled";}).length;
     html+='<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:3px">'
       +'<span style="font-size:12px;font-weight:700;color:#1A365E">'+esc(ca)+'</span>'
@@ -7245,7 +7263,10 @@ function openModal(id,stype){
     caEl.innerHTML=SETT.campuses.map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
     caEl.disabled=false;caEl.style.background="";caEl.title="";
   }
-  var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+SETT.cohorts.map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var coEl=document.getElementById("f-cohort");
+  var _modalCohorts=SETT.cohorts.slice();
+  students.forEach(function(s){if(s.cohort&&s.cohort!==""&&_modalCohorts.indexOf(s.cohort)<0)_modalCohorts.push(s.cohort);});
+  coEl.innerHTML='<option value="">— None —</option>'+_modalCohorts.map(function(x){return'<option'+(s&&s.cohort===x?' selected':'')+'>'+esc(x)+'</option>';}).join("");
   var dt=document.getElementById("doc-toggles");dt.innerHTML=SETT.docs.map(function(d){var on=s&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
   document.getElementById("f-fn").value=s?s.firstName:"";
   document.getElementById("f-ln").value=s?s.lastName:"";
