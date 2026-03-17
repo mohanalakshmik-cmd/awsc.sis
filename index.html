@@ -833,11 +833,11 @@ var TERMS = ["Term 1","Term 2","Term 3","Term 4"];
 
 // ── LocalStorage helpers
 function loadElemRecords(){try{return JSON.parse(localStorage.getItem("aws_elem_records_v1")||"[]");}catch(e){return[];}}
-function saveElemRecords(d){localStorage.setItem("aws_elem_records_v1",JSON.stringify(d));}
+function saveElemRecords(d){localStorage.setItem("aws_elem_records_v1",JSON.stringify(d));if(webUrl)gmsSheetRequest("saveElemRecords",{records:d},null);}
 function loadMsRecords(){try{return JSON.parse(localStorage.getItem("aws_ms_records_v1")||"[]");}catch(e){return[];}}
-function saveMsRecords(d){localStorage.setItem("aws_ms_records_v1",JSON.stringify(d));}
+function saveMsRecords(d){localStorage.setItem("aws_ms_records_v1",JSON.stringify(d));if(webUrl)gmsSheetRequest("saveMSRecords",{records:d},null);}
 function loadElemNarrative(){try{return JSON.parse(localStorage.getItem("aws_elem_narrative_v1")||"[]");}catch(e){return[];}}
-function saveElemNarrative(d){localStorage.setItem("aws_elem_narrative_v1",JSON.stringify(d));}
+function saveElemNarrative(d){localStorage.setItem("aws_elem_narrative_v1",JSON.stringify(d));if(webUrl)gmsSheetRequest("saveElemNarratives",{narratives:d},null);}
 
 // ── Get record for a student/term
 function getElemRecord(studentId,term){
@@ -1317,7 +1317,7 @@ function rElemPortfolio(body,s,term,container){
     list.querySelectorAll(".port-del").forEach(function(b){
       b.addEventListener("click",function(){
         var idx2=parseInt(b.dataset.i);saved.splice(idx2,1);
-        localStorage.setItem(key,JSON.stringify(saved));refreshList();
+        localStorage.setItem(key,JSON.stringify(saved));if(webUrl){var _pSid=s.id,_pTerm=window._elemTerm||"Term 1";gmsSheetRequest("upsertElemPortfolio",{portfolio:{key:key,studentId:_pSid,term:_pTerm,entries:saved}},null);}refreshList();
       });
     });
   }
@@ -1325,7 +1325,7 @@ function rElemPortfolio(body,s,term,container){
   document.getElementById("port-add").addEventListener("click",function(){
     var d=new Date();
     saved.push({date:d.toISOString().split("T")[0],type:"Observation",title:"",description:"",subject:""});
-    localStorage.setItem(key,JSON.stringify(saved));refreshList();
+    localStorage.setItem(key,JSON.stringify(saved));if(webUrl){var _pSid=s.id,_pTerm=window._elemTerm||"Term 1";gmsSheetRequest("upsertElemPortfolio",{portfolio:{key:key,studentId:_pSid,term:_pTerm,entries:saved}},null);}refreshList();
   });
   refreshList();
 }
@@ -2425,6 +2425,86 @@ function sheetFetch(){
         // Calendar
         if(Array.isArray(d.calendar)){
           _CAL=d.calendar.map(function(e){return Object.assign({},e,{id:e.id||("cal"+Date.now()+Math.random())});});
+        }
+        // ── Lower School Progress Records ──────────────────────────────────
+        if(Array.isArray(d.elemProgress)&&d.elemProgress.length){
+          localStorage.setItem("aws_elem_records_v1",JSON.stringify(d.elemProgress));
+        }
+        // ── Middle School Grades ────────────────────────────────────────────
+        if(Array.isArray(d.msGrades)&&d.msGrades.length){
+          localStorage.setItem("aws_ms_records_v1",JSON.stringify(d.msGrades));
+        }
+        // ── Elem Narratives ─────────────────────────────────────────────────
+        if(Array.isArray(d.elemNarratives)&&d.elemNarratives.length){
+          localStorage.setItem("aws_elem_narrative_v1",JSON.stringify(d.elemNarratives));
+        }
+        // ── Elem Portfolios ─────────────────────────────────────────────────
+        if(Array.isArray(d.elemPortfolios)&&d.elemPortfolios.length){
+          // Merge into individual localStorage keys per student+term
+          d.elemPortfolios.forEach(function(po){
+            if(po.key) localStorage.setItem(po.key, JSON.stringify(po.entries||[]));
+          });
+        }
+        // ── Skills Mastery ──────────────────────────────────────────────────
+        if(d.skillMastery&&typeof d.skillMastery==="object"&&Object.keys(d.skillMastery).length){
+          localStorage.setItem("aws_skill_mastery_v1",JSON.stringify(d.skillMastery));
+        }
+        // ── Health Records ──────────────────────────────────────────────────
+        if(Array.isArray(d.health)&&d.health.length){
+          localStorage.setItem("aws_health_v1",JSON.stringify(d.health));
+        }
+        // ── Behaviour Log ───────────────────────────────────────────────────
+        if(Array.isArray(d.behaviour)&&d.behaviour.length){
+          localStorage.setItem("aws_beh_v1",JSON.stringify(d.behaviour));
+        }
+        // ── Timetable Blocks ────────────────────────────────────────────────
+        if(Array.isArray(d.blocks)&&d.blocks.length){
+          tSave("blocks",d.blocks);
+        }
+        // ── Assignment Tracker ──────────────────────────────────────────────
+        if(Array.isArray(d.atAssignments)&&d.atAssignments.length){
+          atSave("assignments",d.atAssignments);
+        }
+        if(Array.isArray(d.atSubs)&&d.atSubs.length){
+          // Convert array back to keyed object
+          var subsObj={};
+          d.atSubs.forEach(function(r){
+            if(r.subKey) subsObj[r.subKey]={
+              score:r.score,status:r.status,submittedDate:r.submittedDate,
+              teacherNote:r.teacherNote,
+              penaltyApplied:r.penaltyApplied==="TRUE"||r.penaltyApplied===true,
+              penaltyWaived:r.penaltyWaived==="TRUE"||r.penaltyWaived===true,
+              penaltyPoints:parseFloat(r.penaltyPoints)||0
+            };
+          });
+          atSaveObj("submissions",subsObj);
+        }
+        if(Array.isArray(d.atAssessments)&&d.atAssessments.length){
+          atSave("assessments",d.atAssessments);
+        }
+        if(Array.isArray(d.atExactPath)&&d.atExactPath.length){
+          atSave("exactpath",d.atExactPath.map(function(r){
+            try{r.trophies=JSON.parse(r.trophies||"[]");}catch(e2){r.trophies=[];}
+            return r;
+          }));
+        }
+        if(Array.isArray(d.atNotes)&&d.atNotes.length){ atSave("notes",d.atNotes); }
+        if(Array.isArray(d.atReports)&&d.atReports.length){ atSave("reports",d.atReports); }
+        // ── AWSC-27 Project Tracker ─────────────────────────────────────────
+        if(Array.isArray(d.ptAssignments)&&d.ptAssignments.length){
+          tSave("pt_assign",d.ptAssignments.map(function(a){
+            try{a.team=JSON.parse(a.team||"[]");}catch(e2){a.team=[];}
+            a.mastery=a.mastery==="TRUE"||a.mastery===true;
+            return a;
+          }));
+        }
+        if(Array.isArray(d.ptEvaluations)&&d.ptEvaluations.length){
+          tSave("pt_evals",d.ptEvaluations.map(function(ev){
+            try{ev.cr=JSON.parse(ev.crJson||"{}");}catch(e2){ev.cr={};}
+            try{ev.co=JSON.parse(ev.coJson||"{}");}catch(e2){ev.co={};}
+            ev.mastery=ev.mastery==="TRUE"||ev.mastery===true;
+            return ev;
+          }));
         }
         saveLocal();setLive();return true;
       }return false;
@@ -14739,7 +14819,7 @@ function rPTR(c){
 // ═══════════════════════════════════════════════════════════════════════════
 
 function loadSkillMastery(){try{return JSON.parse(localStorage.getItem("aws_skill_mastery_v1")||"{}");}catch(e){return{};}}
-function saveSkillMastery(d){localStorage.setItem("aws_skill_mastery_v1",JSON.stringify(d));}
+function saveSkillMastery(d){localStorage.setItem("aws_skill_mastery_v1",JSON.stringify(d));if(webUrl)gmsSheetRequest("saveSkillMastery",{mastery:d},null);}
 function getStudentMastery(sid){var a=loadSkillMastery();return a[sid]||{};}
 function setStudentMastery(sid,map){var a=loadSkillMastery();a[sid]=map;saveSkillMastery(a);}
 
