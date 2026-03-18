@@ -414,10 +414,15 @@ document.addEventListener("DOMContentLoaded",function(){
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
 
-  // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
+  // Sign In button — delegates to main app doLogin() when available,
+  // otherwise performs a safe bootstrap login and reloads into the full app.
+  // NOTE: getPermFromCache and updateUserUI live in the main app script and
+  // may not be defined yet, so every call is guarded with typeof checks.
   el("login-btn").addEventListener("click",function(e){
     e.preventDefault();
+    // If the main app is already loaded, hand off immediately — no duplicate logic.
     if(typeof doLogin==="function"){doLogin();return;}
+
     var webUrl=localStorage.getItem("aws_url")||"";
     if(!webUrl){
       showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
@@ -431,33 +436,44 @@ document.addEventListener("DOMContentLoaded",function(){
     var btn=el("login-btn");
     btn.disabled=true; btn.textContent="Signing in...";
     showErr("");
+
+    function _onLoginSuccess(d, usr, pw){
+      localStorage.setItem("aws_token", d.token);
+      if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
+      // Only call main-app helpers if they exist — avoids ReferenceError
+      if(typeof launchApp==="function"){
+        var loginUser = d.user||{username:usr,role:"staff",name:usr};
+        // Guard: getPermFromCache is defined in the main app script (line ~2106)
+        if(typeof getPermFromCache==="function"){
+          var cachedPerms = getPermFromCache(loginUser.username);
+          if(cachedPerms !== null) loginUser.permissions = cachedPerms;
+        }
+        // Guard: updateUserUI is defined in the main app script
+        if(typeof updateUserUI==="function") updateUserUI(loginUser);
+        window._sessionToken = d.token;
+        if(typeof loadLocal==="function") loadLocal();
+        if(typeof sheetFetchFast==="function"){
+          sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
+        } else if(typeof sheetFetch==="function"){
+          sheetFetch().then(function(){launchApp();}).catch(function(){launchApp();});
+        } else {
+          launchApp();
+        }
+      } else {
+        // Main app JS not yet ready — reload so auto-login picks up the saved token.
+        showErr("Logging in...");
+        setTimeout(function(){ location.reload(); }, 300);
+      }
+    }
+
     var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
     var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
-    fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+    fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
       .then(function(r){clearTimeout(t);return r.json();})
       .then(function(d){
         btn.disabled=false; btn.textContent="Sign In";
         if(d.status==="ok"&&d.token){
-          localStorage.setItem("aws_token",d.token);
-          if(typeof launchApp==="function"){
-            var loginUser = d.user||{username:username,role:"staff",name:username};
-            // Merge cached permissions into user object
-            var cachedPerms = getPermFromCache(loginUser.username);
-            if(cachedPerms !== null) loginUser.permissions = cachedPerms;
-            if(typeof updateUserUI==="function") updateUserUI(loginUser);
-            window._sessionToken=d.token;
-            if(typeof loadLocal==="function") loadLocal();
-            if(typeof sheetFetch==="function"){
-              sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
-            } else { launchApp(); }
-          } else {
-            // Main JS not yet parsed — save token and reload.
-            // On reload auto-login will run with the full app loaded.
-            showErr("Logging in...");
-            localStorage.setItem("aws_token", d.token);
-            if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
-            setTimeout(function(){ location.reload(); }, 300);
-          }
+          _onLoginSuccess(d, username, password);
         } else {
           showErr(d.message||"Incorrect username or password.");
         }
@@ -465,7 +481,7 @@ document.addEventListener("DOMContentLoaded",function(){
       .catch(function(err){
         btn.disabled=false; btn.textContent="Sign In";
         if(err.name==="AbortError"){
-          // Timed out — retry once automatically
+          // Apps Script cold-start timeout — retry once with both payload encodings
           showErr("Server slow to respond. Retrying...");
           setTimeout(function(){
             btn.disabled=true; btn.textContent="Retrying...";
@@ -475,10 +491,7 @@ document.addEventListener("DOMContentLoaded",function(){
               .then(function(d){
                 btn.disabled=false; btn.textContent="Sign In";
                 if(d.status==="ok"&&d.token){
-                  localStorage.setItem("aws_token",d.token);
-                  if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-                  showErr("Logging in...");
-                  setTimeout(function(){location.reload();},300);
+                  _onLoginSuccess(d, username, password);
                 } else {
                   showErr(d.message||"Incorrect username or password.");
                 }
