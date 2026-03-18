@@ -438,10 +438,13 @@ document.addEventListener("DOMContentLoaded",function(){
     showErr("");
 
     function _onLoginSuccess(d, usr, pw){
+      // Always persist token + user so auto-login survives a reload
+      _sessionToken = d.token;
       localStorage.setItem("aws_token", d.token);
       if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
-      // Only call main-app helpers if they exist — avoids ReferenceError
+
       if(typeof launchApp==="function"){
+        // Main app is fully loaded — run the full success path directly, no reload needed
         var loginUser = d.user||{username:usr,role:"staff",name:usr};
         // Guard: getPermFromCache is defined in the main app script (line ~2106)
         if(typeof getPermFromCache==="function"){
@@ -452,15 +455,21 @@ document.addEventListener("DOMContentLoaded",function(){
         if(typeof updateUserUI==="function") updateUserUI(loginUser);
         window._sessionToken = d.token;
         if(typeof loadLocal==="function") loadLocal();
+        if(typeof SETT!=="undefined"&&typeof loadS==="function") SETT=loadS();
         if(typeof sheetFetchFast==="function"){
-          sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
+          sheetFetchFast().then(function(ok){ launchApp(); if(!ok) toast&&toast("Loaded from cache.",""); }).catch(function(){ launchApp(); });
         } else if(typeof sheetFetch==="function"){
-          sheetFetch().then(function(){launchApp();}).catch(function(){launchApp();});
+          sheetFetch().then(function(){ launchApp(); }).catch(function(){ launchApp(); });
         } else {
           launchApp();
         }
+      } else if(typeof doLogin==="function"){
+        // Main app partially loaded — hand off to its own doLogin success handler
+        // by pre-populating the form and calling doLogin() with the token already saved
+        doLogin();
       } else {
-        // Main app JS not yet ready — reload so auto-login picks up the saved token.
+        // Main app JS not yet parsed at all — reload so auto-login picks up the saved token
+        // (token + user are already in localStorage above, so the auto-login block will fire)
         showErr("Logging in...");
         setTimeout(function(){ location.reload(); }, 300);
       }
@@ -2373,7 +2382,7 @@ function genSID(){
   return prefix+"-"+yr+"-"+String((Math.max.apply(null,nums.concat([0]))+1)).padStart(3,"0");
 }
 
-function sheetFetchFast(){
+function sheetFetchFast(retryOnSession){
   // Loads ONLY students + settings — fast path for login
   if(!webUrl) return Promise.resolve(false);
   var done=false;
@@ -2384,6 +2393,13 @@ function sheetFetchFast(){
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
       if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
+        // Apps Script can take a moment to commit the session row after login.
+        // Retry once after 2.5 s before giving up and showing the login page.
+        if(retryOnSession!==false){
+          return new Promise(function(resolve){
+            setTimeout(function(){ resolve(sheetFetchFast(false)); },2500);
+          });
+        }
         handleSessionExpired();return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
@@ -2419,7 +2435,11 @@ function sheetFetch(){
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
       if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        // Session expired — go back to login
+        // Only treat as truly expired if the app has been running a while.
+        // A "Session" error within 10 s of page load is likely an Apps Script
+        // write-lag false-positive — ignore it rather than kicking the user out.
+        var uptime=(Date.now()-(window._appStartTime||Date.now()));
+        if(uptime<10000) return false;
         handleSessionExpired();return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
@@ -2616,7 +2636,7 @@ function sheetPush(student,action){
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
   var c=new AbortController(),t=setTimeout(function(){c.abort();},20000);
-  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0&&(Date.now()-(window._appStartTime||0))>10000)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
 }
 function sheetDel(id){
   if(!webUrl)return;
@@ -2636,7 +2656,7 @@ function gmsSheetRequest(action, payload, onOk) {
     .then(function(r){clearTimeout(t); return r.json();})
     .then(function(d){
       if(d.status==="ok"){setLive();if(onOk)onOk(d);}
-      else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
+      else if(d.message&&d.message.indexOf("Session")>=0&&(Date.now()-(window._appStartTime||0))>10000){handleSessionExpired();}
       else{console.warn("GMS sync error:",d.message);}
     })
     .catch(function(e){console.warn("GMS sync failed:",e);});
@@ -7829,6 +7849,7 @@ function exportRecord(s){
 // LOGIN / SESSION MANAGEMENT
 // ════════════════════════════════════════════════════════════════
 function launchApp(){
+  window._appStartTime = window._appStartTime || Date.now();
   document.getElementById("login").style.display="none";
   document.getElementById("app").classList.add("on");
   document.getElementById("sb-yr").textContent=(SETT.academicYear||"2024–2025")+" · Admissions SIS";
@@ -8026,12 +8047,18 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   SETT=loadS();loadLocal();
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
+  // Restore user from localStorage so UI is populated before the fetch returns
+  if(_currentUser) updateUserUI(_currentUser);
   if(_sessionToken&&webUrl){
     sheetFetchFast().then(function(ok){
-      setLive();launchApp();
-      if(!ok) toast("Loaded from cache. Sync failed.","");
+      if(ok){ setLive(); }
+      // Always launch — if fetch failed we still have local cache data
+      launchApp();
+      if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
     }).catch(function(){
-      setLive();launchApp();
+      // Network error — launch with whatever is in local cache
+      launchApp();
+      toast("Loaded from local cache.","");
     });
   }
 })();
