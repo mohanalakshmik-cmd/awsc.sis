@@ -358,30 +358,16 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
   </div>
 </div>
 <script>
-// ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
+// ── SELF-CONTAINED LOGIN BOOTSTRAP
+var DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec"; ──────────────────────────────────────────
 // Runs immediately, independently of the main app script below.
 // Handles: Configure URL toggle, Save URL, and Sign In button.
-
-// ╔══════════════════════════════════════════════════════════════════════╗
-// ║  REQUIRED SETUP — replace the placeholder below with your real URL  ║
-// ║                                                                      ║
-// ║  1. Open Apps Script → Deploy → Manage deployments                  ║
-// ║  2. Copy the Web App URL (ends with /exec)                          ║
-// ║  3. Paste it between the quotes on the line below                   ║
-// ║  4. Save this file and push to GitHub                               ║
-// ╚══════════════════════════════════════════════════════════════════════╝
-// ⚠️  PASTE YOUR FULL /exec URL BELOW (copy from Apps Script → Deploy → Manage deployments)
-var DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec";
-
 document.addEventListener("DOMContentLoaded",function(){
 (function(){
   function el(id){return document.getElementById(id);}
-
-  // ── Auto-seed URL from default if nothing saved yet ───────────────────
-  if(DEFAULT_SCRIPT_URL && DEFAULT_SCRIPT_URL !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE"){
-    if(!localStorage.getItem("aws_url")){
-      localStorage.setItem("aws_url", DEFAULT_SCRIPT_URL);
-    }
+  // Auto-seed URL from hardcoded default if nothing saved yet
+  if(DEFAULT_SCRIPT_URL && !localStorage.getItem("aws_url")){
+    localStorage.setItem("aws_url", DEFAULT_SCRIPT_URL);
   }
 
   // ── Warm-up ping: wake the App Script on page load ────────────────────
@@ -396,11 +382,6 @@ document.addEventListener("DOMContentLoaded",function(){
   // Populate URL input from localStorage on load
   var savedUrl=localStorage.getItem("aws_url")||"";
   if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
-
-  // ── Auto-show URL section if no URL is saved at all ───────────────────
-  if(!savedUrl && el("url-section")){
-    el("url-section").style.display="block";
-  }
 
   // ⚙ Configure API URL toggle
   el("show-url-btn").addEventListener("click",function(e){
@@ -438,41 +419,31 @@ document.addEventListener("DOMContentLoaded",function(){
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
 
-  // Sign In button — simply waits for the main app doLogin() then calls it.
-  // The main app is in a SECOND script block so doLogin may not exist yet.
+  // Sign In button — delegates to main app doLogin()
   el("login-btn").addEventListener("click", function(e){
     e.preventDefault();
-    var webUrl = localStorage.getItem("aws_url") || "";
-    if(!webUrl){
-      showErr("First click '\u2699 Configure API URL' and paste your Apps Script URL.");
-      el("url-section").style.display = "block";
-      return;
-    }
     if(typeof doLogin === "function"){
       doLogin();
     } else {
       var btn = el("login-btn");
-      btn.disabled = true;
-      btn.textContent = "Loading app...";
+      btn.disabled = true; btn.textContent = "Loading...";
       var waited = 0;
       var poll = setInterval(function(){
         waited += 50;
         if(typeof doLogin === "function"){
           clearInterval(poll);
-          btn.disabled = false;
-          btn.textContent = "Sign In";
+          btn.disabled = false; btn.textContent = "Sign In";
           doLogin();
         } else if(waited >= 8000){
           clearInterval(poll);
-          btn.disabled = false;
-          btn.textContent = "Sign In";
+          btn.disabled = false; btn.textContent = "Sign In";
           showErr("App failed to load. Please refresh the page.");
         }
       }, 50);
     }
-  });
+  });;
 
-    function showErr(msg){
+  function showErr(msg){
     var e=el("login-err");
     if(!e)return;
     if(!msg){e.style.display="none";return;}
@@ -2186,7 +2157,7 @@ function getAPScholar(records){
 })();
 
 var students=[],nextId=100,view="dashboard",editId=null;
-var webUrl=localStorage.getItem("aws_url")||(typeof DEFAULT_SCRIPT_URL!=="undefined"&&DEFAULT_SCRIPT_URL!=="PASTE_YOUR_APPS_SCRIPT_URL_HERE"?DEFAULT_SCRIPT_URL:"")||"";
+var webUrl=localStorage.getItem("aws_url")||(typeof DEFAULT_SCRIPT_URL!=="undefined"?DEFAULT_SCRIPT_URL:"")||"";
 var _sessionToken=localStorage.getItem("aws_token")||"";
 var _currentUser=null;
 try{_currentUser=JSON.parse(localStorage.getItem("aws_user")||"null");}catch(e){}
@@ -2338,7 +2309,7 @@ function genSID(){
   return prefix+"-"+yr+"-"+String((Math.max.apply(null,nums.concat([0]))+1)).padStart(3,"0");
 }
 
-function sheetFetchFast(retryOnSession){
+function sheetFetchFast(){
   // Loads ONLY students + settings — fast path for login
   if(!webUrl) return Promise.resolve(false);
   var done=false;
@@ -2349,13 +2320,6 @@ function sheetFetchFast(retryOnSession){
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
       if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        // Apps Script can take a moment to commit the session row after login.
-        // Retry once after 2.5 s before giving up and showing the login page.
-        if(retryOnSession!==false){
-          return new Promise(function(resolve){
-            setTimeout(function(){ resolve(sheetFetchFast(false)); },2500);
-          });
-        }
         handleSessionExpired();return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
@@ -2391,11 +2355,7 @@ function sheetFetch(){
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
       if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        // Only treat as truly expired if the app has been running a while.
-        // A "Session" error within 10 s of page load is likely an Apps Script
-        // write-lag false-positive — ignore it rather than kicking the user out.
-        var uptime=(Date.now()-(window._appStartTime||Date.now()));
-        if(uptime<10000) return false;
+        // Session expired — go back to login
         handleSessionExpired();return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
@@ -2592,7 +2552,7 @@ function sheetPush(student,action){
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
   var c=new AbortController(),t=setTimeout(function(){c.abort();},20000);
-  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0&&(Date.now()-(window._appStartTime||0))>10000)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
 }
 function sheetDel(id){
   if(!webUrl)return;
@@ -2612,7 +2572,7 @@ function gmsSheetRequest(action, payload, onOk) {
     .then(function(r){clearTimeout(t); return r.json();})
     .then(function(d){
       if(d.status==="ok"){setLive();if(onOk)onOk(d);}
-      else if(d.message&&d.message.indexOf("Session")>=0&&(Date.now()-(window._appStartTime||0))>10000){handleSessionExpired();}
+      else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
       else{console.warn("GMS sync error:",d.message);}
     })
     .catch(function(e){console.warn("GMS sync failed:",e);});
@@ -7805,7 +7765,6 @@ function exportRecord(s){
 // LOGIN / SESSION MANAGEMENT
 // ════════════════════════════════════════════════════════════════
 function launchApp(){
-  window._appStartTime = window._appStartTime || Date.now();
   document.getElementById("login").style.display="none";
   document.getElementById("app").classList.add("on");
   document.getElementById("sb-yr").textContent=(SETT.academicYear||"2024–2025")+" · Admissions SIS";
@@ -7893,21 +7852,11 @@ function doLogin(){
   var err=document.getElementById("login-err");
   if(!username||!password){showLoginErr("Please enter your username and password.");return;}
   if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
-  btn.disabled=true;err.style.display="none";
-
-  // Countdown so user knows server is waking up
-  var _dlTimer=null, _dlRemaining=60;
-  btn.textContent="Signing in... ("+_dlRemaining+"s)";
-  _dlTimer=setInterval(function(){
-    _dlRemaining--;
-    if(_dlRemaining>0) btn.textContent="Signing in... ("+_dlRemaining+"s)";
-    else clearInterval(_dlTimer);
-  },1000);
-
+  btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
   var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},60000);
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},30000);
   fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
-    .then(function(r){clearTimeout(t);clearInterval(_dlTimer);return r.json();})
+    .then(function(r){clearTimeout(t);return r.json();})
     .then(function(d){
       btn.disabled=false;btn.textContent="Sign In";
       if(d.status==="ok"&&d.token){
@@ -7915,16 +7864,15 @@ function doLogin(){
         localStorage.setItem("aws_token",d.token);
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+        // Fast login: load students+settings, then background sync rest
         SETT=loadS();loadLocal();
-        // Launch immediately — don't block on sheet fetch
-        launchApp();
-        // Sync data in the background after launch
-        setTimeout(function(){
-          sheetFetchFast().then(function(ok){
-            if(ok){ if(typeof render==="function") render(); }
-            else toast("Loaded from local cache.","");
-          }).catch(function(){});
-        }, 500);
+        sheetFetchFast().then(function(ok){
+          launchApp();
+          if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
+        }).catch(function(){
+          launchApp();
+          toast("Loaded from local cache.","");
+        });
       } else {
         // Show the exact server message so we know what went wrong
         var msg = d.message || "No error message returned from server.";
@@ -7933,18 +7881,15 @@ function doLogin(){
       }
     })
     .catch(function(e){
-      clearInterval(_dlTimer);
       btn.disabled=false;btn.textContent="Sign In";
       if(e.name==="AbortError"){
-        // Timed out — retry once with countdown
-        showLoginErr("Server is waking up. Retrying...");
-        var _r=60; btn.disabled=true; btn.textContent="Retrying... ("+_r+"s)";
-        var _rt=setInterval(function(){_r--;if(_r>0)btn.textContent="Retrying... ("+_r+"s)";else clearInterval(_rt);},1000);
+        // Timed out — retry once
+        showLoginErr("Server slow to respond. Retrying...");
         setTimeout(function(){
+          btn.disabled=true;btn.textContent="Retrying...";
           var p2=encodeURIComponent(JSON.stringify({username:username,password:password}));
-          var c2=new AbortController(),t2=setTimeout(function(){c2.abort();},60000);
-          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c2.signal,mode:"cors"})
-            .then(function(r){clearTimeout(t2);clearInterval(_rt);return r.json();})
+          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+            .then(function(r){return r.json();})
             .then(function(d){
               btn.disabled=false;btn.textContent="Sign In";
               if(d.status==="ok"&&d.token){
@@ -7953,16 +7898,12 @@ function doLogin(){
                 updateUserUI(d.user||{username:username,role:"staff",name:username});
                 toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
                 SETT=loadS();loadLocal();
-                launchApp();
-                setTimeout(function(){
-                  sheetFetchFast().then(function(ok){ if(ok&&typeof render==="function") render(); else toast("Loaded from cache.",""); }).catch(function(){});
-                },500);
+                sheetFetchFast().then(function(ok){launchApp();if(!ok)toast("Loaded from cache.","");}).catch(function(){launchApp();});
               } else {
                 showLoginErr(d.message||"Incorrect username or password.");
               }
             })
             .catch(function(){
-              clearInterval(_rt);
               btn.disabled=false;btn.textContent="Sign In";
               showLoginErr("Could not reach server after retry. Please try again.");
             });
@@ -8021,18 +7962,12 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   SETT=loadS();loadLocal();
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
-  // Restore user from localStorage so UI is populated before the fetch returns
-  if(_currentUser) updateUserUI(_currentUser);
   if(_sessionToken&&webUrl){
     sheetFetchFast().then(function(ok){
-      if(ok){ setLive(); }
-      // Always launch — if fetch failed we still have local cache data
-      launchApp();
-      if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
+      setLive();launchApp();
+      if(!ok) toast("Loaded from cache. Sync failed.","");
     }).catch(function(){
-      // Network error — launch with whatever is in local cache
-      launchApp();
-      toast("Loaded from local cache.","");
+      setLive();launchApp();
     });
   }
 })();
