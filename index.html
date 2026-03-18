@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- AWS SIS v8.2 FIXED BUILD — login patch applied -->
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -359,41 +358,149 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
   </div>
 </div>
 <script>
-// ── BOOTSTRAP: URL config UI only (no login logic here) ──────────────────────
+// ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
+// Runs immediately, independently of the main app script below.
+// Handles: Configure URL toggle, Save URL, and Sign In button.
 document.addEventListener("DOMContentLoaded",function(){
+(function(){
+  function el(id){return document.getElementById(id);}
+
+  // ── Warm-up ping: wake the App Script on page load ────────────────────
+  // Prevents cold-start timeout when user clicks Sign In
+  var _pingUrl=localStorage.getItem("aws_url")||"";
+  if(_pingUrl){
+    setTimeout(function(){
+      fetch(_pingUrl+"?action=ping",{mode:"cors"}).catch(function(){});
+    },500);
+  }
+
+  // Populate URL input from localStorage on load
   var savedUrl=localStorage.getItem("aws_url")||"";
-  var inp=document.getElementById("url-inp");
-  if(inp&&savedUrl) inp.value=savedUrl;
+  if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
 
-  // Warm-up ping
-  if(savedUrl) setTimeout(function(){fetch(savedUrl+"?action=ping",{mode:"cors"}).catch(function(){});},800);
-
-  // Show/hide URL section
-  var showBtn=document.getElementById("show-url-btn");
-  if(showBtn) showBtn.addEventListener("click",function(e){
+  // ⚙ Configure API URL toggle
+  el("show-url-btn").addEventListener("click",function(e){
     e.preventDefault();
-    var sec=document.getElementById("url-section");
-    var hidden=!sec.style.display||sec.style.display==="none";
-    sec.style.display=hidden?"block":"none";
-    if(hidden&&inp){inp.value=localStorage.getItem("aws_url")||"";inp.focus();}
+    var sec=el("url-section");
+    var isHidden=sec.style.display===""||sec.style.display==="none";
+    sec.style.display=isHidden?"block":"none";
+    if(isHidden){
+      var inp=el("url-inp");
+      inp.value=localStorage.getItem("aws_url")||"";
+      inp.focus();
+    }
   });
 
-  // Save URL
-  var saveBtn=document.getElementById("save-url-btn");
-  if(saveBtn) saveBtn.addEventListener("click",function(e){
+  // Save URL button
+  el("save-url-btn").addEventListener("click",function(e){
     e.preventDefault();
-    var url=(inp?inp.value:"").trim();
-    var errEl=document.getElementById("login-err");
-    function showE(m){if(errEl){errEl.textContent=m;errEl.style.display=m?"block":"none";}}
-    if(!url){showE("Please paste your Apps Script URL.");return;}
-    if(!url.startsWith("https://script.google.com")){showE("URL must start with https://script.google.com");return;}
-    if(!url.endsWith("/exec")){showE("URL must end with /exec");return;}
+    var url=(el("url-inp").value||"").trim();
+    if(!url){
+      showErr("Please paste your Apps Script URL.");return;
+    }
+    if(!url.startsWith("https://script.google.com")){
+      showErr("URL must start with https://script.google.com");return;
+    }
+    if(!url.endsWith("/exec")){
+      showErr("URL must end with /exec — copy the full Web App URL.");return;
+    }
     localStorage.setItem("aws_url",url);
-    document.getElementById("url-section").style.display="none";
-    showE("");
-    var btn=document.getElementById("login-btn");
-    if(btn){btn.style.background="#1DBD6A";btn.textContent="URL Saved — Sign In";setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);}
+    el("url-section").style.display="none";
+    showErr("");
+    // Flash the sign in button green briefly to confirm
+    var btn=el("login-btn");
+    btn.style.background="#1DBD6A";
+    btn.textContent="✓ URL Saved — Sign In";
+    setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
+
+  // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
+  el("login-btn").addEventListener("click",function(e){
+    e.preventDefault();
+    if(typeof doLogin==="function"){doLogin();return;}
+    var webUrl=localStorage.getItem("aws_url")||"";
+    if(!webUrl){
+      showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
+      el("url-section").style.display="block";
+      return;
+    }
+    var userEl=el("login-user"), passEl=el("login-pass");
+    var username=userEl?userEl.value.trim():"";
+    var password=passEl?passEl.value.trim():"";
+    if(!username||!password){showErr("Please enter your username and password.");return;}
+    var btn=el("login-btn");
+    btn.disabled=true; btn.textContent="Signing in...";
+    showErr("");
+    var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
+    var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
+    fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+      .then(function(r){clearTimeout(t);return r.json();})
+      .then(function(d){
+        btn.disabled=false; btn.textContent="Sign In";
+        if(d.status==="ok"&&d.token){
+          localStorage.setItem("aws_token",d.token);
+          if(typeof launchApp==="function"){
+            var loginUser = d.user||{username:username,role:"staff",name:username};
+            // Merge cached permissions into user object
+            var cachedPerms = getPermFromCache(loginUser.username);
+            if(cachedPerms !== null) loginUser.permissions = cachedPerms;
+            if(typeof updateUserUI==="function") updateUserUI(loginUser);
+            window._sessionToken=d.token;
+            if(typeof loadLocal==="function") loadLocal();
+            if(typeof sheetFetch==="function"){
+              sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
+            } else { launchApp(); }
+          } else {
+            // Main JS not yet parsed — save token and reload.
+            // On reload auto-login will run with the full app loaded.
+            showErr("Logging in...");
+            localStorage.setItem("aws_token", d.token);
+            if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
+            setTimeout(function(){ location.reload(); }, 300);
+          }
+        } else {
+          showErr(d.message||"Incorrect username or password.");
+        }
+      })
+      .catch(function(err){
+        btn.disabled=false; btn.textContent="Sign In";
+        if(err.name==="AbortError"){
+          // Timed out — retry once automatically
+          showErr("Server slow to respond. Retrying...");
+          setTimeout(function(){
+            btn.disabled=true; btn.textContent="Retrying...";
+            var payload2=encodeURIComponent(JSON.stringify({username:username,password:password}));
+            fetch(webUrl+"?action=login&payload="+payload2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+              .then(function(r){return r.json();})
+              .then(function(d){
+                btn.disabled=false; btn.textContent="Sign In";
+                if(d.status==="ok"&&d.token){
+                  localStorage.setItem("aws_token",d.token);
+                  if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+                  showErr("Logging in...");
+                  setTimeout(function(){location.reload();},300);
+                } else {
+                  showErr(d.message||"Incorrect username or password.");
+                }
+              })
+              .catch(function(){
+                btn.disabled=false; btn.textContent="Sign In";
+                showErr("Could not reach server. Check your internet connection and try again.");
+              });
+          }, 1000);
+        } else {
+          showErr("Could not reach server. Check your API URL and internet connection.");
+        }
+      });
+  });
+
+  function showErr(msg){
+    var e=el("login-err");
+    if(!e)return;
+    if(!msg){e.style.display="none";return;}
+    e.textContent=msg;e.style.display="block";
+  }
+})();
 });
 // ═══════════════════════════════════════════════════════════════════════════
 // LOWER SCHOOL GRADES & PROGRESS REPORTS (Pre-K, K, Grades 1–5)
@@ -1491,7 +1598,7 @@ function openElemCardWindow(s,rec,narr,subList,isMS,isPrek,term){
     +'<div style="border-top:1px solid #1A365E;padding-top:6px;text-align:center;font-size:10px">Parent / Guardian Signature &amp; Date</div>'
     +'</div>'
     +'<div style="margin-top:16px;font-size:9px;color:#9CA3AF;text-align:center">This document is confidential and intended for the student\'s family only. American World School · '+h(acYear)+'</div>'
-    +'<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
+    +'<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
     +'</body></html>');
   win.document.close();
 }
@@ -4646,7 +4753,7 @@ function openCourseModal(studentId,idx){
     +'<div class="fl"><label class="flb">Credits Attempted</label><input class="fi" type="number" id="cm-cra" value="'+(cr?cr.creditsAttempted:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Credits Earned</label><input class="fi" type="number" id="cm-cre" value="'+(cr?cr.creditsEarned:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Final Grade</label><select class="fsel2" id="cm-grade">'+grades.map(function(g){return'<option '+(cr&&cr.grade===g?"selected":"")+'>'+g+'</option>';}).join("")+'</select></div>'
-    +'<div class="fl"><label class="flb">📋 Course Status</label><select class="fsel2" id="cm-status">'+["Completed","In Progress","Assigned","Not Started","Withdrawn"].map(function(st){var sel=(cr&&cr.courseStatus===st)?"selected":(!cr&&st==="Not Started"?"selected":"");return'<option value="'+st+'" '+sel+'>'+st+'</option>';}).join("")+'</select></div>'
+    +'<div class="fl"><label class="flb">📋 Course Status</label><select class="fsel2" id="cm-status">'+["Completed","In Progress","Assigned","Not Started","Withdrawn"].map(function(st){var sel=(cr&&cr.courseStatus===st)?"selected":(!cr&&st==="Not Started"?"selected":"");return'<option value="'+st+'" '+sel+'>'+st+'</option>';}).join("")+'</select></div>
     +'<div class="fl"><label class="flb">AP/IB Exam Score (1–5/7)</label><select class="fsel2" id="cm-ap"><option value="">—</option>'+[1,2,3,4,5,6,7].map(function(n){return'<option '+(cr&&cr.apScore==n?"selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
     +'<div class="fl"><label class="flb">Instructor</label><input class="fi" id="cm-instr" value="'+esc(cr?cr.instructor:"")+'"/></div>'
     +'<div class="fl"><label class="flb">Room / Section</label><input class="fi" id="cm-sec" value="'+esc(cr?cr.section:"")+'"/></div>'
@@ -7793,68 +7900,68 @@ function doLogin(){
   var username=document.getElementById("login-user").value.trim();
   var password=document.getElementById("login-pass").value.trim();
   var btn=document.getElementById("login-btn");
-  var errEl=document.getElementById("login-err");
-  function showE(m){errEl.textContent=m;errEl.style.display=m?"block":"none";}
-
-  if(!username||!password){showE("Please enter your username and password.");return;}
-  if(!webUrl){showE("No API URL configured. Click Configure API URL below.");return;}
-
-  btn.disabled=true;btn.textContent="Signing in...";showE("");
-
+  var err=document.getElementById("login-err");
+  if(!username||!password){showLoginErr("Please enter your username and password.");return;}
+  if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
+  btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
   var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-  var url=webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password);
-
-  fetch(url,{mode:"cors"})
-    .then(function(r){return r.json();})
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},30000);
+  fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
+    .then(function(r){clearTimeout(t);return r.json();})
     .then(function(d){
       btn.disabled=false;btn.textContent="Sign In";
       if(d.status==="ok"&&d.token){
-        // Store everything
         _sessionToken=d.token;
         localStorage.setItem("aws_token",d.token);
-        if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-        // Update UI
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+        // Fast login: load students+settings, then background sync rest
         SETT=loadS();loadLocal();
-        // Launch immediately — no waiting
-        setLive();launchApp();
-        // Sync data in background
-        setTimeout(function(){
-          sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});
-        },1000);
-      }else{
-        showE(d.message||"Incorrect username or password.");
-        console.error("Login response:",JSON.stringify(d));
+        sheetFetchFast().then(function(ok){
+          launchApp();
+          if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
+        }).catch(function(){
+          launchApp();
+          toast("Loaded from local cache.","");
+        });
+      } else {
+        // Show the exact server message so we know what went wrong
+        var msg = d.message || "No error message returned from server.";
+        showLoginErr(msg);
+        console.error("Login failed. Full server response:", JSON.stringify(d));
       }
     })
-    .catch(function(err){
+    .catch(function(e){
       btn.disabled=false;btn.textContent="Sign In";
-      // Retry once on any network error
-      showE("Connecting... retrying...");
-      setTimeout(function(){
-        fetch(url,{mode:"cors"})
-          .then(function(r){return r.json();})
-          .then(function(d){
-            btn.disabled=false;btn.textContent="Sign In";
-            if(d.status==="ok"&&d.token){
-              _sessionToken=d.token;
-              localStorage.setItem("aws_token",d.token);
-              if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-              updateUserUI(d.user||{username:username,role:"staff",name:username});
-              toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-              SETT=loadS();loadLocal();
-              setLive();launchApp();
-              setTimeout(function(){sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});},1000);
-            }else{
-              showE(d.message||"Incorrect username or password.");
-            }
-          })
-          .catch(function(){
-            btn.disabled=false;btn.textContent="Sign In";
-            showE("Cannot reach server. Check your internet connection.");
-          });
-      },2000);
+      if(e.name==="AbortError"){
+        // Timed out — retry once
+        showLoginErr("Server slow to respond. Retrying...");
+        setTimeout(function(){
+          btn.disabled=true;btn.textContent="Retrying...";
+          var p2=encodeURIComponent(JSON.stringify({username:username,password:password}));
+          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+            .then(function(r){return r.json();})
+            .then(function(d){
+              btn.disabled=false;btn.textContent="Sign In";
+              if(d.status==="ok"&&d.token){
+                _sessionToken=d.token;
+                localStorage.setItem("aws_token",d.token);
+                updateUserUI(d.user||{username:username,role:"staff",name:username});
+                toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+                SETT=loadS();loadLocal();
+                sheetFetchFast().then(function(ok){launchApp();if(!ok)toast("Loaded from cache.","");}).catch(function(){launchApp();});
+              } else {
+                showLoginErr(d.message||"Incorrect username or password.");
+              }
+            })
+            .catch(function(){
+              btn.disabled=false;btn.textContent="Sign In";
+              showLoginErr("Could not reach server after retry. Please try again.");
+            });
+        },1000);
+      } else {
+        showLoginErr("Could not reach server. Check your API URL and internet connection.");
+      }
     });
 }
 
@@ -7877,22 +7984,42 @@ function doLogout(){
   toast("Signed out.","ok");
 }
 
-// Login form events
+// Login form events — url buttons handled by bootstrap script above
+document.getElementById("login-btn").removeEventListener("click",doLogin); // clear bootstrap handler
 document.getElementById("login-btn").addEventListener("click",doLogin);
 document.getElementById("login-pass").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
 document.getElementById("login-user").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("login-pass").focus();});
 document.getElementById("logout-btn").addEventListener("click",doLogout);
 
+// URL config toggle (backup handler — inline onclick on button handles it too)
+var _showUrlBtn=document.getElementById("show-url-btn");
+if(_showUrlBtn&&!_showUrlBtn.dataset.bound){_showUrlBtn.dataset.bound="1";_showUrlBtn.addEventListener("click",function(){
+  var sec=document.getElementById("url-section");
+  sec.style.display=sec.style.display==="none"?"block":"none";
+  if(sec.style.display==="block") document.getElementById("url-inp").value=webUrl;
+});}
+var _saveUrlBtn=document.getElementById("save-url-btn");
+if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveUrlBtn.addEventListener("click",function(){
+  var url=document.getElementById("url-inp").value.trim();
+  if(!url||!url.startsWith("https://script.google.com")){showLoginErr("URL must start with https://script.google.com");return;}
+  webUrl=url;localStorage.setItem("aws_url",url);
+  document.getElementById("url-section").style.display="none";
+  document.getElementById("login-err").style.display="none";
+  toast("API URL saved.","ok");
+});}
+
 // Auto-login if session token exists
 (function(){
   SETT=loadS();loadLocal();
-  if(webUrl){var inp=document.getElementById("url-inp");if(inp)inp.value=webUrl;}
+  // Pre-fill URL input if saved
+  if(webUrl) document.getElementById("url-inp").value=webUrl;
   if(_sessionToken&&webUrl){
-    if(_currentUser) updateUserUI(_currentUser);
-    setLive();launchApp();
-    setTimeout(function(){
-      sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});
-    },500);
+    sheetFetchFast().then(function(ok){
+      setLive();launchApp();
+      if(!ok) toast("Loaded from cache. Sync failed.","");
+    }).catch(function(){
+      setLive();launchApp();
+    });
   }
 })();
 document.getElementById("form-close").addEventListener("click",closeModal);
@@ -14164,7 +14291,7 @@ function rATReports(c){
         css+='</style>';
         css+='</head><body>';
         css+=panel.outerHTML;
-        css+='<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>';
+        css+='<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>';
         css+='</body></html>';
         pw.document.write(css);
         pw.document.close();
@@ -15142,16 +15269,17 @@ function openSkillsAuditWindow(s,subList,isMS){
     +'<span><strong>'+masteredCount+'</strong> of <strong>'+totalSkills+'</strong> skills mastered</span>'
     +'<span style="font-weight:900;color:'+statusCol+'">'+pct+'% complete</span>'
     +'</div>'
-    +'<div class="stat-row">');
-  // Stat boxes
-  var _catsDone=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];return sk.length&&sk.every(function(x,si){return mastery[cat.key+"::"+si];});}).length;
-  var _catsIP=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];var d=sk.filter(function(x,si){return mastery[cat.key+"::"+si];}).length;return d>0&&d<sk.length;}).length;
-  var _catsNS=subList.length-_catsDone-_catsIP;
-  var _statBoxes='<div class="stat-box"><div class="stat-num" style="color:#1DBD6A">'+_catsDone+'</div><div class="stat-lbl">Categories Complete</div></div>'
-    +'<div class="stat-box"><div class="stat-num" style="color:#F5A623">'+_catsIP+'</div><div class="stat-lbl">In Progress</div></div>'
-    +'<div class="stat-box"><div class="stat-num" style="color:#9CA3AF">'+_catsNS+'</div><div class="stat-lbl">Not Started</div></div>'
-    +'<div class="stat-box"><div class="stat-num" style="color:'+statusCol+'">'+pct+'%</div><div class="stat-lbl">Overall Mastery</div></div>';
-  win.document.write(_statBoxes
+    // Stat boxes
+    +'<div class="stat-row">'
+    +function(){
+      var catsDone=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];return sk.length&&sk.every(function(x,i){return mastery[cat.key+"::"+i];});}).length;
+      var catsIP=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];var d=sk.filter(function(x,i){return mastery[cat.key+"::"+i];}).length;return d>0&&d<sk.length;}).length;
+      var catsNS=subList.length-catsDone-catsIP;
+      return'<div class="stat-box"><div class="stat-num" style="color:#1DBD6A">'+catsDone+'</div><div class="stat-lbl">Categories Complete</div></div>'
+        +'<div class="stat-box"><div class="stat-num" style="color:#F5A623">'+catsIP+'</div><div class="stat-lbl">In Progress</div></div>'
+        +'<div class="stat-box"><div class="stat-num" style="color:#9CA3AF">'+catsNS+'</div><div class="stat-lbl">Not Started</div></div>'
+        +'<div class="stat-box"><div class="stat-num" style="color:'+statusCol+'">'+pct+'%</div><div class="stat-lbl">Overall Mastery</div></div>';
+    }()
     +'</div></div>'
 
     // Skills table
@@ -15183,12 +15311,11 @@ function openSkillsAuditWindow(s,subList,isMS){
 
     +'<div style="margin-top:14px;font-size:9px;color:#9CA3AF;text-align:center">Confidential — American World School · '+h(acYear)+'</div>'
 
-    +'<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
+    +'<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
     +'</body></html>');
   win.document.close();
 }
 
-// end of script
 </script>
 </body>
 </html>
