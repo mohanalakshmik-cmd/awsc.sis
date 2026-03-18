@@ -371,7 +371,7 @@ document.addEventListener("DOMContentLoaded",function(){
       <button class="ni" data-v="analytics">Analytics</button>
       <button class="ni" data-v="notifications">Alerts<span class="nbadge" id="nb-notif" style="display:none"></span></button>
       <button class="ni admin-only" data-v="users" style="display:none">User Management</button>
-      <button class="ni" data-v="settings">Settings</button>
+      <button class="ni admin-only" data-v="settings" style="display:none">Settings</button>
     </nav>
     <div class="sbf">
       <div class="user-pill" id="user-pill">
@@ -5110,8 +5110,8 @@ function launchApp(){
     }
     banner.style.display="block";
     banner.innerHTML="🏫 Campus Access: <strong>"+esc(getPartnerCampus())+"</strong> &nbsp;·&nbsp; You can only view and manage students from your campus.";
-    // Hide admin nav items
-    ["perf_dash","users","settings","analytics","staff"].forEach(function(v){
+    // Hide admin-only nav items (partners can still access analytics and staff directory)
+    ["perf_dash","users"].forEach(function(v){
       var btn=document.querySelector(".ni[data-v=\""+v+"\"]");
       if(btn)btn.style.display="none";
     });
@@ -6798,7 +6798,7 @@ function rStaff(c){
   hdr.style.cssText="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px";
   hdr.innerHTML='<div><div style="font-size:20px;font-weight:800;color:#1A365E">Staff Directory</div>'
     +'<div style="font-size:12px;color:#7A92B0">Staff and faculty records for American World School</div></div>'
-    +'<button id="add-staff-btn" style="background:#1A365E;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">+ Add Staff</button>';
+    +(isPartner()?'':'<button id="add-staff-btn" style="background:#1A365E;color:#fff;border:none;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">+ Add Staff</button>');
   wrap.appendChild(hdr);
 
   // Stats
@@ -6883,10 +6883,10 @@ function rStaff(c){
         +(s.subjects?'<div style="font-size:10px;color:#7A92B0;margin-top:4px">📚 '+esc(s.subjects)+'</div>':'')
         +(s.assignedCohorts&&s.assignedCohorts.length?'<div style="font-size:10px;color:#059669;margin-top:3px">👥 '+esc(s.assignedCohorts.join(", "))+'</div>':'')
         +(s.notes?'<div style="font-size:10px;color:#AAB8CC;margin-top:4px;font-style:italic">'+esc(s.notes)+'</div>':'')
-        +'<div style="display:flex;gap:6px;margin-top:12px">'
+        +(isPartner()?'':'<div style="display:flex;gap:6px;margin-top:12px">'
         +'<button class="staff-edit" data-id="'+s.id+'" style="flex:1;background:#F5F7FA;border:1px solid #E4EAF2;padding:6px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;color:#1A365E">✏️ Edit</button>'
         +'<button class="staff-del" data-id="'+s.id+'" style="background:#FFF0F1;border:1px solid #FFD0D3;padding:6px 10px;border-radius:7px;font-size:11px;color:#D61F31;cursor:pointer">🗑</button>'
-        +'</div>';
+        +'</div>');
       grid.appendChild(card);
     });
   }
