@@ -365,6 +365,15 @@ document.addEventListener("DOMContentLoaded",function(){
 (function(){
   function el(id){return document.getElementById(id);}
 
+  // ── Warm-up ping: wake the App Script on page load ────────────────────
+  // Prevents cold-start timeout when user clicks Sign In
+  var _pingUrl=localStorage.getItem("aws_url")||"";
+  if(_pingUrl){
+    setTimeout(function(){
+      fetch(_pingUrl+"?action=ping",{mode:"cors"}).catch(function(){});
+    },500);
+  }
+
   // Populate URL input from localStorage on load
   var savedUrl=localStorage.getItem("aws_url")||"";
   if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
@@ -423,7 +432,7 @@ document.addEventListener("DOMContentLoaded",function(){
     btn.disabled=true; btn.textContent="Signing in...";
     showErr("");
     var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-    var c=new AbortController(), t=setTimeout(function(){c.abort();},12000);
+    var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
     fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
       .then(function(r){clearTimeout(t);return r.json();})
       .then(function(d){
@@ -455,7 +464,33 @@ document.addEventListener("DOMContentLoaded",function(){
       })
       .catch(function(err){
         btn.disabled=false; btn.textContent="Sign In";
-        showErr(err.name==="AbortError"?"Request timed out.":"Could not reach server. Check your API URL.");
+        if(err.name==="AbortError"){
+          // Timed out — retry once automatically
+          showErr("Server slow to respond. Retrying...");
+          setTimeout(function(){
+            btn.disabled=true; btn.textContent="Retrying...";
+            var payload2=encodeURIComponent(JSON.stringify({username:username,password:password}));
+            fetch(webUrl+"?action=login&payload="+payload2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+              .then(function(r){return r.json();})
+              .then(function(d){
+                btn.disabled=false; btn.textContent="Sign In";
+                if(d.status==="ok"&&d.token){
+                  localStorage.setItem("aws_token",d.token);
+                  if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+                  showErr("Logging in...");
+                  setTimeout(function(){location.reload();},300);
+                } else {
+                  showErr(d.message||"Incorrect username or password.");
+                }
+              })
+              .catch(function(){
+                btn.disabled=false; btn.textContent="Sign In";
+                showErr("Could not reach server. Check your internet connection and try again.");
+              });
+          }, 1000);
+        } else {
+          showErr("Could not reach server. Check your API URL and internet connection.");
+        }
       });
   });
 
@@ -7870,7 +7905,7 @@ function doLogin(){
   if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
   btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
   var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},12000);
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},30000);
   fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
     .then(function(r){clearTimeout(t);return r.json();})
     .then(function(d){
@@ -7898,7 +7933,35 @@ function doLogin(){
     })
     .catch(function(e){
       btn.disabled=false;btn.textContent="Sign In";
-      showLoginErr("Could not reach server. Check your API URL and internet connection.");
+      if(e.name==="AbortError"){
+        // Timed out — retry once
+        showLoginErr("Server slow to respond. Retrying...");
+        setTimeout(function(){
+          btn.disabled=true;btn.textContent="Retrying...";
+          var p2=encodeURIComponent(JSON.stringify({username:username,password:password}));
+          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+            .then(function(r){return r.json();})
+            .then(function(d){
+              btn.disabled=false;btn.textContent="Sign In";
+              if(d.status==="ok"&&d.token){
+                _sessionToken=d.token;
+                localStorage.setItem("aws_token",d.token);
+                updateUserUI(d.user||{username:username,role:"staff",name:username});
+                toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+                SETT=loadS();loadLocal();
+                sheetFetchFast().then(function(ok){launchApp();if(!ok)toast("Loaded from cache.","");}).catch(function(){launchApp();});
+              } else {
+                showLoginErr(d.message||"Incorrect username or password.");
+              }
+            })
+            .catch(function(){
+              btn.disabled=false;btn.textContent="Sign In";
+              showLoginErr("Could not reach server after retry. Please try again.");
+            });
+        },1000);
+      } else {
+        showLoginErr("Could not reach server. Check your API URL and internet connection.");
+      }
     });
 }
 
