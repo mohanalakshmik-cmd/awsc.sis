@@ -358,17 +358,12 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
   </div>
 </div>
 <script>
-// ── SELF-CONTAINED LOGIN BOOTSTRAP
-var DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec"; ──────────────────────────────────────────
+// ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
 // Runs immediately, independently of the main app script below.
 // Handles: Configure URL toggle, Save URL, and Sign In button.
 document.addEventListener("DOMContentLoaded",function(){
 (function(){
   function el(id){return document.getElementById(id);}
-  // Auto-seed URL from hardcoded default if nothing saved yet
-  if(DEFAULT_SCRIPT_URL && !localStorage.getItem("aws_url")){
-    localStorage.setItem("aws_url", DEFAULT_SCRIPT_URL);
-  }
 
   // ── Warm-up ping: wake the App Script on page load ────────────────────
   // Prevents cold-start timeout when user clicks Sign In
@@ -419,29 +414,85 @@ document.addEventListener("DOMContentLoaded",function(){
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
 
-  // Sign In button — delegates to main app doLogin()
-  el("login-btn").addEventListener("click", function(e){
+  // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
+  el("login-btn").addEventListener("click",function(e){
     e.preventDefault();
-    if(typeof doLogin === "function"){
-      doLogin();
-    } else {
-      var btn = el("login-btn");
-      btn.disabled = true; btn.textContent = "Loading...";
-      var waited = 0;
-      var poll = setInterval(function(){
-        waited += 50;
-        if(typeof doLogin === "function"){
-          clearInterval(poll);
-          btn.disabled = false; btn.textContent = "Sign In";
-          doLogin();
-        } else if(waited >= 8000){
-          clearInterval(poll);
-          btn.disabled = false; btn.textContent = "Sign In";
-          showErr("App failed to load. Please refresh the page.");
-        }
-      }, 50);
+    if(typeof doLogin==="function"){doLogin();return;}
+    var webUrl=localStorage.getItem("aws_url")||"";
+    if(!webUrl){
+      showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
+      el("url-section").style.display="block";
+      return;
     }
-  });;
+    var userEl=el("login-user"), passEl=el("login-pass");
+    var username=userEl?userEl.value.trim():"";
+    var password=passEl?passEl.value.trim():"";
+    if(!username||!password){showErr("Please enter your username and password.");return;}
+    var btn=el("login-btn");
+    btn.disabled=true; btn.textContent="Signing in...";
+    showErr("");
+    var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
+    var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
+    fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
+      .then(function(r){clearTimeout(t);return r.json();})
+      .then(function(d){
+        btn.disabled=false; btn.textContent="Sign In";
+        if(d.status==="ok"&&d.token){
+          localStorage.setItem("aws_token",d.token);
+          if(typeof launchApp==="function"){
+            var loginUser = d.user||{username:username,role:"staff",name:username};
+            // Merge cached permissions into user object
+            var cachedPerms = getPermFromCache(loginUser.username);
+            if(cachedPerms !== null) loginUser.permissions = cachedPerms;
+            if(typeof updateUserUI==="function") updateUserUI(loginUser);
+            window._sessionToken=d.token;
+            if(typeof loadLocal==="function") loadLocal();
+            if(typeof sheetFetch==="function"){
+              sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
+            } else { launchApp(); }
+          } else {
+            // Main JS not yet parsed — save token and reload.
+            // On reload auto-login will run with the full app loaded.
+            showErr("Logging in...");
+            localStorage.setItem("aws_token", d.token);
+            if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
+            setTimeout(function(){ location.reload(); }, 300);
+          }
+        } else {
+          showErr(d.message||"Incorrect username or password.");
+        }
+      })
+      .catch(function(err){
+        btn.disabled=false; btn.textContent="Sign In";
+        if(err.name==="AbortError"){
+          // Timed out — retry once automatically
+          showErr("Server slow to respond. Retrying...");
+          setTimeout(function(){
+            btn.disabled=true; btn.textContent="Retrying...";
+            var payload2=encodeURIComponent(JSON.stringify({username:username,password:password}));
+            fetch(webUrl+"?action=login&payload="+payload2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
+              .then(function(r){return r.json();})
+              .then(function(d){
+                btn.disabled=false; btn.textContent="Sign In";
+                if(d.status==="ok"&&d.token){
+                  localStorage.setItem("aws_token",d.token);
+                  if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+                  showErr("Logging in...");
+                  setTimeout(function(){location.reload();},300);
+                } else {
+                  showErr(d.message||"Incorrect username or password.");
+                }
+              })
+              .catch(function(){
+                btn.disabled=false; btn.textContent="Sign In";
+                showErr("Could not reach server. Check your internet connection and try again.");
+              });
+          }, 1000);
+        } else {
+          showErr("Could not reach server. Check your API URL and internet connection.");
+        }
+      });
+  });
 
   function showErr(msg){
     var e=el("login-err");
@@ -2157,7 +2208,7 @@ function getAPScholar(records){
 })();
 
 var students=[],nextId=100,view="dashboard",editId=null;
-var webUrl=localStorage.getItem("aws_url")||(typeof DEFAULT_SCRIPT_URL!=="undefined"?DEFAULT_SCRIPT_URL:"")||"";
+var webUrl=localStorage.getItem("aws_url")||"";
 var _sessionToken=localStorage.getItem("aws_token")||"";
 var _currentUser=null;
 try{_currentUser=JSON.parse(localStorage.getItem("aws_user")||"null");}catch(e){}
