@@ -2370,8 +2370,9 @@ function sheetFetchFast(){
   return fetch(url,{signal:c.signal,mode:"cors"})
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
-      if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        handleSessionExpired();return false;
+      if(d&&d.status==="error"){
+        // Don't clear session on error - just return false and use local cache
+        return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
         if(d.user)updateUserUI(d.user);
@@ -2406,8 +2407,10 @@ function sheetFetch(){
     .then(function(r){clearTimeout(t);done=true;return r.json();})
     .then(function(d){
       if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        // Session expired — go back to login
-        handleSessionExpired();return false;
+        // Only redirect to login if app is NOT already showing (avoid kicking logged-in users)
+        var appVisible = document.getElementById("app")&&document.getElementById("app").classList.contains("on");
+        if(!appVisible){ handleSessionExpired(); }
+        return false;
       }
       if(d&&d.status==="ok"&&Array.isArray(d.students)){
         // Update current user info if returned
@@ -8014,12 +8017,37 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
   if(_sessionToken&&webUrl){
-    sheetFetchFast().then(function(ok){
-      setLive();launchApp();
-      if(!ok) toast("Loaded from cache. Sync failed.","");
-    }).catch(function(){
-      setLive();launchApp();
-    });
+    // Launch immediately with local cached data — no server call needed
+    // Background sync will validate session and load fresh data
+    setLive();launchApp();
+    // Then sync data in background (validates session server-side)
+    setTimeout(function(){
+      // Background sync — ignore session errors so user stays logged in
+      if(!webUrl) return;
+      var bgUrl = webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken);
+      fetch(bgUrl,{mode:"cors"})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d&&d.status==="ok"&&Array.isArray(d.students)){
+            // Got fresh data — update everything silently
+            if(d.user) updateUserUI(d.user);
+            students=d.students.map(function(s){return Object.assign({},s,{
+              id:parseInt(s.id)||s.id,
+              documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])
+            });});
+            nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
+            if(d.settings&&typeof d.settings==="object"&&Object.keys(d.settings).length){
+              SETT=Object.assign(defS(),d.settings);saveS(SETT);
+            }
+            saveLocal();setLive();render();
+          }
+          // Silently ignore errors — user stays in the app
+        }).catch(function(){
+          // Network error — user stays in app with local data
+        });
+    }, 2000);
+  } else if(_sessionToken&&!webUrl){
+    setLive();launchApp();
   }
 })();
 document.getElementById("form-close").addEventListener("click",closeModal);
