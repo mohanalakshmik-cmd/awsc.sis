@@ -438,133 +438,41 @@ document.addEventListener("DOMContentLoaded",function(){
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
 
-  // Sign In button — delegates to main app doLogin() when available,
-  // otherwise performs a safe bootstrap login and reloads into the full app.
-  // NOTE: getPermFromCache and updateUserUI live in the main app script and
-  // may not be defined yet, so every call is guarded with typeof checks.
-  el("login-btn").addEventListener("click",function(e){
+  // Sign In button — simply waits for the main app doLogin() then calls it.
+  // The main app is in a SECOND script block so doLogin may not exist yet.
+  el("login-btn").addEventListener("click", function(e){
     e.preventDefault();
-    // If the main app is already loaded, hand off immediately — no duplicate logic.
-    if(typeof doLogin==="function"){doLogin();return;}
-
-    var webUrl=localStorage.getItem("aws_url")||"";
+    var webUrl = localStorage.getItem("aws_url") || "";
     if(!webUrl){
-      showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
-      el("url-section").style.display="block";
+      showErr("First click '\u2699 Configure API URL' and paste your Apps Script URL.");
+      el("url-section").style.display = "block";
       return;
     }
-    var userEl=el("login-user"), passEl=el("login-pass");
-    var username=userEl?userEl.value.trim():"";
-    var password=passEl?passEl.value.trim():"";
-    if(!username||!password){showErr("Please enter your username and password.");return;}
-    var btn=el("login-btn");
-    btn.disabled=true; btn.textContent="Signing in...";
-    showErr("");
-
-    function _onLoginSuccess(d, usr, pw){
-      // Always persist token + user so auto-login survives a reload
-      _sessionToken = d.token;
-      localStorage.setItem("aws_token", d.token);
-      if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
-
-      if(typeof launchApp==="function"){
-        // Main app is fully loaded — run the full success path directly, no reload needed
-        var loginUser = d.user||{username:usr,role:"staff",name:usr};
-        // Guard: getPermFromCache is defined in the main app script (line ~2106)
-        if(typeof getPermFromCache==="function"){
-          var cachedPerms = getPermFromCache(loginUser.username);
-          if(cachedPerms !== null) loginUser.permissions = cachedPerms;
+    if(typeof doLogin === "function"){
+      doLogin();
+    } else {
+      var btn = el("login-btn");
+      btn.disabled = true;
+      btn.textContent = "Loading app...";
+      var waited = 0;
+      var poll = setInterval(function(){
+        waited += 50;
+        if(typeof doLogin === "function"){
+          clearInterval(poll);
+          btn.disabled = false;
+          btn.textContent = "Sign In";
+          doLogin();
+        } else if(waited >= 8000){
+          clearInterval(poll);
+          btn.disabled = false;
+          btn.textContent = "Sign In";
+          showErr("App failed to load. Please refresh the page.");
         }
-        // Guard: updateUserUI is defined in the main app script
-        if(typeof updateUserUI==="function") updateUserUI(loginUser);
-        window._sessionToken = d.token;
-        if(typeof loadLocal==="function") loadLocal();
-        if(typeof SETT!=="undefined"&&typeof loadS==="function") SETT=loadS();
-        if(typeof sheetFetchFast==="function"){
-          sheetFetchFast().then(function(ok){ launchApp(); if(!ok) toast&&toast("Loaded from cache.",""); }).catch(function(){ launchApp(); });
-        } else if(typeof sheetFetch==="function"){
-          sheetFetch().then(function(){ launchApp(); }).catch(function(){ launchApp(); });
-        } else {
-          launchApp();
-        }
-      } else if(typeof doLogin==="function"){
-        // Main app partially loaded — hand off to its own doLogin success handler
-        // by pre-populating the form and calling doLogin() with the token already saved
-        doLogin();
-      } else {
-        // Main app JS not yet parsed at all — reload so auto-login picks up the saved token
-        // (token + user are already in localStorage above, so the auto-login block will fire)
-        showErr("Logging in...");
-        setTimeout(function(){ location.reload(); }, 300);
-      }
+      }, 50);
     }
-
-    // Show a countdown so the user knows the server is waking up
-    var _countdownTimer = null;
-    function startCountdown(secs, label){
-      var remaining = secs;
-      btn.textContent = label + " (" + remaining + "s)";
-      _countdownTimer = setInterval(function(){
-        remaining--;
-        if(remaining > 0){
-          btn.textContent = label + " (" + remaining + "s)";
-        } else {
-          clearInterval(_countdownTimer);
-        }
-      }, 1000);
-    }
-    function stopCountdown(){
-      if(_countdownTimer){ clearInterval(_countdownTimer); _countdownTimer=null; }
-    }
-
-    // Apps Script can take up to 30s to cold-start — give it 60s total
-    startCountdown(60, "Signing in...");
-    var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-    var c=new AbortController(), t=setTimeout(function(){c.abort();},60000);
-    fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
-      .then(function(r){clearTimeout(t);stopCountdown();return r.json();})
-      .then(function(d){
-        btn.disabled=false; btn.textContent="Sign In";
-        if(d.status==="ok"&&d.token){
-          _onLoginSuccess(d, username, password);
-        } else {
-          showErr(d.message||"Incorrect username or password.");
-        }
-      })
-      .catch(function(err){
-        stopCountdown();
-        btn.disabled=false; btn.textContent="Sign In";
-        if(err.name==="AbortError"){
-          // Cold-start timed out — retry once automatically
-          showErr("Server is waking up. Retrying...");
-          startCountdown(60, "Retrying...");
-          btn.disabled=true;
-          setTimeout(function(){
-            var payload2=encodeURIComponent(JSON.stringify({username:username,password:password}));
-            var c2=new AbortController(), t2=setTimeout(function(){c2.abort();},60000);
-            fetch(webUrl+"?action=login&payload="+payload2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c2.signal,mode:"cors"})
-              .then(function(r){clearTimeout(t2);stopCountdown();return r.json();})
-              .then(function(d){
-                btn.disabled=false; btn.textContent="Sign In";
-                if(d.status==="ok"&&d.token){
-                  _onLoginSuccess(d, username, password);
-                } else {
-                  showErr(d.message||"Incorrect username or password.");
-                }
-              })
-              .catch(function(){
-                stopCountdown();
-                btn.disabled=false; btn.textContent="Sign In";
-                showErr("Server did not respond. Please try again — it may need another moment to wake up.");
-              });
-          }, 2000);
-        } else {
-          showErr("Could not reach server. Check your internet connection and try again.");
-        }
-      });
   });
 
-  function showErr(msg){
+    function showErr(msg){
     var e=el("login-err");
     if(!e)return;
     if(!msg){e.style.display="none";return;}
@@ -8007,15 +7915,16 @@ function doLogin(){
         localStorage.setItem("aws_token",d.token);
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-        // Fast login: load students+settings, then background sync rest
         SETT=loadS();loadLocal();
-        sheetFetchFast().then(function(ok){
-          launchApp();
-          if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
-        }).catch(function(){
-          launchApp();
-          toast("Loaded from local cache.","");
-        });
+        // Launch immediately — don't block on sheet fetch
+        launchApp();
+        // Sync data in the background after launch
+        setTimeout(function(){
+          sheetFetchFast().then(function(ok){
+            if(ok){ if(typeof render==="function") render(); }
+            else toast("Loaded from local cache.","");
+          }).catch(function(){});
+        }, 500);
       } else {
         // Show the exact server message so we know what went wrong
         var msg = d.message || "No error message returned from server.";
@@ -8044,7 +7953,10 @@ function doLogin(){
                 updateUserUI(d.user||{username:username,role:"staff",name:username});
                 toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
                 SETT=loadS();loadLocal();
-                sheetFetchFast().then(function(ok){launchApp();if(!ok)toast("Loaded from cache.","");}).catch(function(){launchApp();});
+                launchApp();
+                setTimeout(function(){
+                  sheetFetchFast().then(function(ok){ if(ok&&typeof render==="function") render(); else toast("Loaded from cache.",""); }).catch(function(){});
+                },500);
               } else {
                 showLoginErr(d.message||"Incorrect username or password.");
               }
