@@ -371,7 +371,7 @@ document.addEventListener("DOMContentLoaded",function(){
       <button class="ni" data-v="analytics">Analytics</button>
       <button class="ni" data-v="notifications">Alerts<span class="nbadge" id="nb-notif" style="display:none"></span></button>
       <button class="ni admin-only" data-v="users" style="display:none">User Management</button>
-      <button class="ni" data-v="settings">Settings</button>
+      <button class="ni admin-only" data-v="settings" style="display:none">Settings</button>
     </nav>
     <div class="sbf">
       <div class="user-pill" id="user-pill">
@@ -5111,7 +5111,7 @@ function launchApp(){
     banner.style.display="block";
     banner.innerHTML="🏫 Campus Access: <strong>"+esc(getPartnerCampus())+"</strong> &nbsp;·&nbsp; You can only view and manage students from your campus.";
     // Hide admin-only nav items (partners can still access analytics and staff directory)
-    ["perf_dash","users","settings"].forEach(function(v){
+    ["perf_dash","users"].forEach(function(v){
       var btn=document.querySelector(".ni[data-v=\""+v+"\"]");
       if(btn)btn.style.display="none";
     });
