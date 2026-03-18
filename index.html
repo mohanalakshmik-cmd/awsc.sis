@@ -1565,11 +1565,15 @@ function rApps(c){
   }
 
   var trows=rows.map(function(s){
+    var sm=SM[s.status]||SM["Inquiry"];
+    var typeLabel=s.studentType==="Alumni"?'🏅':s.studentType==="Existing"?'✅':'📝';
     return'<tr class="sr" data-id="'+s.id+'">'
-      +'<td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:'+SM[s.status].bg+';color:'+SM[s.status].tc+'">'+esc(ini(s))+'</div>'
+      +'<td style="padding:6px 8px;width:32px"><input type="checkbox" class="app-chk" data-id="'+s.id+'" onclick="event.stopPropagation()" style="width:14px;height:14px;accent-color:#1A365E;cursor:pointer"></td>'
+      +'<td><div style="display:flex;align-items:center;gap:8px"><div class="ava" style="background:'+sm.bg+';color:'+sm.tc+'">'+esc(ini(s))+'</div>'
         +'<div><div style="font-size:13px;font-weight:700;color:#1A365E">'+esc(s.firstName+" "+s.lastName)+'</div>'
         +'<div style="font-size:10px;color:#7A92B0">'+esc(s.nationality||"")+'</div></div></div></td>'
       +(s.studentId?'<td><span class="eid">🎓 '+esc(s.studentId)+'</span></td>':'<td><span style="color:#C0C0C0;font-size:11px">—</span></td>')
+      +'<td style="font-size:12px;text-align:center" title="'+(s.studentType||"New")+'">'+typeLabel+'</td>'
       +'<td style="color:#3D5475">'+esc(s.grade)+'</td>'
       +'<td>'+badge(s.status)+'</td>'
       +'<td style="color:#3D5475">'+esc(s.campus)+'</td>'
@@ -1577,7 +1581,7 @@ function rApps(c){
       +'<td>'+pb(s.priority)+'</td>'
       +'<td>'+(s.intDate?'<span style="font-size:10px;background:#F3EEFF;color:#7040CC;padding:2px 7px;border-radius:5px">📅 '+esc(s.intDate)+'</span>':"<span style='color:#C0C0C0;font-size:10px'>—</span>")+'</td>'
       +'<td style="white-space:nowrap"><div style="display:flex;align-items:center;gap:4px">'
-        +'<select class="status-sel" data-id="'+s.id+'" onclick="event.stopPropagation()" style="padding:3px 6px;border:1.5px solid '+(SM[s.status]?SM[s.status].dot:'#E4EAF2')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(SM[s.status]?SM[s.status].tc:'#1A365E')+';background:'+(SM[s.status]?SM[s.status].bg:'#fff')+';cursor:pointer;max-width:110px">'
+        +'<select class="status-sel" data-id="'+s.id+'" onclick="event.stopPropagation()" style="padding:3px 6px;border:1.5px solid '+sm.dot+';border-radius:6px;font-size:10px;font-weight:700;color:'+sm.tc+';background:'+sm.bg+';cursor:pointer;max-width:110px">'
         +STATUSES.map(function(st){return'<option value="'+esc(st)+'"'+(s.status===st?' selected':'')+'>'+esc(st)+'</option>';}).join("")
         +'</select>'
         +'<button class="eb" data-id="'+s.id+'" onclick="event.stopPropagation()" style="width:26px;height:26px;border-radius:6px;border:1.5px solid #E4EAF2;background:#fff;cursor:pointer">✏️</button>'
@@ -4847,7 +4851,7 @@ function updateDocProg(){
 }
 function switchTab(tab){
   activeTab=tab;
-  ["personal","academic","contact","health","docs","notes"].forEach(function(t){var el=document.getElementById("tab-"+t);if(el)el.style.display=(t===tab)?"block":"none";});
+  ["personal","academic","contact","health","docs","notes","interview","fees"].forEach(function(t){var el=document.getElementById("tab-"+t);if(el)el.style.display=(t===tab)?"block":"none";});
   document.querySelectorAll("#form-tabs .tab").forEach(function(b){b.classList.toggle("active",b.dataset.tab===tab);});
 }
 function closeModal(){document.getElementById("form-modal").classList.remove("open");editId=null;}
