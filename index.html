@@ -433,29 +433,27 @@ document.addEventListener("DOMContentLoaded",function(){
     showErr("");
     var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
     var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
-    fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+    fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
       .then(function(r){clearTimeout(t);return r.json();})
       .then(function(d){
         btn.disabled=false; btn.textContent="Sign In";
         if(d.status==="ok"&&d.token){
           localStorage.setItem("aws_token",d.token);
+          if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+          window._sessionToken=d.token;
+          if(typeof updateUserUI==="function"&&d.user) updateUserUI(d.user);
+          if(typeof loadLocal==="function") loadLocal();
           if(typeof launchApp==="function"){
             var loginUser = d.user||{username:username,role:"staff",name:username};
-            // Merge cached permissions into user object
-            var cachedPerms = getPermFromCache(loginUser.username);
+            var cachedPerms = (typeof getPermFromCache==="function")?getPermFromCache(loginUser.username):null;
             if(cachedPerms !== null) loginUser.permissions = cachedPerms;
             if(typeof updateUserUI==="function") updateUserUI(loginUser);
-            window._sessionToken=d.token;
-            if(typeof loadLocal==="function") loadLocal();
-            if(typeof sheetFetch==="function"){
+            if(typeof sheetFetchFast==="function"){
               sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
             } else { launchApp(); }
           } else {
-            // Main JS not yet parsed — save token and reload.
-            // On reload auto-login will run with the full app loaded.
-            showErr("Logging in...");
-            localStorage.setItem("aws_token", d.token);
-            if(d.user) localStorage.setItem("aws_user", JSON.stringify(d.user));
+            // Main JS not yet parsed — reload and auto-login will complete it
+            showErr("Logging in\u2026");
             setTimeout(function(){ location.reload(); }, 300);
           }
         } else {
@@ -477,8 +475,17 @@ document.addEventListener("DOMContentLoaded",function(){
                 if(d.status==="ok"&&d.token){
                   localStorage.setItem("aws_token",d.token);
                   if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-                  showErr("Logging in...");
-                  setTimeout(function(){location.reload();},300);
+                  window._sessionToken=d.token;
+                  if(typeof updateUserUI==="function"&&d.user) updateUserUI(d.user);
+                  if(typeof loadLocal==="function") loadLocal();
+                  if(typeof launchApp==="function"){
+                    if(typeof sheetFetchFast==="function"){
+                      sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
+                    } else { launchApp(); }
+                  } else {
+                    showErr("Logging in\u2026");
+                    setTimeout(function(){location.reload();},300);
+                  }
                 } else {
                   showErr(d.message||"Incorrect username or password.");
                 }
@@ -7913,16 +7920,25 @@ function doLogin(){
       if(d.status==="ok"&&d.token){
         _sessionToken=d.token;
         localStorage.setItem("aws_token",d.token);
+        if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
         // Fast login: load students+settings, then background sync rest
         SETT=loadS();loadLocal();
+        // Safety net: always launch within 12s even if sheetFetchFast hangs
+        var _launched=false;
+        function _launch(fromCache){
+          if(_launched)return;_launched=true;
+          launchApp();
+          if(fromCache) toast("Loaded from local cache. Syncing in background\u2026","");
+        }
+        var _safetyTimer=setTimeout(function(){_launch(true);},12000);
         sheetFetchFast().then(function(ok){
-          launchApp();
-          if(!ok) toast("Loaded from local cache. Sheet sync failed.","");
+          clearTimeout(_safetyTimer);
+          _launch(!ok);
         }).catch(function(){
-          launchApp();
-          toast("Loaded from local cache.","");
+          clearTimeout(_safetyTimer);
+          _launch(true);
         });
       } else {
         // Show the exact server message so we know what went wrong
@@ -7946,10 +7962,18 @@ function doLogin(){
               if(d.status==="ok"&&d.token){
                 _sessionToken=d.token;
                 localStorage.setItem("aws_token",d.token);
+                if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
                 updateUserUI(d.user||{username:username,role:"staff",name:username});
                 toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
                 SETT=loadS();loadLocal();
-                sheetFetchFast().then(function(ok){launchApp();if(!ok)toast("Loaded from cache.","");}).catch(function(){launchApp();});
+                var _launched2=false;
+                function _launch2(fromCache){
+                  if(_launched2)return;_launched2=true;
+                  launchApp();
+                  if(fromCache) toast("Loaded from local cache.","");
+                }
+                var _safety2=setTimeout(function(){_launch2(true);},12000);
+                sheetFetchFast().then(function(ok){clearTimeout(_safety2);_launch2(!ok);}).catch(function(){clearTimeout(_safety2);_launch2(true);});
               } else {
                 showLoginErr(d.message||"Incorrect username or password.");
               }
@@ -8014,11 +8038,15 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
   if(_sessionToken&&webUrl){
+    // Restore user UI immediately from localStorage so sidebar/name shows
+    if(_currentUser&&typeof updateUserUI==="function") updateUserUI(_currentUser);
     sheetFetchFast().then(function(ok){
       setLive();launchApp();
-      if(!ok) toast("Loaded from cache. Sync failed.","");
+      if(!ok) toast("Loaded from local cache. Sheet sync will retry shortly.","");
     }).catch(function(){
+      // Even if sync fails, launch from local cache — don't leave user on login screen
       setLive();launchApp();
+      toast("Loaded from local cache.","");
     });
   }
 })();
