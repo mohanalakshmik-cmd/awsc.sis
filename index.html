@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- AWS SIS v8.2 FIXED BUILD — login patch applied -->
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -448,9 +449,14 @@ document.addEventListener("DOMContentLoaded",function(){
             var cachedPerms = (typeof getPermFromCache==="function")?getPermFromCache(loginUser.username):null;
             if(cachedPerms !== null) loginUser.permissions = cachedPerms;
             if(typeof updateUserUI==="function") updateUserUI(loginUser);
-            if(typeof sheetFetchFast==="function"){
-              sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
-            } else { launchApp(); }
+            if(typeof loadLocal==="function") loadLocal();
+            if(typeof setLive==="function") setLive();
+            launchApp();
+            setTimeout(function(){
+              if(typeof sheetFetchFast==="function"){
+                sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});
+              }
+            },800);
           } else {
             // Main JS not yet parsed — reload and auto-login will complete it
             showErr("Logging in\u2026");
@@ -479,9 +485,14 @@ document.addEventListener("DOMContentLoaded",function(){
                   if(typeof updateUserUI==="function"&&d.user) updateUserUI(d.user);
                   if(typeof loadLocal==="function") loadLocal();
                   if(typeof launchApp==="function"){
-                    if(typeof sheetFetchFast==="function"){
-                      sheetFetchFast().then(function(){launchApp();}).catch(function(){launchApp();});
-                    } else { launchApp(); }
+                    if(typeof loadLocal==="function") loadLocal();
+                    if(typeof setLive==="function") setLive();
+                    launchApp();
+                    setTimeout(function(){
+                      if(typeof sheetFetchFast==="function"){
+                        sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});
+                      }
+                    },800);
                   } else {
                     showErr("Logging in\u2026");
                     setTimeout(function(){location.reload();},300);
@@ -1605,7 +1616,7 @@ function openElemCardWindow(s,rec,narr,subList,isMS,isPrek,term){
     +'<div style="border-top:1px solid #1A365E;padding-top:6px;text-align:center;font-size:10px">Parent / Guardian Signature &amp; Date</div>'
     +'</div>'
     +'<div style="margin-top:16px;font-size:9px;color:#9CA3AF;text-align:center">This document is confidential and intended for the student\'s family only. American World School · '+h(acYear)+'</div>'
-    +'<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
+    +'<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
     +'</body></html>');
   win.document.close();
 }
@@ -4760,7 +4771,7 @@ function openCourseModal(studentId,idx){
     +'<div class="fl"><label class="flb">Credits Attempted</label><input class="fi" type="number" id="cm-cra" value="'+(cr?cr.creditsAttempted:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Credits Earned</label><input class="fi" type="number" id="cm-cre" value="'+(cr?cr.creditsEarned:1)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Final Grade</label><select class="fsel2" id="cm-grade">'+grades.map(function(g){return'<option '+(cr&&cr.grade===g?"selected":"")+'>'+g+'</option>';}).join("")+'</select></div>'
-    +'<div class="fl"><label class="flb">📋 Course Status</label><select class="fsel2" id="cm-status">'+["Completed","In Progress","Assigned","Not Started","Withdrawn"].map(function(st){var sel=(cr&&cr.courseStatus===st)?"selected":(!cr&&st==="Not Started"?"selected":"");return'<option value="'+st+'" '+sel+'>'+st+'</option>';}).join("")+'</select></div>
+    +'<div class="fl"><label class="flb">📋 Course Status</label><select class="fsel2" id="cm-status">'+["Completed","In Progress","Assigned","Not Started","Withdrawn"].map(function(st){var sel=(cr&&cr.courseStatus===st)?"selected":(!cr&&st==="Not Started"?"selected":"");return'<option value="'+st+'" '+sel+'>'+st+'</option>';}).join("")+'</select></div>'
     +'<div class="fl"><label class="flb">AP/IB Exam Score (1–5/7)</label><select class="fsel2" id="cm-ap"><option value="">—</option>'+[1,2,3,4,5,6,7].map(function(n){return'<option '+(cr&&cr.apScore==n?"selected":"")+'>'+n+'</option>';}).join("")+'</select></div>'
     +'<div class="fl"><label class="flb">Instructor</label><input class="fi" id="cm-instr" value="'+esc(cr?cr.instructor:"")+'"/></div>'
     +'<div class="fl"><label class="flb">Room / Section</label><input class="fi" id="cm-sec" value="'+esc(cr?cr.section:"")+'"/></div>'
@@ -7923,23 +7934,15 @@ function doLogin(){
         if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-        // Fast login: load students+settings, then background sync rest
         SETT=loadS();loadLocal();
-        // Safety net: always launch within 12s even if sheetFetchFast hangs
-        var _launched=false;
-        function _launch(fromCache){
-          if(_launched)return;_launched=true;
-          launchApp();
-          if(fromCache) toast("Loaded from local cache. Syncing in background\u2026","");
-        }
-        var _safetyTimer=setTimeout(function(){_launch(true);},12000);
-        sheetFetchFast().then(function(ok){
-          clearTimeout(_safetyTimer);
-          _launch(!ok);
-        }).catch(function(){
-          clearTimeout(_safetyTimer);
-          _launch(true);
-        });
+        // Launch immediately — never block on sheet sync
+        setLive();launchApp();
+        // Sync data in background after app is visible
+        setTimeout(function(){
+          sheetFetchFast().then(function(ok){
+            if(ok){ if(typeof render==="function") render(); }
+          }).catch(function(){});
+        }, 800);
       } else {
         // Show the exact server message so we know what went wrong
         var msg = d.message || "No error message returned from server.";
@@ -7966,14 +7969,8 @@ function doLogin(){
                 updateUserUI(d.user||{username:username,role:"staff",name:username});
                 toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
                 SETT=loadS();loadLocal();
-                var _launched2=false;
-                function _launch2(fromCache){
-                  if(_launched2)return;_launched2=true;
-                  launchApp();
-                  if(fromCache) toast("Loaded from local cache.","");
-                }
-                var _safety2=setTimeout(function(){_launch2(true);},12000);
-                sheetFetchFast().then(function(ok){clearTimeout(_safety2);_launch2(!ok);}).catch(function(){clearTimeout(_safety2);_launch2(true);});
+                setLive();launchApp();
+                setTimeout(function(){sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});},800);
               } else {
                 showLoginErr(d.message||"Incorrect username or password.");
               }
@@ -8038,16 +8035,19 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
   // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
   if(_sessionToken&&webUrl){
-    // Restore user UI immediately from localStorage so sidebar/name shows
+    // Restore user UI immediately from localStorage so sidebar shows
     if(_currentUser&&typeof updateUserUI==="function") updateUserUI(_currentUser);
-    sheetFetchFast().then(function(ok){
-      setLive();launchApp();
-      if(!ok) toast("Loaded from local cache. Sheet sync will retry shortly.","");
-    }).catch(function(){
-      // Even if sync fails, launch from local cache — don't leave user on login screen
-      setLive();launchApp();
-      toast("Loaded from local cache.","");
-    });
+    // ALWAYS launch immediately — never block on sheet sync
+    setLive();launchApp();
+    // Sync data in background after app is visible
+    setTimeout(function(){
+      sheetFetchFast().then(function(ok){
+        if(ok){ if(typeof render==="function") render(); }
+        else { toast("Working offline \u2014 data loaded from local cache.",""); }
+      }).catch(function(){
+        toast("Working offline \u2014 data loaded from local cache.","");
+      });
+    }, 500);
   }
 })();
 document.getElementById("form-close").addEventListener("click",closeModal);
@@ -14319,7 +14319,7 @@ function rATReports(c){
         css+='</style>';
         css+='</head><body>';
         css+=panel.outerHTML;
-        css+='<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>';
+        css+='<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};}<\/script>';
         css+='</body></html>';
         pw.document.write(css);
         pw.document.close();
@@ -15297,17 +15297,16 @@ function openSkillsAuditWindow(s,subList,isMS){
     +'<span><strong>'+masteredCount+'</strong> of <strong>'+totalSkills+'</strong> skills mastered</span>'
     +'<span style="font-weight:900;color:'+statusCol+'">'+pct+'% complete</span>'
     +'</div>'
-    // Stat boxes
-    +'<div class="stat-row">'
-    +function(){
-      var catsDone=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];return sk.length&&sk.every(function(x,i){return mastery[cat.key+"::"+i];});}).length;
-      var catsIP=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];var d=sk.filter(function(x,i){return mastery[cat.key+"::"+i];}).length;return d>0&&d<sk.length;}).length;
-      var catsNS=subList.length-catsDone-catsIP;
-      return'<div class="stat-box"><div class="stat-num" style="color:#1DBD6A">'+catsDone+'</div><div class="stat-lbl">Categories Complete</div></div>'
-        +'<div class="stat-box"><div class="stat-num" style="color:#F5A623">'+catsIP+'</div><div class="stat-lbl">In Progress</div></div>'
-        +'<div class="stat-box"><div class="stat-num" style="color:#9CA3AF">'+catsNS+'</div><div class="stat-lbl">Not Started</div></div>'
-        +'<div class="stat-box"><div class="stat-num" style="color:'+statusCol+'">'+pct+'%</div><div class="stat-lbl">Overall Mastery</div></div>';
-    }()
+    +'<div class="stat-row">');
+  // Stat boxes
+  var _catsDone=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];return sk.length&&sk.every(function(x,si){return mastery[cat.key+"::"+si];});}).length;
+  var _catsIP=subList.filter(function(cat){var sk=cat.skills||cat.strands||[];var d=sk.filter(function(x,si){return mastery[cat.key+"::"+si];}).length;return d>0&&d<sk.length;}).length;
+  var _catsNS=subList.length-_catsDone-_catsIP;
+  var _statBoxes='<div class="stat-box"><div class="stat-num" style="color:#1DBD6A">'+_catsDone+'</div><div class="stat-lbl">Categories Complete</div></div>'
+    +'<div class="stat-box"><div class="stat-num" style="color:#F5A623">'+_catsIP+'</div><div class="stat-lbl">In Progress</div></div>'
+    +'<div class="stat-box"><div class="stat-num" style="color:#9CA3AF">'+_catsNS+'</div><div class="stat-lbl">Not Started</div></div>'
+    +'<div class="stat-box"><div class="stat-num" style="color:'+statusCol+'">'+pct+'%</div><div class="stat-lbl">Overall Mastery</div></div>';
+  win.document.write(_statBoxes
     +'</div></div>'
 
     // Skills table
@@ -15339,11 +15338,12 @@ function openSkillsAuditWindow(s,subList,isMS){
 
     +'<div style="margin-top:14px;font-size:9px;color:#9CA3AF;text-align:center">Confidential — American World School · '+h(acYear)+'</div>'
 
-    +'<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
+    +'<scr'+'ipt>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>'
     +'</body></html>');
   win.document.close();
 }
 
+// end of script
 </script>
 </body>
 </html>
