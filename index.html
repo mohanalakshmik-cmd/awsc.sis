@@ -352,7 +352,7 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
     <div class="url-toggle"><button id="show-url-btn">⚙ Configure API URL</button></div>
     <div id="url-section">
       <div style="font-size:11px;color:#7A92B0;margin-bottom:7px">Paste your Google Apps Script Web App URL:</div>
-      <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec"/>
+      <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/>
       <button id="save-url-btn">Save URL</button>
     </div>
   </div>
@@ -362,10 +362,15 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 // Runs immediately, independently of the main app script below.
 // Handles: Configure URL toggle, Save URL, and Sign In button.
 
-// ── DEFAULT APPS SCRIPT URL ──────────────────────────────────────────────────
-// Set this to your deployed Web App URL so users never need to configure it.
-// Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone
-// Then paste the /exec URL below between the quotes.
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  REQUIRED SETUP — replace the placeholder below with your real URL  ║
+// ║                                                                      ║
+// ║  1. Open Apps Script → Deploy → Manage deployments                  ║
+// ║  2. Copy the Web App URL (ends with /exec)                          ║
+// ║  3. Paste it between the quotes on the line below                   ║
+// ║  4. Save this file and push to GitHub                               ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+// ⚠️  PASTE YOUR FULL /exec URL BELOW (copy from Apps Script → Deploy → Manage deployments)
 var DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec";
 
 document.addEventListener("DOMContentLoaded",function(){
@@ -373,7 +378,7 @@ document.addEventListener("DOMContentLoaded",function(){
   function el(id){return document.getElementById(id);}
 
   // ── Auto-seed URL from default if nothing saved yet ───────────────────
-  if(DEFAULT_SCRIPT_URL && DEFAULT_SCRIPT_URL !== "https://script.google.com/macros/s/AKfycbyMfWvO-Pr93nxNZIissm-wWpUtawr3vviNKDhPa7BpJmKzdHXHy8P2B_qiZ5l9IfIwyw/exec"){
+  if(DEFAULT_SCRIPT_URL && DEFAULT_SCRIPT_URL !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE"){
     if(!localStorage.getItem("aws_url")){
       localStorage.setItem("aws_url", DEFAULT_SCRIPT_URL);
     }
