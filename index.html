@@ -361,9 +361,23 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 // ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
 // Runs immediately, independently of the main app script below.
 // Handles: Configure URL toggle, Save URL, and Sign In button.
+
+// ── DEFAULT APPS SCRIPT URL ──────────────────────────────────────────────────
+// Set this to your deployed Web App URL so users never need to configure it.
+// Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone
+// Then paste the /exec URL below between the quotes.
+var DEFAULT_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+
 document.addEventListener("DOMContentLoaded",function(){
 (function(){
   function el(id){return document.getElementById(id);}
+
+  // ── Auto-seed URL from default if nothing saved yet ───────────────────
+  if(DEFAULT_SCRIPT_URL && DEFAULT_SCRIPT_URL !== "PASTE_YOUR_APPS_SCRIPT_URL_HERE"){
+    if(!localStorage.getItem("aws_url")){
+      localStorage.setItem("aws_url", DEFAULT_SCRIPT_URL);
+    }
+  }
 
   // ── Warm-up ping: wake the App Script on page load ────────────────────
   // Prevents cold-start timeout when user clicks Sign In
@@ -377,6 +391,11 @@ document.addEventListener("DOMContentLoaded",function(){
   // Populate URL input from localStorage on load
   var savedUrl=localStorage.getItem("aws_url")||"";
   if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
+
+  // ── Auto-show URL section if no URL is saved at all ───────────────────
+  if(!savedUrl && el("url-section")){
+    el("url-section").style.display="block";
+  }
 
   // ⚙ Configure API URL toggle
   el("show-url-btn").addEventListener("click",function(e){
@@ -2230,7 +2249,7 @@ function getAPScholar(records){
 })();
 
 var students=[],nextId=100,view="dashboard",editId=null;
-var webUrl=localStorage.getItem("aws_url")||"";
+var webUrl=localStorage.getItem("aws_url")||(typeof DEFAULT_SCRIPT_URL!=="undefined"&&DEFAULT_SCRIPT_URL!=="PASTE_YOUR_APPS_SCRIPT_URL_HERE"?DEFAULT_SCRIPT_URL:"")||"";
 var _sessionToken=localStorage.getItem("aws_token")||"";
 var _currentUser=null;
 try{_currentUser=JSON.parse(localStorage.getItem("aws_user")||"null");}catch(e){}
