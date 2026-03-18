@@ -359,166 +359,41 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
   </div>
 </div>
 <script>
-// ── SELF-CONTAINED LOGIN BOOTSTRAP ──────────────────────────────────────────
-// Runs immediately, independently of the main app script below.
-// Handles: Configure URL toggle, Save URL, and Sign In button.
+// ── BOOTSTRAP: URL config UI only (no login logic here) ──────────────────────
 document.addEventListener("DOMContentLoaded",function(){
-(function(){
-  function el(id){return document.getElementById(id);}
-
-  // ── Warm-up ping: wake the App Script on page load ────────────────────
-  // Prevents cold-start timeout when user clicks Sign In
-  var _pingUrl=localStorage.getItem("aws_url")||"";
-  if(_pingUrl){
-    setTimeout(function(){
-      fetch(_pingUrl+"?action=ping",{mode:"cors"}).catch(function(){});
-    },500);
-  }
-
-  // Populate URL input from localStorage on load
   var savedUrl=localStorage.getItem("aws_url")||"";
-  if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
+  var inp=document.getElementById("url-inp");
+  if(inp&&savedUrl) inp.value=savedUrl;
 
-  // ⚙ Configure API URL toggle
-  el("show-url-btn").addEventListener("click",function(e){
+  // Warm-up ping
+  if(savedUrl) setTimeout(function(){fetch(savedUrl+"?action=ping",{mode:"cors"}).catch(function(){});},800);
+
+  // Show/hide URL section
+  var showBtn=document.getElementById("show-url-btn");
+  if(showBtn) showBtn.addEventListener("click",function(e){
     e.preventDefault();
-    var sec=el("url-section");
-    var isHidden=sec.style.display===""||sec.style.display==="none";
-    sec.style.display=isHidden?"block":"none";
-    if(isHidden){
-      var inp=el("url-inp");
-      inp.value=localStorage.getItem("aws_url")||"";
-      inp.focus();
-    }
+    var sec=document.getElementById("url-section");
+    var hidden=!sec.style.display||sec.style.display==="none";
+    sec.style.display=hidden?"block":"none";
+    if(hidden&&inp){inp.value=localStorage.getItem("aws_url")||"";inp.focus();}
   });
 
-  // Save URL button
-  el("save-url-btn").addEventListener("click",function(e){
+  // Save URL
+  var saveBtn=document.getElementById("save-url-btn");
+  if(saveBtn) saveBtn.addEventListener("click",function(e){
     e.preventDefault();
-    var url=(el("url-inp").value||"").trim();
-    if(!url){
-      showErr("Please paste your Apps Script URL.");return;
-    }
-    if(!url.startsWith("https://script.google.com")){
-      showErr("URL must start with https://script.google.com");return;
-    }
-    if(!url.endsWith("/exec")){
-      showErr("URL must end with /exec — copy the full Web App URL.");return;
-    }
+    var url=(inp?inp.value:"").trim();
+    var errEl=document.getElementById("login-err");
+    function showE(m){if(errEl){errEl.textContent=m;errEl.style.display=m?"block":"none";}}
+    if(!url){showE("Please paste your Apps Script URL.");return;}
+    if(!url.startsWith("https://script.google.com")){showE("URL must start with https://script.google.com");return;}
+    if(!url.endsWith("/exec")){showE("URL must end with /exec");return;}
     localStorage.setItem("aws_url",url);
-    el("url-section").style.display="none";
-    showErr("");
-    // Flash the sign in button green briefly to confirm
-    var btn=el("login-btn");
-    btn.style.background="#1DBD6A";
-    btn.textContent="✓ URL Saved — Sign In";
-    setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
+    document.getElementById("url-section").style.display="none";
+    showE("");
+    var btn=document.getElementById("login-btn");
+    if(btn){btn.style.background="#1DBD6A";btn.textContent="URL Saved — Sign In";setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);}
   });
-
-  // Sign In button — FULLY SELF-CONTAINED (works even if main script fails)
-  el("login-btn").addEventListener("click",function(e){
-    e.preventDefault();
-    if(typeof doLogin==="function"){doLogin();return;}
-    var webUrl=localStorage.getItem("aws_url")||"";
-    if(!webUrl){
-      showErr("First click '⚙ Configure API URL' and paste your Apps Script URL.");
-      el("url-section").style.display="block";
-      return;
-    }
-    var userEl=el("login-user"), passEl=el("login-pass");
-    var username=userEl?userEl.value.trim():"";
-    var password=passEl?passEl.value.trim():"";
-    if(!username||!password){showErr("Please enter your username and password.");return;}
-    var btn=el("login-btn");
-    btn.disabled=true; btn.textContent="Signing in...";
-    showErr("");
-    var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-    var c=new AbortController(), t=setTimeout(function(){c.abort();},30000);
-    fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
-      .then(function(r){clearTimeout(t);return r.json();})
-      .then(function(d){
-        btn.disabled=false; btn.textContent="Sign In";
-        if(d.status==="ok"&&d.token){
-          localStorage.setItem("aws_token",d.token);
-          if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-          window._sessionToken=d.token;
-          if(typeof updateUserUI==="function"&&d.user) updateUserUI(d.user);
-          if(typeof loadLocal==="function") loadLocal();
-          if(typeof launchApp==="function"){
-            var loginUser = d.user||{username:username,role:"staff",name:username};
-            var cachedPerms = (typeof getPermFromCache==="function")?getPermFromCache(loginUser.username):null;
-            if(cachedPerms !== null) loginUser.permissions = cachedPerms;
-            if(typeof updateUserUI==="function") updateUserUI(loginUser);
-            if(typeof loadLocal==="function") loadLocal();
-            if(typeof setLive==="function") setLive();
-            launchApp();
-            setTimeout(function(){
-              if(typeof sheetFetchFast==="function"){
-                sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});
-              }
-            },800);
-          } else {
-            // Main JS not yet parsed — reload and auto-login will complete it
-            showErr("Logging in\u2026");
-            setTimeout(function(){ location.reload(); }, 300);
-          }
-        } else {
-          showErr(d.message||"Incorrect username or password.");
-        }
-      })
-      .catch(function(err){
-        btn.disabled=false; btn.textContent="Sign In";
-        if(err.name==="AbortError"){
-          // Timed out — retry once automatically
-          showErr("Server slow to respond. Retrying...");
-          setTimeout(function(){
-            btn.disabled=true; btn.textContent="Retrying...";
-            var payload2=encodeURIComponent(JSON.stringify({username:username,password:password}));
-            fetch(webUrl+"?action=login&payload="+payload2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
-              .then(function(r){return r.json();})
-              .then(function(d){
-                btn.disabled=false; btn.textContent="Sign In";
-                if(d.status==="ok"&&d.token){
-                  localStorage.setItem("aws_token",d.token);
-                  if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-                  window._sessionToken=d.token;
-                  if(typeof updateUserUI==="function"&&d.user) updateUserUI(d.user);
-                  if(typeof loadLocal==="function") loadLocal();
-                  if(typeof launchApp==="function"){
-                    if(typeof loadLocal==="function") loadLocal();
-                    if(typeof setLive==="function") setLive();
-                    launchApp();
-                    setTimeout(function(){
-                      if(typeof sheetFetchFast==="function"){
-                        sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});
-                      }
-                    },800);
-                  } else {
-                    showErr("Logging in\u2026");
-                    setTimeout(function(){location.reload();},300);
-                  }
-                } else {
-                  showErr(d.message||"Incorrect username or password.");
-                }
-              })
-              .catch(function(){
-                btn.disabled=false; btn.textContent="Sign In";
-                showErr("Could not reach server. Check your internet connection and try again.");
-              });
-          }, 1000);
-        } else {
-          showErr("Could not reach server. Check your API URL and internet connection.");
-        }
-      });
-  });
-
-  function showErr(msg){
-    var e=el("login-err");
-    if(!e)return;
-    if(!msg){e.style.display="none";return;}
-    e.textContent=msg;e.style.display="block";
-  }
-})();
 });
 // ═══════════════════════════════════════════════════════════════════════════
 // LOWER SCHOOL GRADES & PROGRESS REPORTS (Pre-K, K, Grades 1–5)
@@ -7918,71 +7793,68 @@ function doLogin(){
   var username=document.getElementById("login-user").value.trim();
   var password=document.getElementById("login-pass").value.trim();
   var btn=document.getElementById("login-btn");
-  var err=document.getElementById("login-err");
-  if(!username||!password){showLoginErr("Please enter your username and password.");return;}
-  if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
-  btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
+  var errEl=document.getElementById("login-err");
+  function showE(m){errEl.textContent=m;errEl.style.display=m?"block":"none";}
+
+  if(!username||!password){showE("Please enter your username and password.");return;}
+  if(!webUrl){showE("No API URL configured. Click Configure API URL below.");return;}
+
+  btn.disabled=true;btn.textContent="Signing in...";showE("");
+
   var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},30000);
-  fetch(webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{signal:c.signal,mode:"cors"})
-    .then(function(r){clearTimeout(t);return r.json();})
+  var url=webUrl+"?action=login&payload="+payload+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password);
+
+  fetch(url,{mode:"cors"})
+    .then(function(r){return r.json();})
     .then(function(d){
       btn.disabled=false;btn.textContent="Sign In";
       if(d.status==="ok"&&d.token){
+        // Store everything
         _sessionToken=d.token;
         localStorage.setItem("aws_token",d.token);
         if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+        // Update UI
         updateUserUI(d.user||{username:username,role:"staff",name:username});
         toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
         SETT=loadS();loadLocal();
-        // Launch immediately — never block on sheet sync
+        // Launch immediately — no waiting
         setLive();launchApp();
-        // Sync data in background after app is visible
+        // Sync data in background
         setTimeout(function(){
-          sheetFetchFast().then(function(ok){
-            if(ok){ if(typeof render==="function") render(); }
-          }).catch(function(){});
-        }, 800);
-      } else {
-        // Show the exact server message so we know what went wrong
-        var msg = d.message || "No error message returned from server.";
-        showLoginErr(msg);
-        console.error("Login failed. Full server response:", JSON.stringify(d));
+          sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});
+        },1000);
+      }else{
+        showE(d.message||"Incorrect username or password.");
+        console.error("Login response:",JSON.stringify(d));
       }
     })
-    .catch(function(e){
+    .catch(function(err){
       btn.disabled=false;btn.textContent="Sign In";
-      if(e.name==="AbortError"){
-        // Timed out — retry once
-        showLoginErr("Server slow to respond. Retrying...");
-        setTimeout(function(){
-          btn.disabled=true;btn.textContent="Retrying...";
-          var p2=encodeURIComponent(JSON.stringify({username:username,password:password}));
-          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
-            .then(function(r){return r.json();})
-            .then(function(d){
-              btn.disabled=false;btn.textContent="Sign In";
-              if(d.status==="ok"&&d.token){
-                _sessionToken=d.token;
-                localStorage.setItem("aws_token",d.token);
-                if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
-                updateUserUI(d.user||{username:username,role:"staff",name:username});
-                toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-                SETT=loadS();loadLocal();
-                setLive();launchApp();
-                setTimeout(function(){sheetFetchFast().then(function(ok){if(ok&&typeof render==="function")render();}).catch(function(){});},800);
-              } else {
-                showLoginErr(d.message||"Incorrect username or password.");
-              }
-            })
-            .catch(function(){
-              btn.disabled=false;btn.textContent="Sign In";
-              showLoginErr("Could not reach server after retry. Please try again.");
-            });
-        },1000);
-      } else {
-        showLoginErr("Could not reach server. Check your API URL and internet connection.");
-      }
+      // Retry once on any network error
+      showE("Connecting... retrying...");
+      setTimeout(function(){
+        fetch(url,{mode:"cors"})
+          .then(function(r){return r.json();})
+          .then(function(d){
+            btn.disabled=false;btn.textContent="Sign In";
+            if(d.status==="ok"&&d.token){
+              _sessionToken=d.token;
+              localStorage.setItem("aws_token",d.token);
+              if(d.user) localStorage.setItem("aws_user",JSON.stringify(d.user));
+              updateUserUI(d.user||{username:username,role:"staff",name:username});
+              toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
+              SETT=loadS();loadLocal();
+              setLive();launchApp();
+              setTimeout(function(){sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});},1000);
+            }else{
+              showE(d.message||"Incorrect username or password.");
+            }
+          })
+          .catch(function(){
+            btn.disabled=false;btn.textContent="Sign In";
+            showE("Cannot reach server. Check your internet connection.");
+          });
+      },2000);
     });
 }
 
@@ -8005,49 +7877,22 @@ function doLogout(){
   toast("Signed out.","ok");
 }
 
-// Login form events — url buttons handled by bootstrap script above
-document.getElementById("login-btn").removeEventListener("click",doLogin); // clear bootstrap handler
+// Login form events
 document.getElementById("login-btn").addEventListener("click",doLogin);
 document.getElementById("login-pass").addEventListener("keydown",function(e){if(e.key==="Enter")doLogin();});
 document.getElementById("login-user").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("login-pass").focus();});
 document.getElementById("logout-btn").addEventListener("click",doLogout);
 
-// URL config toggle (backup handler — inline onclick on button handles it too)
-var _showUrlBtn=document.getElementById("show-url-btn");
-if(_showUrlBtn&&!_showUrlBtn.dataset.bound){_showUrlBtn.dataset.bound="1";_showUrlBtn.addEventListener("click",function(){
-  var sec=document.getElementById("url-section");
-  sec.style.display=sec.style.display==="none"?"block":"none";
-  if(sec.style.display==="block") document.getElementById("url-inp").value=webUrl;
-});}
-var _saveUrlBtn=document.getElementById("save-url-btn");
-if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveUrlBtn.addEventListener("click",function(){
-  var url=document.getElementById("url-inp").value.trim();
-  if(!url||!url.startsWith("https://script.google.com")){showLoginErr("URL must start with https://script.google.com");return;}
-  webUrl=url;localStorage.setItem("aws_url",url);
-  document.getElementById("url-section").style.display="none";
-  document.getElementById("login-err").style.display="none";
-  toast("API URL saved.","ok");
-});}
-
 // Auto-login if session token exists
 (function(){
   SETT=loadS();loadLocal();
-  // Pre-fill URL input if saved
-  if(webUrl) document.getElementById("url-inp").value=webUrl;
+  if(webUrl){var inp=document.getElementById("url-inp");if(inp)inp.value=webUrl;}
   if(_sessionToken&&webUrl){
-    // Restore user UI immediately from localStorage so sidebar shows
-    if(_currentUser&&typeof updateUserUI==="function") updateUserUI(_currentUser);
-    // ALWAYS launch immediately — never block on sheet sync
+    if(_currentUser) updateUserUI(_currentUser);
     setLive();launchApp();
-    // Sync data in background after app is visible
     setTimeout(function(){
-      sheetFetchFast().then(function(ok){
-        if(ok){ if(typeof render==="function") render(); }
-        else { toast("Working offline \u2014 data loaded from local cache.",""); }
-      }).catch(function(){
-        toast("Working offline \u2014 data loaded from local cache.","");
-      });
-    }, 500);
+      sheetFetchFast().then(function(ok){if(ok)render();}).catch(function(){});
+    },500);
   }
 })();
 document.getElementById("form-close").addEventListener("click",closeModal);
