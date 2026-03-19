@@ -813,6 +813,13 @@ function normSett(s){
   });
   return s;
 }
+function getSA(field){
+  // Safely get a SETT array field - handles string values from Sheets
+  var v=SETT[field];
+  if(Array.isArray(v)) return v;
+  if(typeof v==="string"&&v.charAt(0)==="["){try{return JSON.parse(v);}catch(e){}}
+  return defS()[field]||[];
+}
 function defS(){
   // Academic year: auto-calculates based on current month
   // Aug-Dec = current year start, Jan-Jul = previous year start
@@ -1152,8 +1159,8 @@ function sheetPush(student,action){
   if(!webUrl)return;
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
-  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},20000);
+  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(e){console.warn("sheetPush failed:",e);toast("Saved locally — sync will retry on next refresh.","err");});
 }
 function sheetDel(id){
   if(!webUrl)return;
@@ -1657,7 +1664,7 @@ function rPerfDash(c){
 
   // Campus breakdown
   var byCampus = {};
-  SETT.campuses.forEach(function(ca){ byCampus[ca] = 0; });
+  getSA('campuses').forEach(function(ca){ byCampus[ca] = 0; });
   enrolled.forEach(function(s){
     var ca = (s.campus||"Unknown").trim();
     byCampus[ca] = (byCampus[ca]||0) + 1;
@@ -1824,7 +1831,7 @@ function filterBar(rows){
 
   var stO=["All"].concat(STATUSES).map(function(s){return'<option value="'+esc(s)+'" '+(fSt===s?"selected":"")+'>'+esc(s==="All"?"All Statuses":s)+'</option>';}).join("");
   var grO=["All"].concat(GRADES).map(function(g){return'<option value="'+esc(g)+'" '+(fGr===g?"selected":"")+'>'+esc(g==="All"?"All Grades":g)+'</option>';}).join("");
-  var caO=["All"].concat(SETT.campuses).map(function(x){return'<option value="'+esc(x)+'" '+(fCa===x?"selected":"")+'>'+esc(x==="All"?"All Campuses":x)+'</option>';}).join("");
+  var caO=["All"].concat(getSA('campuses')).map(function(x){return'<option value="'+esc(x)+'" '+(fCa===x?"selected":"")+'>'+esc(x==="All"?"All Campuses":x)+'</option>';}).join("");
   var tyO=['<option value="">All Types</option>','<option value="New">📝 New</option>','<option value="Existing">✅ Existing</option>','<option value="Alumni">🏅 Alumni</option>'].join("");
   return'<div class="fbar"><div class="srch"><span>🔍</span><input id="srch-inp" value="'+esc(srch)+'" id="hlth-srch" placeholder="Search by name, ID, nationality..."/></div><select class="fsel" id="fst">'+stO+'</select><select class="fsel" id="fty" title="Filter by student type">'+tyO+'</select><select class="fsel" id="fgr">'+grO+'</select><select class="fsel" id="fca">'+caO+'</select><span style="font-size:11px;color:#7A92B0">'+rows.length+' result'+(rows.length!==1?"s":"")+'</span></div>';
 }
@@ -2022,7 +2029,7 @@ function rWaitlist(c){
   html+='<div class="g4">'
     +sc("On Waitlist",wl.length,"#1FD6C4")
     +sc("High/Urgent Priority",wl.filter(function(s){return["High","Urgent"].includes(s.priority);}).length,"#D61F31")
-    +sc("Docs Complete",wl.filter(function(s){return s.documents.length>=SETT.docs.length;}).length,"#1DBD6A")
+    +sc("Docs Complete",wl.filter(function(s){return s.documents.length>=getSA('docs').length;}).length,"#1DBD6A")
     +sc("Days Avg Wait",wl.length?Math.round(wl.reduce(function(acc,s){return acc+(s.appDate?Math.round((new Date()-new Date(s.appDate))/86400000):0);},0)/wl.length):0,"#F5A623")
     +'</div>';
 
@@ -2053,7 +2060,7 @@ function rWaitlist(c){
 
   wl.forEach(function(s,i){
     var days=s.appDate?Math.round((new Date()-new Date(s.appDate))/86400000):0;
-    var docPct=SETT.docs.length?Math.round(s.documents.length/SETT.docs.length*100):0;
+    var docPct=getSA('docs').length?Math.round(s.documents.length/getSA('docs').length*100):0;
     var docCol=docPct>=100?"#1DBD6A":docPct>=50?"#F5A623":"#D61F31";
     var dayCol=days>30?"#D61F31":days>14?"#F5A623":"#3D5475";
     html+='<tr class="sr" data-id="'+s.id+'">'
@@ -2199,7 +2206,7 @@ function rCohorts(c){
 
   // Summary cards
   html+='<div class="g4">';
-  html+=sc("Total Cohorts", SETT.cohorts.length, "#1A365E");
+  html+=sc("Total Cohorts", getSA('cohorts').length, "#1A365E");
   var totalCohortStudents=students.filter(function(s){return s.cohort&&s.cohort!=="";}).length;
   html+=sc("Assigned Students", totalCohortStudents, "#0EA5E9");
   var unassigned=students.filter(function(s){return s.status==="Enrolled"&&(!s.cohort||s.cohort==="");}).length;
@@ -2213,11 +2220,11 @@ function rCohorts(c){
     +'<button id="add-cohort-btn" style="padding:7px 16px;background:#D61F31;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ New Cohort</button>'
     +'</div>';
 
-  if(!SETT.cohorts.length){
+  if(!getSA('cohorts').length){
     html+='<div class="card" style="padding:40px;text-align:center;color:#7A92B0">No cohorts configured. Click <strong>+ New Cohort</strong> to create one.</div>';
   }
 
-  SETT.cohorts.forEach(function(coh,cohIdx){
+  getSA('cohorts').forEach(function(coh,cohIdx){
     var members=students.filter(function(s){return s.cohort===coh;});
     var enrolled=members.filter(function(s){return s.status==="Enrolled";});
     var grades=[];members.forEach(function(s){if(s.grade&&!grades.includes(s.grade))grades.push(s.grade);});
@@ -2340,14 +2347,14 @@ function rCohorts(c){
   document.getElementById("add-cohort-btn").addEventListener("click",function(){
     var name=prompt("New cohort name (e.g. Class 2025-A):");
     if(!name||!name.trim())return;
-    if(SETT.cohorts.includes(name.trim())){toast("Cohort already exists","err");return;}
-    SETT.cohorts.push(name.trim());saveS(SETT);toast("Cohort created ✓","ok");render();
+    if(getSA('cohorts').includes(name.trim())){toast("Cohort already exists","err");return;}
+    getSA('cohorts').push(name.trim());SETT.cohorts=getSA('cohorts');saveS(SETT);toast("Cohort created ✓","ok");render();
   });
 
   c.querySelectorAll(".coh-del").forEach(function(b){b.addEventListener("click",function(){
-    var cohName=SETT.cohorts[parseInt(b.dataset.cohi)];
+    var cohName=getSA('cohorts')[parseInt(b.dataset.cohi)];
     if(!confirm("Remove cohort '"+cohName+"'? Students will be unassigned."))return;
-    SETT.cohorts.splice(parseInt(b.dataset.cohi),1);
+    var _c=getSA('cohorts');_c.splice(parseInt(b.dataset.cohi),1);SETT.cohorts=_c;
     students=students.map(function(s){return s.cohort===cohName?Object.assign({},s,{cohort:""}):s;});
     saveLocal();saveS(SETT);toast("Cohort removed","ok");render();
   });});
@@ -2407,7 +2414,7 @@ function rDocs(c){
   var tot=active.length||1;
 
   // Summary
-  var complete=active.filter(function(s){return s.documents.length>=SETT.docs.length;}).length;
+  var complete=active.filter(function(s){return s.documents.length>=getSA('docs').length;}).length;
   var missing=active.filter(function(s){return s.documents.length===0;}).length;
   var partial=tot-complete-missing;
 
@@ -2422,7 +2429,7 @@ function rDocs(c){
   // Document completion by type
   html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">📋 Document Collection Status</div>';
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
-  SETT.docs.forEach(function(doc){
+  getSA('docs').forEach(function(doc){
     var n=active.filter(function(s){return s.documents.includes(doc);}).length;
     var pct=Math.round(n/tot*100);
     var col=pct>=80?"#1DBD6A":pct>=50?"#F5A623":"#D61F31";
@@ -2440,28 +2447,28 @@ function rDocs(c){
   // Per-student document matrix
   html+='<div class="card" style="padding:18px;overflow-x:auto"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">📁 Student Document Matrix</div>';
   html+='<table style="width:100%;border-collapse:collapse;min-width:600px;font-size:11px"><thead><tr><th style="padding:8px;text-align:left;border:1px solid #E4EAF2;background:#F7F9FC;font-size:11px;min-width:150px">Student</th>';
-  SETT.docs.forEach(function(doc){
+  getSA('docs').forEach(function(doc){
     html+='<th style="padding:6px 8px;border:1px solid #E4EAF2;background:#F7F9FC;font-size:9px;text-align:center;max-width:80px;word-break:break-word">'+esc(doc)+'</th>';
   });
   html+='<th style="padding:8px;border:1px solid #E4EAF2;background:#F7F9FC;text-align:center">Complete</th></tr></thead><tbody>';
   active.sort(function(a,b){return a.lastName.localeCompare(b.lastName);}).forEach(function(s){
-    var pct=SETT.docs.length?Math.round(s.documents.length/SETT.docs.length*100):0;
+    var pct=getSA('docs').length?Math.round(s.documents.length/getSA('docs').length*100):0;
     var col=pct>=100?"#1DBD6A":pct>=50?"#F5A623":"#D61F31";
     html+='<tr><td style="padding:8px;border:1px solid #E4EAF2"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.firstName+" "+s.lastName)+'</div><div style="font-size:9px;color:#7A92B0">'+esc(s.grade)+'</div></td>';
-    SETT.docs.forEach(function(doc){
+    getSA('docs').forEach(function(doc){
       var has=s.documents.includes(doc);
       html+='<td style="padding:6px;border:1px solid #E4EAF2;text-align:center"><button class="doc-toggle" data-sid="'+s.id+'" data-doc="'+esc(doc)+'" title="'+(has?"✓ Received — click to remove":"Pending — click to mark received")+'" style="border:none;background:none;cursor:pointer;font-size:14px">'+(has?"✅":"⬜")+'</button></td>';
     });
-    html+='<td style="padding:6px;border:1px solid #E4EAF2;text-align:center"><span style="font-size:11px;font-weight:800;color:'+col+'">'+s.documents.length+'/'+SETT.docs.length+'</span></td></tr>';
+    html+='<td style="padding:6px;border:1px solid #E4EAF2;text-align:center"><span style="font-size:11px;font-weight:800;color:'+col+'">'+s.documents.length+'/'+getSA('docs').length+'</span></td></tr>';
   });
   html+='</tbody></table></div>';
 
   // Incomplete students list
-  var incomplete=active.filter(function(s){return s.documents.length<SETT.docs.length;}).sort(function(a,b){return a.documents.length-b.documents.length;});
+  var incomplete=active.filter(function(s){return s.documents.length<getSA('docs').length;}).sort(function(a,b){return a.documents.length-b.documents.length;});
   if(incomplete.length){
     html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">⚠️ Incomplete Files ('+incomplete.length+')</div>';
     incomplete.forEach(function(s){
-      var miss=SETT.docs.filter(function(d){return!s.documents.includes(d);});
+      var miss=getSA('docs').filter(function(d){return!s.documents.includes(d);});
       html+='<div class="ir" data-id="'+s.id+'" style="display:flex;align-items:center;gap:10px;padding:10px;background:#FFF0F1;border-radius:9px;border:1px solid #F5C2C7;margin-bottom:7px;cursor:pointer">'
         +'<div class="ava" style="background:#D61F3120;color:#D61F31">'+esc(ini(s))+'</div>'
         +'<div style="flex:1">'
@@ -2547,7 +2554,7 @@ function rDocs(c){
       btn.textContent=docs.includes(doc)?"✅":"⬜";
       // Update the matrix cell colour
       var cell=btn.closest("td").nextSibling;
-      if(cell)cell.querySelector("span").textContent=docs.length+"/"+SETT.docs.length;
+      if(cell)cell.querySelector("span").textContent=docs.length+"/"+getSA('docs').length;
       toast((docs.includes(doc)?"✅ Marked received: ":"⬜ Removed: ")+doc,"ok");
     });
   });
@@ -4506,14 +4513,14 @@ function rAnalytics(c){
 
   // By campus
   var byCampus={};
-  SETT.campuses.forEach(function(ca){byCampus[ca]=students.filter(function(s){return s.campus===ca;}).length;});
+  getSA('campuses').forEach(function(ca){byCampus[ca]=students.filter(function(s){return s.campus===ca;}).length;});
 
   // By priority
   var byPri={};["Urgent","High","Normal","Low"].forEach(function(p){byPri[p]=students.filter(function(s){return s.priority===p;}).length;});
   var priCols={"Urgent":"#D61F31","High":"#F5A623","Normal":"#1DBD6A","Low":"#7A92B0"};
 
   // Document completion
-  var docComplete=students.filter(function(s){return s.documents.length>=SETT.docs.length;}).length;
+  var docComplete=students.filter(function(s){return s.documents.length>=getSA('docs').length;}).length;
   var docPct=Math.round(docComplete/tot*100);
 
   // Interview scheduled
@@ -4598,7 +4605,7 @@ function rAnalytics(c){
   // Campus breakdown
   html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">🏫 Enrollment by Campus</div>';
   var maxCa=Math.max.apply(null,Object.values(byCampus).concat([1]));
-  SETT.campuses.forEach(function(ca,i){
+  getSA('campuses').forEach(function(ca,i){
     var n=byCampus[ca]||0;var col=CHARTCOLS[i%CHARTCOLS.length];
     var enrN=students.filter(function(s){return s.campus===ca&&s.status==="Enrolled";}).length;
     html+='<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:3px">'
@@ -4841,7 +4848,7 @@ function openUserModal(user,idx){
     +'<div class="fl"><label class="flb">Role</label><select class="fsel2" id="um-role"><option value="staff" '+((!user||user.role==="staff")?"selected":"")+'>Staff</option><option value="admin" '+(user&&user.role==="admin"?"selected":"")+'>Admin</option><option value="principal" '+(user&&user.role==="principal"?"selected":"")+'>Principal</option><option value="partner" '+(user&&user.role==="partner"?"selected":"")+'>Campus Partner</option></select></div>'
     +'</div>'
     +'<div class="fl"><label class="flb">Email</label><input class="fi" id="um-email" value="'+esc(user?user.email:"")+'\" placeholder=\"user@school.edu\"/></div>'
-    +'<div class="fl"><label class="flb">Campus <span style="color:#D61F31;font-size:10px">(required for Partner)</span></label><select class="fsel2" id="um-campus"><option value="">— Any Campus —</option>'+(SETT.campuses||["Chennai","Sri Lanka","UAE","Spain","Online"]).map(function(ca){return'<option value="'+esc(ca)+'" '+(user&&user.campus===ca?"selected":"")+'>'+esc(ca)+'</option>';}).join("")+"'</select></div>'"
+    +'<div class="fl"><label class="flb">Campus <span style="color:#D61F31;font-size:10px">(required for Partner)</span></label><select class="fsel2" id="um-campus"><option value="">— Any Campus —</option>'+getSA('campuses').map(function(ca){return'<option value="'+esc(ca)+'" '+(user&&user.campus===ca?"selected":"")+'>'+esc(ca)+'</option>';}).join("")+"'</select></div>'"
     +(isNew?"":
       '<div class="fl"><label class="flb">Account Status</label><select class="fsel2" id="um-active"><option value="true" '+(user.active!=="false"?"selected":"")+'>Active</option><option value="false" '+(user.active==="false"?"selected":"")+'>Inactive (cannot log in)</option></select></div>'
     )
@@ -4895,7 +4902,7 @@ function rNotifs(c){
 
   // Missing documents
   students.filter(function(s){return s.documents.length<3&&!["Denied","Withdrawn"].includes(s.status);}).forEach(function(s){
-    var miss=SETT.docs.filter(function(d){return!s.documents.includes(d);});
+    var miss=getSA('docs').filter(function(d){return!s.documents.includes(d);});
     items.push({id:"docs-"+s.id,cat:"urgent",ico:"📄",col:"#F5A623",bg:"#FFF6E0",
       title:s.firstName+" "+s.lastName+" — Missing Documents",
       body:miss.slice(0,3).join(", ")+(miss.length>3?" +"+miss.length-3+" more":""),
@@ -5013,7 +5020,7 @@ function rNotifs(c){
   });
 
   // ── ENROLLED STUDENTS WITH NO COHORT ASSIGNED ────────────────────────────
-  var noCohort=students.filter(function(s){return s.status==="Enrolled"&&(!s.cohort||s.cohort==="")&&SETT.cohorts&&SETT.cohorts.length>0;});
+  var noCohort=students.filter(function(s){return s.status==="Enrolled"&&(!s.cohort||s.cohort==="")&&getSA('cohorts').length>0;});
   if(noCohort.length){
     items.push({id:"no-cohort-bulk",cat:"info",ico:"👥",col:"#0EA5E9",bg:"#E6F4FF",
       title:noCohort.length+" Enrolled Student"+(noCohort.length>1?"s":"")+" Without Cohort",
@@ -5161,10 +5168,10 @@ function rNotifs(c){
 function rSettings(c){
   var rows=[
     {key:"academicYear",label:"Academic Year",ico:"📅",col:"#1A365E",val:SETT.academicYear,desc:"Current school year shown across all views"},
-    {key:"campuses",label:"Campuses",ico:"🏫",col:"#D61F31",val:SETT.campuses.join(" · "),desc:SETT.campuses.length+" campus"+(SETT.campuses.length>1?"es":"")+" configured"},
+    {key:"campuses",label:"Campuses",ico:"🏫",col:"#D61F31",val:getSA('campuses').join(" · "),desc:getSA('campuses').length+" campus"+(getSA('campuses').length>1?"es":"")+" configured"},
     {key:"capacity",label:"Enrollment Capacity",ico:"📊",col:"#1FD6C4",val:SETT.capacity,desc:"Used for capacity tracking in Analytics"},
-    {key:"docs",label:"Required Documents",ico:"📄",col:"#A36CFF",val:SETT.docs.length+" documents",desc:SETT.docs.join(", ").slice(0,60)+(SETT.docs.join(", ").length>60?"…":"")},
-    {key:"cohorts",label:"Cohorts / Sections",ico:"👥",col:"#FAC600",val:SETT.cohorts.length+" cohorts",desc:SETT.cohorts.length?SETT.cohorts.join(", ").slice(0,60):"No cohorts yet"},
+    {key:"docs",label:"Required Documents",ico:"📄",col:"#A36CFF",val:getSA('docs').length+" documents",desc:getSA('docs').join(", ").slice(0,60)+(getSA('docs').join(", ").length>60?"…":"")},
+    {key:"cohorts",label:"Cohorts / Sections",ico:"👥",col:"#FAC600",val:getSA('cohorts').length+" cohorts",desc:getSA('cohorts').length?getSA('cohorts').join(", ").slice(0,60):"No cohorts yet"},
     {key:"sidPrefix",label:"Student ID Format",ico:"🎓",col:"#0EA5E9",val:"Format: "+SETT.sidPrefix+"-YYYY-NNN",desc:"e.g. AWS-2024-001"},
     {key:"gradeScale",label:"Grading Scale",ico:"📝",col:"#1DBD6A",val:SETT.gradeScale,desc:"Used in grade reporting"},
     {key:"emailNotif",label:"Email Notifications",ico:"✉️",col:"#F5A623",val:SETT.emailNotif,desc:"Status change and document alerts"},
@@ -5405,16 +5412,16 @@ function openModal(id,stype){
   document.getElementById("form-save").textContent=btnMap[studentType]||btnMap.New;
   var gEl=document.getElementById("f-grade");gEl.innerHTML=(GRADES||[]).map(function(g){return'<option>'+esc(g)+'</option>';}).join("");
   var stEl=document.getElementById("f-status");stEl.innerHTML=(STATUSES||[]).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var caEl=document.getElementById("f-campus");caEl.innerHTML=(Array.isArray(SETT.campuses)?SETT.campuses:defS().campuses).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+(Array.isArray(SETT.cohorts)?SETT.cohorts:defS().cohorts).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var dt=document.getElementById("doc-toggles");dt.innerHTML=(Array.isArray(SETT.docs)?SETT.docs:defS().docs).map(function(d){var on=s&&s.documents&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
+  var caEl=document.getElementById("f-campus");caEl.innerHTML=getSA('campuses').map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+getSA('cohorts').map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var dt=document.getElementById("doc-toggles");dt.innerHTML=getSA('docs').map(function(d){var on=s&&s.documents&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
   document.getElementById("f-fn").value=s?s.firstName:"";
   document.getElementById("f-ln").value=s?s.lastName:"";
   document.getElementById("f-dob").value=s?s.dob:"";
   document.getElementById("f-gender").value=s?s.gender:"Male";
   document.getElementById("f-nat").value=s?s.nationality:"";
   document.getElementById("f-lang").value=s?s.lang:"";
-  gEl.value=s?s.grade:GRADES[0];stEl.value=s?s.status:"Inquiry";caEl.value=s?s.campus:(isPartner()&&getPartnerCampus()?getPartnerCampus():SETT.campuses[0]);
+  gEl.value=s?s.grade:GRADES[0];stEl.value=s?s.status:"Inquiry";caEl.value=s?s.campus:(isPartner()&&getPartnerCampus()?getPartnerCampus():getSA('campuses')[0]);
   // Lock campus for partners
   if(isPartner()&&getPartnerCampus()){
     caEl.disabled=true;
@@ -5527,7 +5534,7 @@ function updateStudentTypePanels(stype){
   updateSIDRow();
 }
 function updateDocProg(){
-  var on=document.querySelectorAll(".dtog.on").length,tot=SETT.docs.length;
+  var on=document.querySelectorAll(".dtog.on").length,tot=getSA('docs').length;
   var pct=tot?Math.round(on/tot*100):0;
   var pf=document.getElementById("doc-pf");var pt=document.getElementById("doc-pt");
   if(pf)pf.style.width=pct+"%";if(pt)pt.textContent=on+" of "+tot+" received";
@@ -5577,7 +5584,7 @@ function saveStudent(){
     alumniNotes:stype==="Alumni"?document.getElementById("f-alumni-notes").value.trim():""};
   var toastMsg=stype==="Alumni"?"Alumni record saved · ID: "+sid+" ✓":stype==="Existing"?"Existing student added · ID: "+sid+" ✓":st==="Enrolled"?"Student enrolled · ID: "+sid+" ✓":"Application submitted ✓";
   if(editId){data.id=editId;students=students.map(function(x){return x.id===editId?data:x;});saveLocal();sheetPush(data,"update");toast("Record updated ✓","ok");}
-  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"create");toast(toastMsg,"ok");}
+  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"add");toast(toastMsg,"ok");}
   closeModal();render();
 }
 
@@ -5595,7 +5602,7 @@ function openDetail(id){
     return'<button class="st-btn'+(act?" act":"")+'" data-id="'+id+'" data-st="'+esc(st)+'" style="'+(act?"background:"+sm.bg+";color:"+sm.tc+";border-color:"+sm.dot:"")+'">'+(act?"✓ ":"")+esc(st)+'</button>';
   }).join("");
 
-  var docHtml=SETT.docs.map(function(d){
+  var docHtml=getSA('docs').map(function(d){
     var have=s.documents.includes(d);
     return'<div class="doci '+(have?"have":"miss")+'">'+esc(d)+'<span>'+(have?"✓":"✕")+'</span></div>';
   }).join("");
@@ -5731,7 +5738,7 @@ function openDetail(id){
       +intHtml
       +feeHtml
       +commsHtml
-      +'<div><div class="dp-sec">Documents ('+s.documents.length+'/'+SETT.docs.length+')</div>'+docHtml+'</div>'
+      +'<div><div class="dp-sec">Documents ('+s.documents.length+'/'+getSA('docs').length+')</div>'+docHtml+'</div>'
       +(s.notes?'<div class="nb"><div class="nbl">Admissions Notes</div><p>'+esc(s.notes)+'</p></div>':"")
       +(s.counselorNotes?'<div class="nb" style="background:#F3EEFF;border-color:#C4A8F5"><div class="nbl" style="color:#5A2FA0">Counselor Notes</div><p style="color:#3D1F7A">'+esc(s.counselorNotes)+'</p></div>':"")
       +'<div class="dp-acts">'
@@ -5772,7 +5779,7 @@ function exportRecord(s){
   var gr=GR[s.id]||{};
   var lines=["AMERICAN WORLD SCHOOL — STUDENT RECORD","=======================================","","STUDENT ID:    "+(s.studentId||"Not Assigned"),"NAME:          "+s.firstName+" "+s.lastName,"DOB:           "+(s.dob||"—"),"GRADE:         "+s.grade,"STATUS:        "+s.status,"CAMPUS:        "+s.campus,"COHORT:        "+(s.cohort||"—"),"NATIONALITY:   "+(s.nationality||"—"),"LANGUAGE:      "+(s.lang||"—"),"","CONTACT","Parent:     "+(s.parent||"—")+" ("+s.relation+")","Email:      "+(s.email||"—"),"Phone:      "+(s.phone||"—"),"Emergency:  "+(s.ecName||"—")+" · "+(s.ecPhone||"—"),"","HEALTH","Blood:      "+(s.bloodGroup||"—"),"Allergies:  "+(s.allergy||"—"),"Medications:"+(s.meds||"—"),"Support:    "+(s.iep||"None")];
   if(Object.keys(gr).length){lines.push("");lines.push("GRADE RECORDS");SUBJECTS.forEach(function(sub){if(gr[sub])lines.push(sub+": "+gr[sub]);});}
-  lines.push("");lines.push("DOCUMENTS");s.documents.forEach(function(d){lines.push("✓ "+d);});SETT.docs.filter(function(d){return!s.documents.includes(d);}).forEach(function(d){lines.push("✕ "+d+" (missing)");});
+  lines.push("");lines.push("DOCUMENTS");s.documents.forEach(function(d){lines.push("✓ "+d);});getSA('docs').filter(function(d){return!s.documents.includes(d);}).forEach(function(d){lines.push("✕ "+d+" (missing)");});
   if(s.notes){lines.push("");lines.push("NOTES");lines.push(s.notes);}lines.push("");lines.push("Generated: "+new Date().toLocaleString());
   var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/plain"}));a.download=s.firstName+"_"+s.lastName+"_AWS_Record.txt";a.click();toast("Record exported","ok");
 }
@@ -6065,7 +6072,7 @@ function rAttendance(c){
     var cohortCard=document.createElement("div");
     cohortCard.className="card";
     cohortCard.style.cssText="padding:18px";
-    var cList=SETT.cohorts||[];
+    var cList=getSA('cohorts');
     var selCohort=localStorage.getItem("aws_att_cohort")||(cList[0]||"");
     var cBlocks=loadBlocks().filter(function(b){return b.cohort===selCohort;});
 
@@ -7561,7 +7568,7 @@ function rStaff(c){
     +'<div><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">PHONE</label><input id="sf-phone" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">SUBJECTS TAUGHT</label><input id="sf-subjects" placeholder="e.g. Mathematics, Physics" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px;box-sizing:border-box"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#7C3AED;display:block;margin-bottom:4px">STAFF TYPE</label><select id="sf-stafftype" style="width:100%;padding:8px 10px;border:1.5px solid #EDE9FE;border-radius:8px;font-size:13px"><option value="">— Standard Staff —</option><option value="success-coach">🟢 Success Coach</option><option value="success-manager">🔵 Success Manager</option></select></div>'
-    +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#059669;display:block;margin-bottom:4px">ASSIGNED COHORT(S)</label><select id="sf-cohorts" multiple style="width:100%;padding:8px 10px;border:1.5px solid #D1FAE5;border-radius:8px;font-size:13px;height:72px">'+(SETT.cohorts.length?SETT.cohorts.map(function(co){return'<option>'+esc(co)+'</option>';}).join(""):'<option disabled>No cohorts yet</option>')+'</select><div style="font-size:10px;color:#7A92B0;margin-top:3px">Ctrl/Cmd to select multiple</div></div>'
+    +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#059669;display:block;margin-bottom:4px">ASSIGNED COHORT(S)</label><select id="sf-cohorts" multiple style="width:100%;padding:8px 10px;border:1.5px solid #D1FAE5;border-radius:8px;font-size:13px;height:72px">'+(getSA('cohorts').length?getSA('cohorts').map(function(co){return'<option>'+esc(co)+'</option>';}).join(""):'<option disabled>No cohorts yet</option>')+'</select><div style="font-size:10px;color:#7A92B0;margin-top:3px">Ctrl/Cmd to select multiple</div></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">STATUS</label><select id="sf-status" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px"><option>Active</option><option>On Leave</option><option>Inactive</option></select></div>'
     +'<div><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">JOIN DATE</label><input id="sf-joindate" type="date" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">NOTES</label><textarea id="sf-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box"></textarea></div>'
@@ -8203,8 +8210,8 @@ var TPMS_GRADES=["Pre-K","Kindergarten","Grade 1","Grade 2","Grade 3","Grade 4",
 // Returns <option> HTML for all grades + any cohorts created in Settings
 function getTpmsGradeOpts(selected){
   var opts=TPMS_GRADES.slice();
-  if(SETT&&SETT.cohorts&&SETT.cohorts.length){
-    opts=opts.concat(SETT.cohorts.map(function(c){return"Cohort: "+c;}));
+  if(SETT&&getSA('cohorts').length){
+    opts=opts.concat(getSA('cohorts').map(function(c){return"Cohort: "+c;}));
   }
   return opts.map(function(g){return'<option '+(g===selected?'selected':'')+'>'+esc(g)+'</option>';}).join("");
 }
@@ -8374,7 +8381,7 @@ function rTPMS(c){
 // ═══════════════════════════════════════════════════════════════════════════
 function rTpmsBlocks(body){
   var blocks=loadBlocks();
-  var cohorts=SETT.cohorts||[];
+  var cohorts=getSA('cohorts');
   var DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   var PERIODS=["Block 1","Block 2","Block 3","Block 4","Block 5","Block 6","Block 7","Block 8"];
 
@@ -8725,7 +8732,7 @@ function rTpmsLessons(body){
   var subjects=["All"].concat(TPMS_SUBJECTS);
   var statuses=["All"].concat(TPMS_LESSON_STATUS);
   var filterGrade=window._tpmsLessonGradeFilter||"All";
-  var gradeOpts=["All"].concat(TPMS_GRADES).concat((SETT&&SETT.cohorts||[]).map(function(c){return"Cohort: "+c;}));
+  var gradeOpts=["All"].concat(TPMS_GRADES).concat(getSA('cohorts').map(function(c){return"Cohort: "+c;}));
 
   var filtered=lessons.filter(function(l){
     if(filterSub!=="All"&&l.subject!==filterSub)return false;
