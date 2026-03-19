@@ -2679,7 +2679,7 @@ function openDocPanel(studentId,docName,currentUrl,parentC){
           token:_sessionToken
         });
         var uc=new AbortController(),ut=setTimeout(function(){uc.abort();},60000);
-        fetch(webUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:uploadPayload,signal:uc.signal,mode:'cors'})
+        fetch(webUrl,{method:'POST',body:uploadPayload,signal:uc.signal,mode:'cors'})
           .then(function(r){clearTimeout(ut);return r.json();})
           .then(function(d){
             if(d&&d.status==='ok'){
