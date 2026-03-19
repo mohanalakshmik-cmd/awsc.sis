@@ -95,7 +95,7 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 .srch input{border:none;background:transparent;font-size:12px;color:#1A365E;outline:none;width:100%}
 .fsel{padding:6px 10px;border-radius:8px;border:1.5px solid #E4EAF2;font-size:12px;color:#3D5475;background:#fff;outline:none}
 .mbg{display:none;position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:200;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
-.mbg.open{display:flex}#form-modal.open{display:flex!important}
+.mbg.open{display:flex}
 .mbox{background:#fff;border-radius:18px;width:100%;max-width:720px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.3)}
 .mhead{background:linear-gradient(135deg,#0F2240,#1A365E);padding:20px 24px;border-radius:18px 18px 0 0;display:flex;justify-content:space-between;align-items:flex-start;position:sticky;top:0;z-index:1}
 .mhead h2{font-size:16px;font-weight:700;color:#fff;margin-bottom:2px}
@@ -122,7 +122,7 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 #dp-bg{display:none;position:fixed;inset:0;background:rgba(10,18,36,.35);z-index:100}
 #dp-bg.open{display:block}
 #dp{position:fixed;right:0;top:0;height:100%;width:400px;background:#fff;box-shadow:-4px 0 24px rgba(26,54,94,.15);transform:translateX(100%);transition:transform .22s ease;z-index:101;overflow-y:auto;display:flex;flex-direction:column}
-#dp.open{transform:translateX(0);display:block!important}
+#dp.open{transform:translateX(0)}
 .dph{background:linear-gradient(135deg,#0F2240,#1A365E);padding:22px 18px 18px;flex-shrink:0}
 .dp-ava{width:46px;height:46px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;margin-bottom:10px}
 .dp-nm{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
@@ -158,6 +158,12 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
   #content{overflow:visible!important;padding:8px!important}
   body{background:#fff!important}
 }
+/* Modal/panel display overrides — must come after hide rules */
+#form-modal.open{display:flex!important}
+#dp.open{display:block!important}
+#dp-bg.open{display:block!important}
+.mbg.open{display:flex!important}
+
 .srow{background:#fff;border-radius:11px;padding:13px 15px;border:1px solid #E4EAF2;display:flex;align-items:center;gap:12px;margin-bottom:9px}
 .sico{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .sedit{padding:5px 12px;border:1.5px solid #E4EAF2;background:#fff;color:#3D5475;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer}
@@ -455,7 +461,7 @@ document.addEventListener("DOMContentLoaded",function(){
 </div>
 
 <!-- FORM MODAL -->
-<div class="mbg" id="form-modal">
+<div class="mbg" id="form-modal" class="mbg">
   <div class="mbox">
     <div class="mhead"><div><h2 id="form-title">New Application</h2><p>American World School · Admissions SIS</p></div><button class="mcl" id="form-close">✕</button></div>
     <div class="mbody">
@@ -796,6 +802,17 @@ var SM={
 };
 var PM={"Low":{bg:"#F4F6F8",tc:"#5A6E86"},"Normal":{bg:"#EEF3FF",tc:"#1A365E"},"High":{bg:"#FFF6E0",tc:"#8A5F00"},"Urgent":{bg:"#FFF0F1",tc:"#D61F31"}};
 
+function normSett(s){
+  // Ensure array fields are arrays (they come from Sheets as JSON strings)
+  var arrayFields=["campuses","cohorts","docs","blocks"];
+  arrayFields.forEach(function(f){
+    if(typeof s[f]==="string"){
+      try{s[f]=JSON.parse(s[f]);}catch(e){s[f]=defS()[f];}
+    }
+    if(!Array.isArray(s[f]))s[f]=defS()[f]||[];
+  });
+  return s;
+}
 function defS(){
   // Academic year: auto-calculates based on current month
   // Aug-Dec = current year start, Jan-Jul = previous year start
@@ -817,7 +834,7 @@ function defS(){
   };
 }
 // ── Settings: localStorage cache + background Sheets push ─────────────────
-function loadS(){try{var s=localStorage.getItem("aws_sett_v5");return s?Object.assign(defS(),JSON.parse(s)):defS();}catch(e){return defS();}}
+function loadS(){try{var s=localStorage.getItem("aws_sett_v5");if(!s)return defS();try{return normSett(Object.assign(defS(),JSON.parse(s)));}catch(e){return defS();}}catch(e){return defS();}}
 function saveS(s){
   localStorage.setItem("aws_sett_v5",JSON.stringify(s));
   if(webUrl) setTimeout(function(){gmsSheetRequest("saveSettings",{settings:s},null);},100);
@@ -1027,7 +1044,9 @@ function sheetFetch(){
         // Update current user info if returned
         if(d.user)updateUserUI(d.user);
         // Students
-        students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});});
+        // Deduplicate by id - keep last occurrence
+        var _seen={};
+        students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});}).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
         nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
         // Courses
         if(Array.isArray(d.courses)&&d.courses.length){
@@ -1039,7 +1058,7 @@ function sheetFetch(){
         }
         // Settings
         if(d.settings&&typeof d.settings==="object"&&Object.keys(d.settings).length){
-          SETT=Object.assign(defS(),d.settings);saveS(SETT);
+          SETT=Object.assign(defS(),d.settings);SETT=normSett(SETT);saveS(SETT);
         }
         // Attendance
         if(Array.isArray(d.attendance)&&d.attendance.length){
@@ -5375,6 +5394,7 @@ function openSettModal(key){
 }
 
 function openModal(id,stype){
+  try{
   editId=id||null;activeTab="personal";
   var s=id?students.find(function(x){return x.id===id;}):null;
   var studentType=s?s.studentType:(stype||"New");
@@ -5383,11 +5403,11 @@ function openModal(id,stype){
   var btnMap={New:id?"Save Changes":"Submit Application",Existing:id?"Save Changes":"Save Existing Student",Alumni:id?"Save Changes":"Save Alumni Record"};
   document.getElementById("form-title").textContent=titleMap[studentType]||titleMap.New;
   document.getElementById("form-save").textContent=btnMap[studentType]||btnMap.New;
-  var gEl=document.getElementById("f-grade");gEl.innerHTML=GRADES.map(function(g){return'<option>'+esc(g)+'</option>';}).join("");
-  var stEl=document.getElementById("f-status");stEl.innerHTML=STATUSES.map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var caEl=document.getElementById("f-campus");caEl.innerHTML=SETT.campuses.map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+SETT.cohorts.map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var dt=document.getElementById("doc-toggles");dt.innerHTML=SETT.docs.map(function(d){var on=s&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
+  var gEl=document.getElementById("f-grade");gEl.innerHTML=(GRADES||[]).map(function(g){return'<option>'+esc(g)+'</option>';}).join("");
+  var stEl=document.getElementById("f-status");stEl.innerHTML=(STATUSES||[]).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var caEl=document.getElementById("f-campus");caEl.innerHTML=(Array.isArray(SETT.campuses)?SETT.campuses:defS().campuses).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+(Array.isArray(SETT.cohorts)?SETT.cohorts:defS().cohorts).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
+  var dt=document.getElementById("doc-toggles");dt.innerHTML=(Array.isArray(SETT.docs)?SETT.docs:defS().docs).map(function(d){var on=s&&s.documents&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
   document.getElementById("f-fn").value=s?s.firstName:"";
   document.getElementById("f-ln").value=s?s.lastName:"";
   document.getElementById("f-dob").value=s?s.dob:"";
@@ -5466,13 +5486,17 @@ function openModal(id,stype){
   document.getElementById("f-feenotes").value=s?s.feeNotes||"":"";
   updateSIDRow();updateDocProg();switchTab("personal");
   document.getElementById("form-modal").classList.add("open");
+  }catch(e){console.error("openModal error:",e);toast("Error opening form: "+e.message,"err");}
 }
 
 function updateSIDRow(){
-  var st=document.getElementById("f-status").value;
+  var stEl=document.getElementById("f-status");
+  var srEl=document.getElementById("sid-row");
+  if(!stEl||!srEl) return;
+  var st=stEl.value;
   var stype=window._modalType||"New";
   var show=st==="Enrolled"||stype==="Existing"||stype==="Alumni";
-  document.getElementById("sid-row").style.display=show?"block":"none";
+  srEl.style.display=show?"block":"none";
 }
 function updateStudentTypePanels(stype){
   window._modalType=stype;
@@ -5863,14 +5887,16 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
           if(d&&d.status==="ok"){
             if(d.user) updateUserUI(d.user);
             if(Array.isArray(d.students)&&d.students.length){
+              // Deduplicate by id
+              var _bgseen={};
               students=d.students.map(function(s){return Object.assign({},s,{
                 id:parseInt(s.id)||s.id,
                 documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])
-              });});
+              });}).filter(function(s){if(_bgseen[s.id])return false;_bgseen[s.id]=true;return true;});
               nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
               saveLocal();
             }
-            if(d.settings&&Object.keys(d.settings).length){SETT=Object.assign(defS(),d.settings);saveS(SETT);}
+            if(d.settings&&Object.keys(d.settings).length){SETT=Object.assign(defS(),d.settings);SETT=normSett(SETT);saveS(SETT);}
             render();
           }
           // Silently ignore errors — user stays in app
