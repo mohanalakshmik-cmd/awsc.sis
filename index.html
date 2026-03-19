@@ -1053,7 +1053,9 @@ function sheetFetch(){
         // Students
         // Deduplicate by id - keep last occurrence
         var _seen={};
-        students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});}).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
+        students=d.students.map(function(s){
+              var df={};try{if(s.docFiles&&typeof s.docFiles==='string')df=JSON.parse(s.docFiles);else if(s.docFiles&&typeof s.docFiles==='object')df=s.docFiles;}catch(e){}
+              return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[]),docFiles:df});}).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
         nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
         // Courses
         if(Array.isArray(d.courses)&&d.courses.length){
@@ -2411,152 +2413,293 @@ function openCohortAssign(cohName){
 
 function rDocs(c){
   var active=students.filter(function(s){return!["Denied","Withdrawn"].includes(s.status);});
+  var docList=getSA('docs');
   var tot=active.length||1;
 
-  // Summary
-  var complete=active.filter(function(s){return s.documents.length>=getSA('docs').length;}).length;
-  var missing=active.filter(function(s){return s.documents.length===0;}).length;
+  // Summary stats
+  var complete=active.filter(function(s){return (s.documents||[]).length>=docList.length;}).length;
+  var missing=active.filter(function(s){return !(s.documents&&s.documents.length);}).length;
   var partial=tot-complete-missing;
 
-  var html='<div style="display:flex;flex-direction:column;gap:14px">';
-  html+='<div class="g4">'
-    +sc("Active Applicants",tot,"#1A365E")
-    +sc("Complete Files",complete,"#1DBD6A")
-    +sc("Partial Files",partial,"#F5A623")
-    +sc("No Documents",missing,"#D61F31")
+  // Count uploaded files across all students
+  var totalFiles=active.reduce(function(n,s){
+    return n+(s.docFiles?Object.keys(s.docFiles).length:0);
+  },0);
+
+  var h='<div style="display:flex;flex-direction:column;gap:16px">';
+
+  // Summary cards
+  h+='<div class="g4">'
+    +'<div class="card" style="text-align:center;padding:20px">'
+    +'<div style="font-size:28px;font-weight:800;color:#1DBD6A">'+complete+'</div>'
+    +'<div style="color:#7A92B0;font-size:11px;font-weight:600;margin-top:4px">COMPLETE</div></div>'
+    +'<div class="card" style="text-align:center;padding:20px">'
+    +'<div style="font-size:28px;font-weight:800;color:#FAC600">'+partial+'</div>'
+    +'<div style="color:#7A92B0;font-size:11px;font-weight:600;margin-top:4px">PARTIAL</div></div>'
+    +'<div class="card" style="text-align:center;padding:20px">'
+    +'<div style="font-size:28px;font-weight:800;color:#D61F31">'+missing+'</div>'
+    +'<div style="color:#7A92B0;font-size:11px;font-weight:600;margin-top:4px">NONE SUBMITTED</div></div>'
+    +'<div class="card" style="text-align:center;padding:20px">'
+    +'<div style="font-size:28px;font-weight:800;color:#1A365E">'+totalFiles+'</div>'
+    +'<div style="color:#7A92B0;font-size:11px;font-weight:600;margin-top:4px">FILES UPLOADED</div></div>'
     +'</div>';
 
-  // Document completion by type
-  html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">📋 Document Collection Status</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
-  getSA('docs').forEach(function(doc){
-    var n=active.filter(function(s){return s.documents.includes(doc);}).length;
-    var pct=Math.round(n/tot*100);
-    var col=pct>=80?"#1DBD6A":pct>=50?"#F5A623":"#D61F31";
-    html+='<div style="padding:12px;border-radius:10px;border:1.5px solid '+col+'30;background:'+col+'08">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
-      +'<div style="font-size:11px;font-weight:700;color:#1A365E;flex:1;line-height:1.3">'+esc(doc)+'</div>'
-      +'<span style="font-size:14px;font-weight:900;color:'+col+';margin-left:6px">'+pct+'%</span>'
-      +'</div>'
-      +'<div class="prog"><div class="pf" style="width:'+pct+'%;background:'+col+'"></div></div>'
-      +'<div style="font-size:10px;color:#7A92B0;margin-top:4px">'+n+' of '+tot+' received</div>'
-      +'</div>';
-  });
-  html+='</div></div>';
+  // Search bar
+  h+='<div style="display:flex;align-items:center;gap:10px">'
+    +'<input id="doc-srch" class="fi" placeholder="Search students..." style="max-width:280px;margin:0" value="'+(window._docSrch||'')+'">'
+    +'<select id="doc-filter" class="fsel2" style="width:auto">'
+    +'<option value="">All Students</option>'
+    +'<option value="complete"'+(window._docFilter==='complete'?' selected':'')+'>Complete</option>'
+    +'<option value="partial"'+(window._docFilter==='partial'?' selected':'')+'>Partial</option>'
+    +'<option value="none"'+(window._docFilter==='none'?' selected':'')+'>None Submitted</option>'
+    +'<option value="uploaded"'+(window._docFilter==='uploaded'?' selected':'')+'>Has Uploaded Files</option>'
+    +'</select></div>';
 
-  // Per-student document matrix
-  html+='<div class="card" style="padding:18px;overflow-x:auto"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">📁 Student Document Matrix</div>';
-  html+='<table style="width:100%;border-collapse:collapse;min-width:600px;font-size:11px"><thead><tr><th style="padding:8px;text-align:left;border:1px solid #E4EAF2;background:#F7F9FC;font-size:11px;min-width:150px">Student</th>';
-  getSA('docs').forEach(function(doc){
-    html+='<th style="padding:6px 8px;border:1px solid #E4EAF2;background:#F7F9FC;font-size:9px;text-align:center;max-width:80px;word-break:break-word">'+esc(doc)+'</th>';
+  // Filter students
+  var srch=(window._docSrch||'').toLowerCase();
+  var filt=window._docFilter||'';
+  var shown=active.filter(function(s){
+    var nameMatch=!srch||(s.firstName+' '+s.lastName+' '+(s.studentId||'')).toLowerCase().includes(srch);
+    var docs=s.documents||[];var files=s.docFiles||{};
+    var isComplete=docs.length>=docList.length;
+    var isNone=docs.length===0;
+    var isPartial=!isComplete&&!isNone;
+    var hasFiles=Object.keys(files).length>0;
+    var filterMatch=!filt
+      ||(filt==='complete'&&isComplete)
+      ||(filt==='partial'&&isPartial)
+      ||(filt==='none'&&isNone)
+      ||(filt==='uploaded'&&hasFiles);
+    return nameMatch&&filterMatch;
   });
-  html+='<th style="padding:8px;border:1px solid #E4EAF2;background:#F7F9FC;text-align:center">Complete</th></tr></thead><tbody>';
-  active.sort(function(a,b){return a.lastName.localeCompare(b.lastName);}).forEach(function(s){
-    var pct=getSA('docs').length?Math.round(s.documents.length/getSA('docs').length*100):0;
-    var col=pct>=100?"#1DBD6A":pct>=50?"#F5A623":"#D61F31";
-    html+='<tr><td style="padding:8px;border:1px solid #E4EAF2"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.firstName+" "+s.lastName)+'</div><div style="font-size:9px;color:#7A92B0">'+esc(s.grade)+'</div></td>';
-    getSA('docs').forEach(function(doc){
-      var has=s.documents.includes(doc);
-      html+='<td style="padding:6px;border:1px solid #E4EAF2;text-align:center"><button class="doc-toggle" data-sid="'+s.id+'" data-doc="'+esc(doc)+'" title="'+(has?"✓ Received — click to remove":"Pending — click to mark received")+'" style="border:none;background:none;cursor:pointer;font-size:14px">'+(has?"✅":"⬜")+'</button></td>';
-    });
-    html+='<td style="padding:6px;border:1px solid #E4EAF2;text-align:center"><span style="font-size:11px;font-weight:800;color:'+col+'">'+s.documents.length+'/'+getSA('docs').length+'</span></td></tr>';
-  });
-  html+='</tbody></table></div>';
 
-  // Incomplete students list
-  var incomplete=active.filter(function(s){return s.documents.length<getSA('docs').length;}).sort(function(a,b){return a.documents.length-b.documents.length;});
-  if(incomplete.length){
-    html+='<div class="card" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">⚠️ Incomplete Files ('+incomplete.length+')</div>';
-    incomplete.forEach(function(s){
-      var miss=getSA('docs').filter(function(d){return!s.documents.includes(d);});
-      html+='<div class="ir" data-id="'+s.id+'" style="display:flex;align-items:center;gap:10px;padding:10px;background:#FFF0F1;border-radius:9px;border:1px solid #F5C2C7;margin-bottom:7px;cursor:pointer">'
-        +'<div class="ava" style="background:#D61F3120;color:#D61F31">'+esc(ini(s))+'</div>'
-        +'<div style="flex:1">'
-        +'<div style="font-size:12px;font-weight:700;color:#1A365E">'+esc(s.firstName+" "+s.lastName)+' <span style="font-size:10px;color:#7A92B0">'+esc(s.grade)+'</span></div>'
-        +'<div style="font-size:10px;color:#D61F31;margin-top:2px">Missing: '+esc(miss.join(", "))+'</div>'
-        +'</div>'+badge(s.status)+'</div>';
+  if(!shown.length){
+    h+='<div class="card" style="text-align:center;padding:32px;color:#7A92B0">No students match filter.</div>';
+  } else {
+    // Student document table
+    h+='<div class="card" style="padding:0;overflow:hidden">'
+      +'<table class="tbl"><thead><tr>'
+      +'<th>Student</th>'
+      +docList.map(function(d){return'<th style="font-size:10px;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis" title="'+esc(d)+'">'+esc(d.split(' ')[0])+'</th>';}).join('')
+      +'<th>Files</th><th>Progress</th>'
+      +'</tr></thead><tbody>';
+
+    shown.forEach(function(s){
+      var docs=s.documents||[];
+      var files=s.docFiles||{};
+      var fileCount=Object.keys(files).length;
+      var pct=docList.length?Math.round(docs.length/docList.length*100):0;
+      var pctCol=pct===100?'#1DBD6A':pct>=50?'#FAC600':'#D61F31';
+
+      var docCells=docList.map(function(d){
+        var checked=docs.includes(d);
+        var hasFile=!!files[d];
+        var icon=hasFile?'&#128196;':(checked?'&#10003;':'&#8212;');
+        var col=hasFile?'#0EA5E9':checked?'#1DBD6A':'#E4EAF2';
+        var bg=hasFile?'#DBEAFE':checked?'#DCFCE7':'#F9FAFB';
+        var title=hasFile?'File uploaded: click to view':(checked?'Submitted (no file)':'Not submitted');
+        return'<td style="text-align:center">'
+          +'<span class="doc-cell" data-sid="'+s.id+'" data-doc="'+esc(d)+'" data-url="'+esc(hasFile?files[d]:'')
+          +'" title="'+esc(title)+'" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:'+bg+';color:'+col+';font-size:13px;cursor:pointer;border:1.5px solid '+col+'44">'+icon+'</span>'
+          +'</td>';
+      }).join('');
+
+      h+='<tr>'
+        +'<td><b>'+esc(s.firstName+' '+s.lastName)+'</b>'
+        +'<br><span style="color:#7A92B0;font-size:11px">'+esc(s.studentId||s.grade||'')+'</span></td>'
+        +docCells
+        +'<td style="text-align:center">'
+        +(fileCount?'<span style="background:#DBEAFE;color:#1E40AF;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">'+fileCount+' &#128196;</span>':'<span style="color:#7A92B0;font-size:11px">&#8212;</span>')
+        +'</td>'
+        +'<td style="min-width:80px">'
+        +'<div style="display:flex;align-items:center;gap:6px">'
+        +'<div style="flex:1;background:#E4EAF2;border-radius:4px;height:6px">'
+        +'<div style="background:'+pctCol+';width:'+pct+'%;height:100%;border-radius:4px"></div></div>'
+        +'<span style="font-size:10px;color:#7A92B0;white-space:nowrap">'+docs.length+'/'+docList.length+'</span>'
+        +'</div></td>'
+        +'</tr>';
     });
-    html+='</div>';
+    h+='</tbody></table></div>';
   }
 
-  html+='</div>';
+  // Upload instructions
+  h+='<div style="background:#EEF3FF;border-radius:10px;padding:12px 16px;font-size:12px;color:#1A365E">'
+    +'<b>&#128196; How to upload files:</b> Click any document cell in the table above to upload, view, or manage that file. '
+    +'Or open a student record and go to the Documents tab. Files are stored in Google Drive.'
+    +'</div>';
 
-  // ── Monthly Applications Trend ────────────────────────────────────────────
-  var monthCounts={};
-  students.forEach(function(s){
-    if(s.appDate){
-      var mo=s.appDate.slice(0,7);
-      if(!monthCounts[mo])monthCounts[mo]={applied:0,enrolled:0,accepted:0};
-      monthCounts[mo].applied++;
-      if(s.status==="Enrolled")monthCounts[mo].enrolled++;
-      if(s.status==="Accepted"||s.status==="Enrolled")monthCounts[mo].accepted++;
+  h+='</div>';
+  c.innerHTML=h;
+
+  // Search + filter
+  var srchEl=document.getElementById('doc-srch');
+  if(srchEl)srchEl.addEventListener('input',function(){window._docSrch=this.value;rDocs(c);});
+  var filtEl=document.getElementById('doc-filter');
+  if(filtEl)filtEl.addEventListener('change',function(){window._docFilter=this.value;rDocs(c);});
+
+  // Doc cell clicks
+  c.querySelectorAll('.doc-cell').forEach(function(cell){
+    cell.addEventListener('click',function(){
+      var sid=parseInt(cell.dataset.sid);
+      var docName=cell.dataset.doc;
+      var url=cell.dataset.url;
+      openDocPanel(sid,docName,url,c);
+    });
+  });
+}
+
+// ── Document Upload Panel ─────────────────────────────────────
+function openDocPanel(studentId,docName,currentUrl,parentC){
+  var s=students.find(function(x){return x.id===studentId;});
+  if(!s)return;
+  var existing=document.getElementById('doc-upload-panel');
+  if(existing)existing.remove();
+
+  var ov=document.createElement('div');ov.id='doc-upload-panel';ov.className='mbg open';
+  var hasFile=!!currentUrl;
+  var checked=(s.documents||[]).includes(docName);
+
+  ov.innerHTML='<div class="mbox" style="max-width:480px">'
+    +'<div class="mhead">'
+    +'<div><h2 style="color:#1A365E;font-size:15px">&#128196; '+esc(docName)+'</h2>'
+    +'<p style="color:#7A92B0;font-size:12px;margin-top:2px">'+esc(s.firstName+' '+s.lastName)+'</p></div>'
+    +'<button id="dp-close" class="mclose">&times;</button>'
+    +'</div>'
+    +'<div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px">'
+
+    // Current status
+    +'<div style="background:#F7F9FC;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px">'
+    +'<div style="font-size:32px">'+(hasFile?'&#128196;':checked?'&#10003;':'&#128196;')+'</div>'
+    +'<div><div style="font-weight:700;color:#1A365E;font-size:13px">'
+    +(hasFile?'File uploaded':'No file uploaded')+'</div>'
+    +'<div style="color:#7A92B0;font-size:11px;margin-top:2px">'
+    +(hasFile?'Stored in Google Drive':'Upload a file to store it in Google Drive')+'</div>'
+    +(hasFile?'<a href="'+currentUrl+'" target="_blank" style="font-size:11px;color:#0EA5E9;font-weight:600">&#128279; View in Google Drive</a>':'')
+    +'</div></div>'
+
+    // Upload area
+    +'<div>'
+    +'<label class="flb">'+(hasFile?'Replace File':'Upload File')+'</label>'
+    +'<div id="dp-drop" style="border:2px dashed #C4D4E8;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s">'
+    +'<div style="font-size:32px;margin-bottom:8px">&#8679;</div>'
+    +'<div style="font-weight:600;color:#1A365E;font-size:13px">Click to select file</div>'
+    +'<div style="color:#7A92B0;font-size:11px;margin-top:4px">PDF, JPG, PNG, DOC — max 10MB</div>'
+    +'<div id="dp-filename" style="color:#0EA5E9;font-size:12px;font-weight:600;margin-top:6px"></div>'
+    +'</div></div>'
+
+    // Checkbox status
+    +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F7F9FC;border-radius:8px">'
+    +'<input type="checkbox" id="dp-check" '+(checked?'checked':'')+' style="width:16px;height:16px;accent-color:#1A365E">'
+    +'<label for="dp-check" style="font-size:13px;color:#1A365E;font-weight:600;cursor:pointer">Mark as submitted (checkbox)</label>'
+    +'</div>'
+
+    +'</div>'
+    +'<div class="mfooter" style="flex-wrap:wrap;gap:8px">'
+    +(hasFile?'<button id="dp-delete" style="padding:9px 16px;background:#FFF0F1;color:#D61F31;border:1.5px solid #F5C2C7;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">&#128465; Delete File</button>':'')
+    +'<button id="dp-cancel" class="btn-s" style="background:#F7F9FC;color:#3D5475;border:1.5px solid #E4EAF2;margin-left:auto">Cancel</button>'
+    +'<button id="dp-save" style="padding:9px 18px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">Save</button>'
+    +'</div></div>';
+
+  document.body.appendChild(ov);
+
+  // File input (hidden)
+  var fileInp=document.createElement('input');fileInp.type='file';
+  fileInp.accept='.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx';
+  var selectedFile=null;
+
+  var dropZone=ov.querySelector('#dp-drop');
+  dropZone.addEventListener('click',function(){fileInp.click();});
+  dropZone.addEventListener('dragover',function(e){e.preventDefault();dropZone.style.borderColor='#1A365E';dropZone.style.background='#EEF3FF';});
+  dropZone.addEventListener('dragleave',function(){dropZone.style.borderColor='#C4D4E8';dropZone.style.background='';});
+  dropZone.addEventListener('drop',function(e){
+    e.preventDefault();dropZone.style.borderColor='#C4D4E8';dropZone.style.background='';
+    var f=e.dataTransfer.files[0];if(f){selectedFile=f;ov.querySelector('#dp-filename').textContent='Selected: '+f.name+' ('+Math.round(f.size/1024)+'KB)';}
+  });
+  fileInp.addEventListener('change',function(){
+    if(fileInp.files[0]){selectedFile=fileInp.files[0];ov.querySelector('#dp-filename').textContent='Selected: '+selectedFile.name+' ('+Math.round(selectedFile.size/1024)+'KB)';}
+  });
+
+  // Close handlers
+  ov.querySelector('#dp-close').onclick=function(){ov.remove();};
+  ov.querySelector('#dp-cancel').onclick=function(){ov.remove();};
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+
+  // Delete file
+  var delBtn=ov.querySelector('#dp-delete');
+  if(delBtn){
+    delBtn.addEventListener('click',function(){
+      if(!confirm('Delete the uploaded file for "'+docName+'"?'))return;
+      delBtn.disabled=true;delBtn.textContent='Deleting...';
+      // Remove locally
+      if(!s.docFiles)s.docFiles={};
+      delete s.docFiles[docName];
+      students=students.map(function(x){return x.id===studentId?Object.assign({},x,{docFiles:s.docFiles}):x;});
+      saveLocal();
+      // Remove from sheet/Drive
+      if(webUrl){
+        gmsSheetRequest('deleteDoc',{studentId:String(studentId),docName:docName,fileUrl:currentUrl},function(){});
+        sheetPush(students.find(function(x){return x.id===studentId;})||s,'update');
+      }
+      toast('File deleted','ok');ov.remove();
+      if(parentC)rDocs(parentC);
+    });
+  }
+
+  // Save
+  ov.querySelector('#dp-save').addEventListener('click',function(){
+    var saveBtn=ov.querySelector('#dp-save');
+    var isChecked=ov.querySelector('#dp-check').checked;
+
+    // Update checkbox/documents array
+    var s2=students.find(function(x){return x.id===studentId;})||s;
+    var docs2=(s2.documents||[]).slice();
+    if(isChecked&&!docs2.includes(docName))docs2.push(docName);
+    else if(!isChecked)docs2=docs2.filter(function(d){return d!==docName;});
+
+    if(selectedFile){
+      // Upload file
+      if(selectedFile.size>10*1024*1024){toast('File too large — max 10MB','err');return;}
+      if(!webUrl){toast('API URL required for file upload. Checkbox saved locally.','err');
+        // Still save checkbox
+        students=students.map(function(x){return x.id===studentId?Object.assign({},x,{documents:docs2}):x;});
+        saveLocal();sheetPush(students.find(function(x){return x.id===studentId;}),  'update');
+        ov.remove();if(parentC)rDocs(parentC);return;
+      }
+      saveBtn.disabled=true;saveBtn.textContent='Uploading...';
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var b64=e.target.result.split(',')[1];
+        gmsSheetRequest('uploadDoc',{
+          studentId:String(studentId),docName:docName,
+          fileName:selectedFile.name,
+          mimeType:selectedFile.type||'application/octet-stream',
+          base64:b64
+        },function(d){
+          if(d&&d.status==='ok'){
+            if(!s2.docFiles)s2.docFiles={};
+            s2.docFiles[docName]=d.url;
+            // Ensure doc is also checked
+            if(!docs2.includes(docName))docs2.push(docName);
+            students=students.map(function(x){return x.id===studentId?Object.assign({},x,{documents:docs2,docFiles:s2.docFiles}):x;});
+            saveLocal();
+            sheetPush(students.find(function(x){return x.id===studentId;})||s2,'update');
+            toast('&#128196; '+docName+' uploaded &#10003;','ok');
+            ov.remove();if(parentC)rDocs(parentC);
+          } else {
+            saveBtn.disabled=false;saveBtn.textContent='Save';
+            toast('Upload failed: '+(d&&d.message||'unknown error'),'err');
+          }
+        });
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      // Just save checkbox change
+      students=students.map(function(x){return x.id===studentId?Object.assign({},x,{documents:docs2}):x;});
+      saveLocal();
+      sheetPush(students.find(function(x){return x.id===studentId;})||s,'update');
+      toast('Document status updated &#10003;','ok');
+      ov.remove();if(parentC)rDocs(parentC);
     }
-  });
-  var moKeys=Object.keys(monthCounts).sort().slice(-12);
-  if(moKeys.length>1){
-    var maxApplied=Math.max.apply(null,moKeys.map(function(k){return monthCounts[k].applied;}));
-    html+='<div class="card" style="padding:18px;margin-bottom:0">';
-    html+='<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:16px">📈 Monthly Applications Trend (last '+moKeys.length+' months)</div>';
-    html+='<div style="display:flex;align-items:flex-end;gap:6px;height:120px;padding-bottom:4px">';
-    moKeys.forEach(function(mo){
-      var cnt=monthCounts[mo];
-      var pct=maxApplied>0?Math.round(cnt.applied/maxApplied*100):0;
-      var enrPct=maxApplied>0?Math.round(cnt.enrolled/maxApplied*100):0;
-      var moLabel=new Date(mo+"-02").toLocaleString("en-US",{month:"short"});
-      html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">';
-      html+='<div style="font-size:9px;font-weight:700;color:#1A365E">'+cnt.applied+'</div>';
-      html+='<div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;height:100px;gap:2px">';
-      html+='<div style="width:100%;background:#1A365E22;border-radius:3px 3px 0 0;height:'+pct+'%;min-height:2px;position:relative">';
-      html+='<div style="position:absolute;bottom:0;left:0;right:0;background:#1DBD6A;border-radius:3px 3px 0 0;height:'+enrPct+'%;min-height:'+(cnt.enrolled?'2px':'0')+'"></div>';
-      html+='</div></div>';
-      html+='<div style="font-size:9px;color:#7A92B0;margin-top:2px">'+moLabel+'</div>';
-      html+='</div>';
-    });
-    html+='</div>';
-    html+='<div style="display:flex;gap:14px;margin-top:10px">';
-    html+='<div style="display:flex;align-items:center;gap:5px"><div style="width:12px;height:12px;border-radius:2px;background:#1A365E22"></div><span style="font-size:10px;color:#7A92B0">Applied</span></div>';
-    html+='<div style="display:flex;align-items:center;gap:5px"><div style="width:12px;height:12px;border-radius:2px;background:#1DBD6A"></div><span style="font-size:10px;color:#7A92B0">Enrolled</span></div>';
-    html+='</div></div>';
-  }
-
-  // ── Attendance & Fees Summary ─────────────────────────────────────────────
-  var attKeys=Object.keys(ATT);
-  var attPresent=attKeys.filter(function(k){return ATT[k].status==="P"||ATT[k].status==="R";}).length;
-  var attAbsent=attKeys.filter(function(k){return ATT[k].status==="A";}).length;
-  var attTotal=attKeys.length;
-  var attRate=attTotal>0?Math.round(attPresent/attTotal*100):0;
-  var overdueCount=FEE.filter(function(f){return !f.paid&&!f.waived&&f.due&&f.due<new Date().toISOString().slice(0,10);}).length;
-  var totalBilled=FEE.filter(function(f){return !f.waived;}).reduce(function(a,f){return a+(parseFloat(f.amount)||0);},0);
-  var totalPaid=FEE.filter(function(f){return f.paid&&!f.waived;}).reduce(function(a,f){return a+(parseFloat(f.amount)||0);},0);
-  var collRate=totalBilled>0?Math.round(totalPaid/totalBilled*100):0;
-
-  html+='<div class="g4">';
-  html+='<div class="card sc-card"><div class="sl">Attendance Rate</div><div style="font-size:26px;font-weight:800;color:'+(attRate>=95?"#1DBD6A":attRate>=90?"#F5A623":"#D61F31")+'">'+attRate+'%</div><div style="font-size:10px;color:#7A92B0;margin-top:2px">'+attTotal+' records</div></div>';
-  html+='<div class="card sc-card"><div class="sl">Absent Days</div><div style="font-size:26px;font-weight:800;color:'+(attAbsent>0?"#D61F31":"#1DBD6A")+'">'+attAbsent+'</div><div style="font-size:10px;color:#7A92B0;margin-top:2px">of '+attTotal+' total</div></div>';
-  html+='<div class="card sc-card"><div class="sl">Fee Collection</div><div style="font-size:26px;font-weight:800;color:'+(collRate>=90?"#1DBD6A":collRate>=70?"#F5A623":"#D61F31")+'">'+collRate+'%</div><div style="font-size:10px;color:#7A92B0;margin-top:2px">'+FEE.length+' fee records</div></div>';
-  html+='<div class="card sc-card"><div class="sl">Overdue Fees</div><div style="font-size:26px;font-weight:800;color:'+(overdueCount>0?"#D61F31":"#1DBD6A")+'">'+overdueCount+'</div><div style="font-size:10px;color:#7A92B0;margin-top:2px">past due date</div></div>';
-  html+='</div>';
-
-  c.innerHTML=html;
-  c.querySelectorAll(".ir").forEach(function(r){r.addEventListener("click",function(){openDetail(parseInt(r.dataset.id));});});
-
-  // Inline document toggle
-  c.querySelectorAll(".doc-toggle").forEach(function(btn){
-    btn.addEventListener("click",function(e){
-      e.stopPropagation();
-      var sid=parseInt(btn.dataset.sid);var doc=btn.dataset.doc;
-      var s=students.find(function(x){return x.id===sid;});if(!s)return;
-      var docs=s.documents.slice();
-      if(docs.includes(doc))docs.splice(docs.indexOf(doc),1);
-      else docs.push(doc);
-      s.documents=docs;
-      saveLocal();sheetPush(s,"update");
-      btn.textContent=docs.includes(doc)?"✅":"⬜";
-      // Update the matrix cell colour
-      var cell=btn.closest("td").nextSibling;
-      if(cell)cell.querySelector("span").textContent=docs.length+"/"+getSA('docs').length;
-      toast((docs.includes(doc)?"✅ Marked received: ":"⬜ Removed: ")+doc,"ok");
-    });
   });
 }
 
@@ -5605,7 +5748,14 @@ function openModal(id,stype){
   var stEl=document.getElementById("f-status");stEl.innerHTML=(STATUSES||[]).map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
   var caEl=document.getElementById("f-campus");caEl.innerHTML=getSA('campuses').map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
   var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+getSA('cohorts').map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
-  var dt=document.getElementById("doc-toggles");dt.innerHTML=getSA('docs').map(function(d){var on=s&&s.documents&&s.documents.includes(d);return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'">'+esc(d)+'</button>';}).join("");
+  var dt=document.getElementById("doc-toggles");dt.innerHTML=getSA('docs').map(function(d){
+    var on=s&&s.documents&&s.documents.includes(d);
+    var fileUrl=(s.docFiles&&s.docFiles[d])?s.docFiles[d]:'';
+    return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'" title="'+esc(d)+'">'
+      +esc(d)
+      +(fileUrl?' <span style="color:#0EA5E9;font-size:10px">&#128196;</span>':'')
+      +'</button>';
+  }).join("");
   document.getElementById("f-fn").value=s?s.firstName:"";
   document.getElementById("f-ln").value=s?s.lastName:"";
   document.getElementById("f-dob").value=s?s.dob:"";
@@ -5756,7 +5906,7 @@ function saveStudent(){
   if((st==="Enrolled"||stype==="Existing"||stype==="Alumni")&&!sid){toast("Student ID is required.","err");switchTab("personal");document.getElementById("sid-row").style.display="block";return;}
   if(sid){var dup=students.find(function(x){return x.studentId===sid&&x.id!==editId;});if(dup){toast("Student ID "+sid+" already used by "+dup.firstName+" "+dup.lastName+".","err");return;}}
   var docs=[].slice.call(document.querySelectorAll(".dtog.on")).map(function(b){return b.dataset.doc;});
-  var data={firstName:fn,lastName:ln,dob:document.getElementById("f-dob").value,gender:document.getElementById("f-gender").value,nationality:document.getElementById("f-nat").value.trim(),lang:document.getElementById("f-lang").value.trim(),grade:gr,status:st,appDate:document.getElementById("f-appdate").value,enrollDate:document.getElementById("f-enrolldate").value,priority:document.getElementById("f-pri").value,campus:(isPartner()&&getPartnerCampus())?getPartnerCampus():document.getElementById("f-campus").value,cohort:document.getElementById("f-cohort").value,prevSchool:document.getElementById("f-prevschool").value.trim(),gpa:document.getElementById("f-gpa").value.trim(),parent:document.getElementById("f-parent").value.trim(),relation:document.getElementById("f-rel").value,email:document.getElementById("f-email").value.trim(),phone:document.getElementById("f-phone").value.trim(),ecName:document.getElementById("f-ec-name").value.trim(),ecPhone:document.getElementById("f-ec-phone").value.trim(),address:document.getElementById("f-addr").value.trim(),bloodGroup:document.getElementById("f-blood").value,allergy:document.getElementById("f-allergy").value.trim(),meds:document.getElementById("f-meds").value.trim(),physician:document.getElementById("f-phys").value.trim(),physicianPhone:document.getElementById("f-phys-ph").value.trim(),healthNotes:document.getElementById("f-health-notes").value.trim(),iep:document.getElementById("f-iep").value,notes:document.getElementById("f-notes").value.trim(),counselorNotes:document.getElementById("f-counselor").value.trim(),studentId:sid,documents:docs,
+  var data={firstName:fn,lastName:ln,dob:document.getElementById("f-dob").value,gender:document.getElementById("f-gender").value,nationality:document.getElementById("f-nat").value.trim(),lang:document.getElementById("f-lang").value.trim(),grade:gr,status:st,appDate:document.getElementById("f-appdate").value,enrollDate:document.getElementById("f-enrolldate").value,priority:document.getElementById("f-pri").value,campus:(isPartner()&&getPartnerCampus())?getPartnerCampus():document.getElementById("f-campus").value,cohort:document.getElementById("f-cohort").value,prevSchool:document.getElementById("f-prevschool").value.trim(),gpa:document.getElementById("f-gpa").value.trim(),parent:document.getElementById("f-parent").value.trim(),relation:document.getElementById("f-rel").value,email:document.getElementById("f-email").value.trim(),phone:document.getElementById("f-phone").value.trim(),ecName:document.getElementById("f-ec-name").value.trim(),ecPhone:document.getElementById("f-ec-phone").value.trim(),address:document.getElementById("f-addr").value.trim(),bloodGroup:document.getElementById("f-blood").value,allergy:document.getElementById("f-allergy").value.trim(),meds:document.getElementById("f-meds").value.trim(),physician:document.getElementById("f-phys").value.trim(),physicianPhone:document.getElementById("f-phys-ph").value.trim(),healthNotes:document.getElementById("f-health-notes").value.trim(),iep:document.getElementById("f-iep").value,notes:document.getElementById("f-notes").value.trim(),counselorNotes:document.getElementById("f-counselor").value.trim(),studentId:sid,documents:docs,docFiles:editId?(students.find(function(x){return x.id===editId;})||{}).docFiles||{}:{},
     intDate:document.getElementById("f-intdate").value,intTime:document.getElementById("f-inttime").value,
     intViewer:document.getElementById("f-intviewer").value.trim(),intScore:document.getElementById("f-intscore").value,
     intNotes:document.getElementById("f-intnotes").value.trim(),committee:document.getElementById("f-committee").value,
