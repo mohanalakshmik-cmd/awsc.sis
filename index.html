@@ -1193,16 +1193,26 @@ function sheetDel(id){
 function gmsSheetRequest(action, payload, onOk) {
   if(!webUrl) return;
   payload.token = _sessionToken;
-  var body = encodeURIComponent(JSON.stringify(payload));
-  var c = new AbortController(), t = setTimeout(function(){c.abort();}, 30000);
-  fetch(webUrl+"?action="+action+"&payload="+body+"&token="+encodeURIComponent(_sessionToken), {signal:c.signal})
+  payload.action = action;
+  var jsonBody = JSON.stringify(payload);
+  var c = new AbortController(), t = setTimeout(function(){c.abort();}, 45000);
+  var req;
+  // Auto-switch to POST for large payloads (>1500 chars encoded) to avoid URL length limits
+  if(encodeURIComponent(jsonBody).length > 1500) {
+    // POST: send as plain text body (no Content-Type = CORS-safe, no preflight)
+    req = fetch(webUrl, {method:"POST", body:jsonBody, signal:c.signal, mode:"cors"});
+  } else {
+    var body = encodeURIComponent(jsonBody);
+    req = fetch(webUrl+"?action="+action+"&payload="+body+"&token="+encodeURIComponent(_sessionToken), {signal:c.signal});
+  }
+  req
     .then(function(r){clearTimeout(t); return r.json();})
     .then(function(d){
       if(d.status==="ok"){setLive();if(onOk)onOk(d);}
       else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
-      else{console.warn("GMS sync error:",d.message);toast("Sync error: "+(d.message||"unknown"),"err");}
+      else{console.warn("GMS sync error ["+action+"]:",d.message);toast("Sync error: "+(d.message||"unknown"),"err");}
     })
-    .catch(function(e){console.warn("GMS sync failed:",e);if(e.name!=="AbortError")toast("Sync failed: "+(e.message||"network error"),"err");});
+    .catch(function(e){console.warn("GMS sync failed ["+action+"]:",e);if(e.name!=="AbortError")toast("Sync failed: "+(e.message||"network error"),"err");});
 }
 
 // Push all course records for one student
@@ -1213,8 +1223,9 @@ function syncCoursesForStudent(studentId) {
 
 // Push all transfer credits for one student
 function syncTransferForStudent(studentId) {
-  var all = loadTransfer().filter(function(t){return t.studentId===studentId||String(t.studentId)===String(studentId);});
-  gmsSheetRequest("saveTransfer", {studentId: studentId, transfers: all}, null);
+  var all = loadTransfer().filter(function(t){return String(t.studentId)===String(studentId);});
+  if(!all.length) return; // nothing to sync
+  gmsSheetRequest("saveTransfer", {studentId: String(studentId), transfers: all}, null);
 }
 
 // Push settings
@@ -4395,9 +4406,10 @@ function rGmsTransfer(body,s){
   if(ecSyncBtn)ecSyncBtn.addEventListener("click",function(){
     if(!webUrl){toast("Connect Google Sheets in Settings first","err");return;}
     ecSyncBtn.textContent="Syncing…";ecSyncBtn.disabled=true;
-    syncECCredits();syncTPMS();
-    setTimeout(function(){ecSyncBtn.textContent="↑ Sync EC to Sheets";ecSyncBtn.disabled=false;},2000);
-    toast("EC Credits + TPMS synced to Sheets ✓","ok");
+    // Sync raw transfer records to Transfer sheet first
+    if(s){syncTransferForStudent(s.id);}
+    syncECCredits();
+    setTimeout(function(){ecSyncBtn.textContent="↑ Sync EC to Sheets";ecSyncBtn.disabled=false;toast("Transfer + EC Credits synced ✓","ok");},2000);
   });
   var db=document.getElementById("add-de-btn");
   if(db)db.addEventListener("click",function(){
@@ -4493,9 +4505,11 @@ function openTransferModal(studentId,idx){
     if(!title){toast("Course title is required","err");return;}
     var rec={
       studentId:studentId,
+      id:Date.now(),
       origTitle:title,
       sourceSchool:document.getElementById("tr-school").value.trim(),
       sourceLoc:document.getElementById("tr-loc").value.trim(),
+      location:document.getElementById("tr-loc").value.trim(),
       accred:document.getElementById("tr-accred").value,
       origGrade:document.getElementById("tr-grade").value.trim(),
       creditsAwarded:parseFloat(document.getElementById("tr-credits").value)||0,
@@ -4503,6 +4517,7 @@ function openTransferModal(studentId,idx){
       type:isDE2?"DE":"TR",
       gradeLevel:document.getElementById("tr-glevel").value,
       status:document.getElementById("tr-status").value,
+      year:new Date().getFullYear()+"-"+(new Date().getFullYear()+1),
       notes:document.getElementById("tr-notes").value.trim(),
       addedDate:new Date().toISOString().split("T")[0]
     };
@@ -7704,10 +7719,8 @@ window.syncAll = function(){
   sids.forEach(function(sid){
     var sc=courses.filter(function(c){return String(c.studentId)===String(sid);});
     var st=transfers.filter(function(t){return String(t.studentId)===String(sid);});
-    if(sc.length||st.length){
-      if(sc.length) gmsSheetRequest("saveCourses",{studentId:sid,courses:sc},null);
-      if(st.length) gmsSheetRequest("saveTransfer",{studentId:sid,transfers:st},null);
-    }
+    if(sc.length) gmsSheetRequest("saveCourses",{studentId:String(sid),courses:sc},null);
+    if(st.length) gmsSheetRequest("saveTransfer",{studentId:String(sid),transfers:st},null);
   });
   // Attendance
   var dates=[...new Set(Object.keys(ATT).map(function(k){return k.split("_")[0];}))];
