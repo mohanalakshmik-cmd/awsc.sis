@@ -820,6 +820,22 @@ function getSA(field){
   if(typeof v==="string"&&v.charAt(0)==="["){try{return JSON.parse(v);}catch(e){}}
   return defS()[field]||[];
 }
+function normStudent(s){
+  if(!s)return s;
+  // Ensure docFiles is always an object
+  if(!s.docFiles||typeof s.docFiles!=='object'||Array.isArray(s.docFiles)){
+    var df={};
+    if(typeof s.docFiles==='string'&&s.docFiles.charAt(0)==='{'){
+      try{df=JSON.parse(s.docFiles);}catch(e){}
+    }
+    s.docFiles=df;
+  }
+  // Ensure documents is always an array
+  if(!Array.isArray(s.documents)){
+    s.documents=typeof s.documents==='string'?s.documents.split('|').filter(Boolean):[];
+  }
+  return s;
+}
 function defS(){
   // Academic year: auto-calculates based on current month
   // Aug-Dec = current year start, Jan-Jul = previous year start
@@ -1019,7 +1035,7 @@ function ini(s){return(String(s.firstName||"")[0]||"")+(String(s.lastName||"")[0
 function badge(st){var m=SM[st]||SM["Inquiry"];return'<span class="badge" style="background:'+m.bg+';color:'+m.tc+'"><span class="bdot" style="background:'+m.dot+'"></span>'+esc(st)+'</span>';}
 function pb(p){var m=PM[p]||PM["Normal"];return'<span class="pb" style="background:'+m.bg+';color:'+m.tc+'">'+esc(p)+'</span>';}
 function saveLocal(){localStorage.setItem("aws_data_v5",JSON.stringify(students));}
-function loadLocal(){var s=localStorage.getItem("aws_data_v5");students=s?JSON.parse(s):JSON.parse(JSON.stringify(SAMPLE));nextId=Math.max.apply(null,students.map(function(x){return parseInt(x.id)||0;}).concat([99]))+1;}
+function loadLocal(){var s=localStorage.getItem("aws_data_v5");students=(s?JSON.parse(s):JSON.parse(JSON.stringify(SAMPLE))).map(normStudent);nextId=Math.max.apply(null,students.map(function(x){return parseInt(x.id)||0;}).concat([99]))+1;}
 var _tt;
 function toast(msg,type){var t=document.getElementById("toast");t.textContent=msg;t.className="show "+(type||"");clearTimeout(_tt);_tt=setTimeout(function(){t.className="";},3200);}
 function setLive(){
@@ -1055,7 +1071,7 @@ function sheetFetch(){
         var _seen={};
         students=d.students.map(function(s){
               var df={};try{if(s.docFiles&&typeof s.docFiles==='string')df=JSON.parse(s.docFiles);else if(s.docFiles&&typeof s.docFiles==='object')df=s.docFiles;}catch(e){}
-              return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[]),docFiles:df});}).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
+              return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[]),docFiles:df});}).map(normStudent).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
         nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
         // Courses
         if(Array.isArray(d.courses)&&d.courses.length){
@@ -1159,6 +1175,7 @@ function sheetFetch(){
 }
 function sheetPush(student,action){
   if(!webUrl)return;
+  if(!student)return;
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|"),docFiles:JSON.stringify(student.docFiles||{})});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
   var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
@@ -5747,6 +5764,7 @@ function openModal(id,stype){
   try{
   editId=id||null;activeTab="personal";
   var s=id?students.find(function(x){return x.id===id;}):null;
+  if(s)normStudent(s);
   var studentType=s?s.studentType:(stype||"New");
   window._modalType=studentType;
   var titleMap={New:id?"Edit Application":"New Application",Existing:id?"Edit Student Record":"Add Existing Student",Alumni:id?"Edit Alumni Record":"Add Alumni Record"};
@@ -5759,7 +5777,7 @@ function openModal(id,stype){
   var coEl=document.getElementById("f-cohort");coEl.innerHTML='<option value="">— None —</option>'+getSA('cohorts').map(function(x){return'<option>'+esc(x)+'</option>';}).join("");
   var dt=document.getElementById("doc-toggles");dt.innerHTML=getSA('docs').map(function(d){
     var on=s&&s.documents&&s.documents.includes(d);
-    var fileUrl=(s.docFiles&&s.docFiles[d])?s.docFiles[d]:'';
+    var fileUrl=(s&&s.docFiles&&s.docFiles[d])?s.docFiles[d]:'';
     return'<button type="button" class="dtog'+(on?" on":"")+'" data-doc="'+esc(d)+'" title="'+esc(d)+'">'
       +esc(d)
       +(fileUrl?' <span style="color:#0EA5E9;font-size:10px">&#128196;</span>':'')
@@ -5843,7 +5861,7 @@ function openModal(id,stype){
   document.getElementById("f-feenotes").value=s?s.feeNotes||"":"";
   updateSIDRow();updateDocProg();switchTab("personal");
   document.getElementById("form-modal").classList.add("open");
-  }catch(e){console.error("openModal error:",e);toast("Error opening form: "+e.message,"err");}
+  }catch(e){console.error("openModal error:",e.stack||e);toast("Error opening form: "+e.message+" | "+((e.stack||"").split("\n")[1]||""),"err");}
 }
 
 function updateSIDRow(){
@@ -5915,7 +5933,7 @@ function saveStudent(){
   if((st==="Enrolled"||stype==="Existing"||stype==="Alumni")&&!sid){toast("Student ID is required.","err");switchTab("personal");document.getElementById("sid-row").style.display="block";return;}
   if(sid){var dup=students.find(function(x){return x.studentId===sid&&x.id!==editId;});if(dup){toast("Student ID "+sid+" already used by "+dup.firstName+" "+dup.lastName+".","err");return;}}
   var docs=[].slice.call(document.querySelectorAll(".dtog.on")).map(function(b){return b.dataset.doc;});
-  var data={firstName:fn,lastName:ln,dob:document.getElementById("f-dob").value,gender:document.getElementById("f-gender").value,nationality:document.getElementById("f-nat").value.trim(),lang:document.getElementById("f-lang").value.trim(),grade:gr,status:st,appDate:document.getElementById("f-appdate").value,enrollDate:document.getElementById("f-enrolldate").value,priority:document.getElementById("f-pri").value,campus:(isPartner()&&getPartnerCampus())?getPartnerCampus():document.getElementById("f-campus").value,cohort:document.getElementById("f-cohort").value,prevSchool:document.getElementById("f-prevschool").value.trim(),gpa:document.getElementById("f-gpa").value.trim(),parent:document.getElementById("f-parent").value.trim(),relation:document.getElementById("f-rel").value,email:document.getElementById("f-email").value.trim(),phone:document.getElementById("f-phone").value.trim(),ecName:document.getElementById("f-ec-name").value.trim(),ecPhone:document.getElementById("f-ec-phone").value.trim(),address:document.getElementById("f-addr").value.trim(),bloodGroup:document.getElementById("f-blood").value,allergy:document.getElementById("f-allergy").value.trim(),meds:document.getElementById("f-meds").value.trim(),physician:document.getElementById("f-phys").value.trim(),physicianPhone:document.getElementById("f-phys-ph").value.trim(),healthNotes:document.getElementById("f-health-notes").value.trim(),iep:document.getElementById("f-iep").value,notes:document.getElementById("f-notes").value.trim(),counselorNotes:document.getElementById("f-counselor").value.trim(),studentId:sid,documents:docs,docFiles:editId?(students.find(function(x){return x.id===editId;})||{}).docFiles||{}:{},
+  var data={firstName:fn,lastName:ln,dob:document.getElementById("f-dob").value,gender:document.getElementById("f-gender").value,nationality:document.getElementById("f-nat").value.trim(),lang:document.getElementById("f-lang").value.trim(),grade:gr,status:st,appDate:document.getElementById("f-appdate").value,enrollDate:document.getElementById("f-enrolldate").value,priority:document.getElementById("f-pri").value,campus:(isPartner()&&getPartnerCampus())?getPartnerCampus():document.getElementById("f-campus").value,cohort:document.getElementById("f-cohort").value,prevSchool:document.getElementById("f-prevschool").value.trim(),gpa:document.getElementById("f-gpa").value.trim(),parent:document.getElementById("f-parent").value.trim(),relation:document.getElementById("f-rel").value,email:document.getElementById("f-email").value.trim(),phone:document.getElementById("f-phone").value.trim(),ecName:document.getElementById("f-ec-name").value.trim(),ecPhone:document.getElementById("f-ec-phone").value.trim(),address:document.getElementById("f-addr").value.trim(),bloodGroup:document.getElementById("f-blood").value,allergy:document.getElementById("f-allergy").value.trim(),meds:document.getElementById("f-meds").value.trim(),physician:document.getElementById("f-phys").value.trim(),physicianPhone:document.getElementById("f-phys-ph").value.trim(),healthNotes:document.getElementById("f-health-notes").value.trim(),iep:document.getElementById("f-iep").value,notes:document.getElementById("f-notes").value.trim(),counselorNotes:document.getElementById("f-counselor").value.trim(),studentId:sid,documents:docs,docFiles:(function(){if(!editId)return {};var _sf=students.find(function(x){return x.id===editId;});return (_sf&&_sf.docFiles&&typeof _sf.docFiles==='object')?_sf.docFiles:{};}()),
     intDate:document.getElementById("f-intdate").value,intTime:document.getElementById("f-inttime").value,
     intViewer:document.getElementById("f-intviewer").value.trim(),intScore:document.getElementById("f-intscore").value,
     intNotes:document.getElementById("f-intnotes").value.trim(),committee:document.getElementById("f-committee").value,
@@ -5942,6 +5960,7 @@ function delStudent(id){var s=students.find(function(x){return x.id===id;});if(!
 
 function openDetail(id){
   var s=students.find(function(x){return x.id===id;});if(!s)return;
+  normStudent(s);
   var m=SM[s.status]||SM["Inquiry"];
   // Alumni/Existing type badge for detail header
   var typeBadge="";
@@ -6246,9 +6265,12 @@ if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveU
             if(Array.isArray(d.students)&&d.students.length){
               // Deduplicate by id
               var _bgseen={};
-              students=d.students.map(function(s){return Object.assign({},s,{
+              students=d.students.map(function(s){
+              var df={};try{if(s.docFiles&&typeof s.docFiles==='string'&&s.docFiles.charAt(0)==='{')df=JSON.parse(s.docFiles);else if(s.docFiles&&typeof s.docFiles==='object'&&!Array.isArray(s.docFiles))df=s.docFiles;}catch(e){}
+              return Object.assign({},s,{
                 id:parseInt(s.id)||s.id,
-                documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])
+                documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[]),
+                docFiles:df
               });}).filter(function(s){if(_bgseen[s.id])return false;_bgseen[s.id]=true;return true;});
               nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
               saveLocal();
