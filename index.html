@@ -1176,7 +1176,7 @@ function sheetFetch(){
 function sheetPush(student,action){
   if(!webUrl)return;
   if(!student)return;
-  var s=Object.assign({},student,{documents:(student.documents||[]).join("|"),docFiles:JSON.stringify(student.docFiles||{})});
+  var s=Object.assign({},student,{documents:(student.documents||[]).join("|"),docFiles:JSON.stringify(student.docFiles||{}),docfiles:JSON.stringify(student.docFiles||{})});
   var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
   var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
   fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
@@ -1200,9 +1200,9 @@ function gmsSheetRequest(action, payload, onOk) {
     .then(function(d){
       if(d.status==="ok"){setLive();if(onOk)onOk(d);}
       else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
-      else{console.warn("GMS sync error:",d.message);}
+      else{console.warn("GMS sync error:",d.message);toast("Sync error: "+(d.message||"unknown"),"err");}
     })
-    .catch(function(e){console.warn("GMS sync failed:",e);});
+    .catch(function(e){console.warn("GMS sync failed:",e);if(e.name!=="AbortError")toast("Sync failed: "+(e.message||"network error"),"err");});
 }
 
 // Push all course records for one student
@@ -2705,7 +2705,7 @@ function openDocPanel(studentId,docName,currentUrl,parentC){
               if(!docs2.includes(docName))docs2.push(docName);
               students=students.map(function(x){return x.id===studentId?Object.assign({},x,{documents:docs2,docFiles:s2.docFiles}):x;});
               saveLocal();
-              sheetPush(students.find(function(x){return x.id===studentId;})||s2,'update');
+              // uploadDoc already saved docFiles to sheet directly
               toast('&#128196; '+docName+' uploaded &#10003;','ok');
               ov.remove();if(parentC)rDocs(parentC);
             } else {
@@ -5952,7 +5952,7 @@ function saveStudent(){
     alumniNotes:stype==="Alumni"?document.getElementById("f-alumni-notes").value.trim():""};
   var toastMsg=stype==="Alumni"?"Alumni record saved · ID: "+sid+" ✓":stype==="Existing"?"Existing student added · ID: "+sid+" ✓":st==="Enrolled"?"Student enrolled · ID: "+sid+" ✓":"Application submitted ✓";
   if(editId){data.id=editId;students=students.map(function(x){return x.id===editId?data:x;});saveLocal();sheetPush(data,"update");toast("Record updated ✓","ok");}
-  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"create");toast(toastMsg,"ok");}
+  else{data.id=nextId++;students.push(data);saveLocal();sheetPush(data,"add");toast(toastMsg,"ok");}
   closeModal();render();
 }
 
