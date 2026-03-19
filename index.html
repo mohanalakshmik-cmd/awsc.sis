@@ -929,7 +929,7 @@ function getRemark(sid,term){return _REMARKS[sid+"_"+term]||"";}
 function saveRemark(sid,term,text){
   _REMARKS[sid+"_"+term]=text;
   localStorage.setItem("aws_remarks_v5",JSON.stringify(_REMARKS));
-  if(webUrl) gmsSheetRequest("saveRemarks",{studentId:String(sid),term:term,remarks:text},null);
+  if(webUrl) gmsSheetRequest("saveRemarks",{studentId:String(sid),term:term,remark:text},null);
 }
 
 // ── GMS Helper Functions ──────────────────────────────────────
@@ -1131,17 +1131,32 @@ function sheetFetch(){
           });
           localStorage.setItem("aws_com_v5",JSON.stringify(COM));
         }
-        // TPMS
+        // TPMS — use tSave directly to avoid triggering sync write-back
         if(d.tpms){
-          if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length){saveLessons(d.tpms.lessons);}
-          if(Array.isArray(d.tpms.units)&&d.tpms.units.length){saveUnits(d.tpms.units);}
+          if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length){tSave("lessons",d.tpms.lessons);}
+          if(Array.isArray(d.tpms.units)&&d.tpms.units.length){tSave("units",d.tpms.units);}
           if(Array.isArray(d.tpms.events)&&d.tpms.events.length){
             var userEvents=d.tpms.events;
             var existingEvents=loadTpmsEvents();
-            var schoolEvents=existingEvents.filter(function(e){return e.layer==="school";});
-            saveTpmsEvents(schoolEvents.concat(userEvents));
+            var schoolEvts=existingEvents.filter(function(e){return e.layer==="school";});
+            tSave("events",schoolEvts.concat(userEvents));
           }
           if(Array.isArray(d.tpms.pd)&&d.tpms.pd.length){savePdRecords(d.tpms.pd);}
+        }
+        // AT — restore from sheet using atSave/atSaveObj to avoid triggering write-back
+        if(d.at){
+          if(Array.isArray(d.at.assignments)&&d.at.assignments.length){atSave("assignments",d.at.assignments);}
+          if(d.at.submissions&&Object.keys(d.at.submissions).length){atSaveObj("submissions",d.at.submissions);}
+          if(Array.isArray(d.at.assessments)&&d.at.assessments.length){atSave("assessments",d.at.assessments);}
+          if(Array.isArray(d.at.exactpath)&&d.at.exactpath.length){atSave("exactpath",d.at.exactpath);}
+          if(Array.isArray(d.at.notes)&&d.at.notes.length){atSave("notes",d.at.notes);}
+          if(Array.isArray(d.at.reports)&&d.at.reports.length){atSave("reports",d.at.reports);}
+          if(Array.isArray(d.at.corrections)&&d.at.corrections.length){atSave("corrections",d.at.corrections);}
+        }
+        // Project Tracker
+        if(d.pt){
+          if(Array.isArray(d.pt.assignments)&&d.pt.assignments.length){pts("a",d.pt.assignments);}
+          if(Array.isArray(d.pt.evaluations)&&d.pt.evaluations.length){pts("e",d.pt.evaluations);}
         }
         // Staff
         if(Array.isArray(d.staff)){
@@ -1196,23 +1211,15 @@ function gmsSheetRequest(action, payload, onOk) {
   payload.action = action;
   var jsonBody = JSON.stringify(payload);
   var c = new AbortController(), t = setTimeout(function(){c.abort();}, 45000);
-  var req;
-  // Auto-switch to POST for large payloads (>1500 chars encoded) to avoid URL length limits
-  if(encodeURIComponent(jsonBody).length > 1500) {
-    // POST: send as plain text body (no Content-Type = CORS-safe, no preflight)
-    req = fetch(webUrl, {method:"POST", body:jsonBody, signal:c.signal, mode:"cors"});
-  } else {
-    var body = encodeURIComponent(jsonBody);
-    req = fetch(webUrl+"?action="+action+"&payload="+body+"&token="+encodeURIComponent(_sessionToken), {signal:c.signal});
-  }
-  req
+  // Always POST — no URL length limit, no CORS preflight (no Content-Type header)
+  fetch(webUrl, {method:"POST", body:jsonBody, signal:c.signal, mode:"cors"})
     .then(function(r){clearTimeout(t); return r.json();})
     .then(function(d){
       if(d.status==="ok"){setLive();if(onOk)onOk(d);}
       else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
       else{console.warn("GMS sync error ["+action+"]:",d.message);toast("Sync error: "+(d.message||"unknown"),"err");}
     })
-    .catch(function(e){console.warn("GMS sync failed ["+action+"]:",e);if(e.name!=="AbortError")toast("Sync failed: "+(e.message||"network error"),"err");});
+    .catch(function(e){clearTimeout(t);console.warn("GMS sync failed ["+action+"]:",e);if(e.name!=="AbortError")toast("Sync failed: "+(e.message||"network error"),"err");});
 }
 
 // Push all course records for one student
@@ -7733,6 +7740,12 @@ window.syncAll = function(){
   gmsSheetRequest("saveCalendar",{events:_CAL},null);
   // Catalog
   var cat=loadCatalog();gmsSheetRequest("saveCatalog",{catalog:cat},null);
+  // Report card remarks (bulk)
+  var _bulkRemarks=Object.keys(_REMARKS).map(function(k){
+    var parts=k.split("_");
+    return{studentId:parts[0],term:parts.slice(1).join("_"),remark:_REMARKS[k],updatedAt:new Date().toISOString()};
+  });
+  if(_bulkRemarks.length)gmsSheetRequest("saveRemarks",{remarks:_bulkRemarks},null);
   // Settings
   gmsSheetRequest("saveSettings",{settings:SETT},null);
   // TPMS
@@ -7749,6 +7762,7 @@ window.syncAll = function(){
   gmsSheetRequest("saveATExactPath",{exactpath:getATEP()},null);
   gmsSheetRequest("saveATNotes",{notes:getATNotes()},null);
   gmsSheetRequest("saveATReports",{reports:getATReports()},null);
+  gmsSheetRequest("saveATCorrections",{corrections:getATCorrections()},null);
   // AWSC-27 Project Tracker
   gmsSheetRequest("savePTAssignments",{assignments:ptGA()},null);
   gmsSheetRequest("savePTEvaluations",{evaluations:ptGE()},null);
@@ -8279,6 +8293,9 @@ function rReportCards(c){
     +'<div style="background:#F7F9FC;border-radius:10px;padding:16px;margin-bottom:24px">'
     +'<div style="font-size:10px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Teacher / Counselor Remarks</div>'
     +'<textarea id="rc-remarks" style="width:100%;min-height:80px;border:1px solid #E4EAF2;border-radius:8px;padding:10px;font-size:13px;color:#1A365E;resize:vertical;box-sizing:border-box" placeholder="Enter remarks for this term...">'+esc(getRemark(s.id,selTerm))+'</textarea>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:8px">'
+    +'<button id="rc-save-remarks" style="padding:8px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Remarks</button>'
+    +'</div>'
     +'</div>'
     // Signature block
     +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:24px">'
@@ -8299,6 +8316,14 @@ function rReportCards(c){
   var remarksEl=document.getElementById("rc-remarks");
   if(remarksEl)remarksEl.addEventListener("blur",function(){
     saveRemark(selId,selTerm,this.value);
+  });
+  var rcSaveBtn=document.getElementById("rc-save-remarks");
+  if(rcSaveBtn)rcSaveBtn.addEventListener("click",function(){
+    var txt=document.getElementById("rc-remarks").value;
+    saveRemark(selId,selTerm,txt);
+    rcSaveBtn.textContent="✓ Saved";
+    rcSaveBtn.style.background="#1DBD6A";
+    setTimeout(function(){rcSaveBtn.textContent="💾 Save Remarks";rcSaveBtn.style.background="#1A365E";},2000);
   });
   var printBtn=document.getElementById("rc-print");
   if(printBtn)printBtn.addEventListener("click",function(){
@@ -10640,11 +10665,11 @@ function saveATSubmissions(v){atSaveObj("submissions",v);if(webUrl)gmsSheetReque
 function getATEP(){return atLoad("exactpath");}
 function saveATEP(v){atSave("exactpath",v);if(webUrl)gmsSheetRequest("saveATExactPath",{exactpath:v},null);}
 function getATAssess(){return atLoad("assessments");}
-function saveATAssess(v){atSave("assessments",v);}
+function saveATAssess(v){atSave("assessments",v);if(webUrl)gmsSheetRequest("saveATAssessments",{assessments:v},null);}
 function getATNotes(){return atLoad("notes");}
 function saveATNotes(v){atSave("notes",v);if(webUrl)gmsSheetRequest("saveATNotes",{notes:v},null);}
 function getATCorrections(){return atLoad("corrections");}
-function saveATCorrections(v){atSave("corrections",v);}
+function saveATCorrections(v){atSave("corrections",v);if(webUrl)gmsSheetRequest("saveATCorrections",{corrections:v},null);}
 function getATReports(){return atLoad("reports");}
 function saveATReports(v){atSave("reports",v);if(webUrl)gmsSheetRequest("saveATReports",{reports:v},null);}
 
@@ -11166,7 +11191,12 @@ function openATAssignModal(idx,c){
       maxScore:parseFloat(document.getElementById("at-max").value)||null,
       dateAssigned:document.getElementById("at-dasgn").value,
       dueDate:due,
+      dueTime:(document.getElementById("at-due-time")||{value:""}).value||"",
       instructions:document.getElementById("at-instr").value.trim(),
+      rubric:(document.getElementById("at-rubric")||{value:a.rubric||""}).value||a.rubric||"",
+      gradingScale:(document.getElementById("at-scale")||{value:a.gradingScale||"Points"}).value||a.gradingScale||"Points",
+      cohort:(document.getElementById("at-cohort")||{value:a.cohort||""}).value||a.cohort||"",
+      teacherId:a.teacherId||(_currentUser?_currentUser.username:""),
       status:"active",createdAt:a.createdAt||new Date().toISOString()
     };
     if(idx!==null&&idx!==undefined)all[idx]=rec;else all.push(rec);
