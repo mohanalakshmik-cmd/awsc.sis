@@ -188,8 +188,8 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
     <h1>Student Information System</h1>
     <div class="sub">American World School · K-12 Admissions &amp; Enrollment</div>
     <div class="login-field">
-      <label>Username</label>
-      <input type="text" id="login-user" placeholder="Enter your username" autocomplete="username"/>
+      <label>Email</label>
+      <input type="email" id="login-user" placeholder="Enter your email" autocomplete="email"/>
     </div>
     <div class="login-field">
       <label>Password</label>
@@ -197,11 +197,12 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
     </div>
     <button id="login-btn">Sign In</button>
     <div id="login-err"></div>
-    <div class="url-toggle"><button id="show-url-btn">⚙ Configure API URL</button></div>
+    <div class="url-toggle"><button id="show-url-btn">⚙ Configure Supabase</button></div>
     <div id="url-section">
-      <div style="font-size:11px;color:#7A92B0;margin-bottom:7px">Paste your Google Apps Script Web App URL:</div>
-      <input type="text" id="url-inp" placeholder="https://script.google.com/macros/s/.../exec"/>
-      <button id="save-url-btn">Save URL</button>
+      <div style="font-size:11px;color:#7A92B0;margin-bottom:6px">Enter your Supabase project URL and anon key:</div>
+      <input type="text" id="url-inp" placeholder="https://xxxx.supabase.co"/>
+      <input type="text" id="sb-key-inp" placeholder="Supabase anon / public key" style="width:100%;padding:9px 12px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:12px;color:#1A365E;outline:none;font-family:Poppins,sans-serif;margin-bottom:7px"/>
+      <button id="save-url-btn">Save Supabase Config</button>
     </div>
   </div>
 </div>
@@ -217,64 +218,44 @@ function showLoginErr(msg){
   el.textContent=msg;el.style.display="block";
 }
 function doLogin(){
-  var username=document.getElementById("login-user").value.trim();
+  var email=document.getElementById("login-user").value.trim();
   var password=document.getElementById("login-pass").value.trim();
   var btn=document.getElementById("login-btn");
   var err=document.getElementById("login-err");
-  if(!username||!password){showLoginErr("Please enter your username and password.");return;}
-  if(!webUrl){showLoginErr("No API URL configured. Click ⚙ Configure API URL below.");return;}
+  if(!email||!password){showLoginErr("Please enter your email and password.");return;}
+  var _sbUrl=localStorage.getItem("aws_supabase_url")||"";
+  var _sbKey=localStorage.getItem("aws_supabase_key")||"";
+  if(!_sbUrl||!_sbKey){showLoginErr("Supabase not configured. Click ⚙ Configure Supabase below.");return;}
   btn.disabled=true;btn.textContent="Signing in...";err.style.display="none";
-  var payload=encodeURIComponent(JSON.stringify({username:username,password:password}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},30000);
-  fetch(webUrl+"?action=login&payload="+payload,{signal:c.signal,mode:"cors"})
+  var c=new AbortController(),t=setTimeout(function(){c.abort();},20000);
+  fetch(_sbUrl+"/auth/v1/token?grant_type=password",{
+    method:"POST",signal:c.signal,
+    headers:{"apikey":_sbKey,"Content-Type":"application/json"},
+    body:JSON.stringify({email:email,password:password})
+  })
     .then(function(r){clearTimeout(t);return r.json();})
     .then(function(d){
       btn.disabled=false;btn.textContent="Sign In";
-      if(d.status==="ok"&&d.token){
-        _sessionToken=d.token;
-        localStorage.setItem("aws_token",d.token);
-        updateUserUI(d.user||{username:username,role:"staff",name:username});
-        toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-        // Fetch all data then launch
+      if(d.access_token){
+        _sessionToken=d.access_token;
+        localStorage.setItem("aws_token",d.access_token);
+        var meta=d.user&&d.user.user_metadata||{};
+        var userObj={username:email,role:meta.role||"staff",name:meta.name||email,campus:meta.campus||""};
+        updateUserUI(userObj);
+        toast("Welcome, "+(meta.name||email)+"!","ok");
         SETT=loadS();loadLocal();
         launchApp();
-        // Sync data in background after launch
-        setTimeout(function(){ sheetFetch().catch(function(){}); }, 1500);
+        setTimeout(function(){ sheetFetch().catch(function(){}); }, 1000);
       } else {
-        showLoginErr(d.message||"Incorrect username or password.");
+        showLoginErr(d.error_description||d.msg||"Incorrect email or password.");
       }
     })
     .catch(function(e){
       btn.disabled=false;btn.textContent="Sign In";
       if(e.name==="AbortError"){
-        // Timed out — retry once automatically (handles cold start)
-        showLoginErr("Server warming up, retrying...");
-        setTimeout(function(){
-          btn.disabled=true;btn.textContent="Retrying...";
-          var p2=encodeURIComponent(JSON.stringify({username:username,password:password}));
-          fetch(webUrl+"?action=login&payload="+p2+"&u="+encodeURIComponent(username)+"&pw="+encodeURIComponent(password),{mode:"cors"})
-            .then(function(r){return r.json();})
-            .then(function(d){
-              btn.disabled=false;btn.textContent="Sign In";
-              if(d.status==="ok"&&d.token){
-                _sessionToken=d.token;
-                localStorage.setItem("aws_token",d.token);
-                updateUserUI(d.user||{username:username,role:"staff",name:username});
-                toast("Welcome, "+(d.user&&d.user.name?d.user.name:username)+"!","ok");
-                SETT=loadS();loadLocal();
-                launchApp();
-                setTimeout(function(){sheetFetch().catch(function(){});},1500);
-              } else {
-                showLoginErr(d.message||"Incorrect username or password.");
-              }
-            })
-            .catch(function(){
-              btn.disabled=false;btn.textContent="Sign In";
-              showLoginErr("Could not reach server. Please check your API URL and try again.");
-            });
-        },1500);
+        showLoginErr("Request timed out. Check your Supabase URL and internet connection.");
       } else {
-        showLoginErr("Could not reach server. Check your API URL and internet connection.");
+        showLoginErr("Could not reach Supabase. Check your configuration and internet connection.");
       }
     });
 }
@@ -283,51 +264,44 @@ document.addEventListener("DOMContentLoaded",function(){
 (function(){
   function el(id){return document.getElementById(id);}
 
-  // ── Warm up App Script on page load to avoid cold-start timeout ─────
-  var _warmUrl=localStorage.getItem("aws_url")||"";
-  if(_warmUrl){
-    setTimeout(function(){
-      fetch(_warmUrl+"?action=ping",{mode:"cors"}).catch(function(){});
-    },500);
-  }
+  // Populate Supabase inputs from localStorage on load
+  var savedSbUrl=localStorage.getItem("aws_supabase_url")||"";
+  var savedSbKey=localStorage.getItem("aws_supabase_key")||"";
+  if(savedSbUrl&&el("url-inp")) el("url-inp").value=savedSbUrl;
+  if(savedSbKey&&el("sb-key-inp")) el("sb-key-inp").value=savedSbKey;
 
-  // Populate URL input from localStorage on load
-  var savedUrl=localStorage.getItem("aws_url")||"";
-  if(savedUrl&&el("url-inp")) el("url-inp").value=savedUrl;
-
-  // ⚙ Configure API URL toggle
+  // ⚙ Configure Supabase toggle
   el("show-url-btn").addEventListener("click",function(e){
     e.preventDefault();
     var sec=el("url-section");
     var isHidden=sec.style.display===""||sec.style.display==="none";
     sec.style.display=isHidden?"block":"none";
     if(isHidden){
-      var inp=el("url-inp");
-      inp.value=localStorage.getItem("aws_url")||"";
-      inp.focus();
+      el("url-inp").value=localStorage.getItem("aws_supabase_url")||"";
+      var keyInp=el("sb-key-inp");
+      if(keyInp) keyInp.value=localStorage.getItem("aws_supabase_key")||"";
+      el("url-inp").focus();
     }
   });
 
-  // Save URL button
+  // Save Supabase config button
   el("save-url-btn").addEventListener("click",function(e){
     e.preventDefault();
     var url=(el("url-inp").value||"").trim();
-    if(!url){
-      showErr("Please paste your Apps Script URL.");return;
+    var keyInp=el("sb-key-inp");
+    var key=keyInp?(keyInp.value||"").trim():"";
+    if(!url){showErr("Please enter your Supabase project URL.");return;}
+    if(!url.startsWith("https://")||!url.includes("supabase")){
+      showErr("URL must be a valid Supabase project URL (https://xxxx.supabase.co)");return;
     }
-    if(!url.startsWith("https://script.google.com")){
-      showErr("URL must start with https://script.google.com");return;
-    }
-    if(!url.endsWith("/exec")){
-      showErr("URL must end with /exec — copy the full Web App URL.");return;
-    }
-    localStorage.setItem("aws_url",url);
+    if(!key){showErr("Please enter your Supabase anon key.");return;}
+    localStorage.setItem("aws_supabase_url",url.replace(/\/$/,""));
+    localStorage.setItem("aws_supabase_key",key);
     el("url-section").style.display="none";
     showErr("");
-    // Flash the sign in button green briefly to confirm
     var btn=el("login-btn");
     btn.style.background="#1DBD6A";
-    btn.textContent="✓ URL Saved — Sign In";
+    btn.textContent="✓ Saved — Sign In";
     setTimeout(function(){btn.style.background="";btn.textContent="Sign In";},2000);
   });
 
@@ -976,10 +950,36 @@ function getAPScholar(records){
 })();
 
 var students=[],nextId=100,view="dashboard",editId=null;
-var webUrl=localStorage.getItem("aws_url")||"";
+var webUrl=localStorage.getItem("aws_supabase_url")||"";
+var _supabaseKey=localStorage.getItem("aws_supabase_key")||"";
 var _sessionToken=localStorage.getItem("aws_token")||"";
 var _currentUser=null;
 try{_currentUser=JSON.parse(localStorage.getItem("aws_user")||"null");}catch(e){}
+
+// ── Supabase REST helpers ─────────────────────────────────────────────────────
+function sbH(extra){
+  var h={"apikey":_supabaseKey,"Authorization":"Bearer "+_sessionToken,"Content-Type":"application/json"};
+  return extra?Object.assign(h,extra):h;
+}
+function sbUrl(table,query){
+  return webUrl+"/rest/v1/"+table+(query?"?"+query:"");
+}
+function sbFetch(table,query){
+  return fetch(sbUrl(table,query||"select=*"),{headers:sbH()}).then(function(r){return r.json();});
+}
+function sbUpsert(table,data){
+  if(!data||!data.length)return Promise.resolve([]);
+  return fetch(sbUrl(table),{
+    method:"POST",
+    headers:sbH({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+    body:JSON.stringify(data)
+  });
+}
+function sbDelete(table,column,value){
+  return fetch(sbUrl(table,column+"=eq."+encodeURIComponent(value)),{
+    method:"DELETE",headers:sbH()
+  });
+}
 
 // ── Campus Partner helpers ────────────────────────────────────────────────────
 function isPartner(){ return _currentUser&&_currentUser.role==="partner"; }
@@ -1016,7 +1016,7 @@ function loadLocal(){var s=localStorage.getItem("aws_data_v5");students=s?JSON.p
 var _tt;
 function toast(msg,type){var t=document.getElementById("toast");t.textContent=msg;t.className="show "+(type||"");clearTimeout(_tt);_tt=setTimeout(function(){t.className="";},3200);}
 function setLive(){
-  localStorage.setItem("aws_last_sync",new Date().toLocaleString());var p=document.getElementById("spill");p.className="spill live";document.getElementById("sync-txt").textContent="Live · Google Sheets";}
+  localStorage.setItem("aws_last_sync",new Date().toLocaleString());var p=document.getElementById("spill");p.className="spill live";document.getElementById("sync-txt").textContent="Live · Supabase";}
 function setLoc(){var p=document.getElementById("spill");p.className="spill";document.getElementById("sync-txt").textContent="Local Mode";}
 
 function genSID(){
@@ -1026,157 +1026,195 @@ function genSID(){
 }
 
 function sheetFetch(){
-  if(!webUrl)return Promise.resolve(false);
-  var done=false;
-  var c=new AbortController();
-  var t=setTimeout(function(){if(!done){c.abort();}},25000);
-  var url=webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken);
-  return fetch(url,{signal:c.signal,mode:"cors"})
-    .then(function(r){clearTimeout(t);done=true;return r.json();})
-    .then(function(d){
-      if(d&&d.status==="error"&&d.message&&d.message.indexOf("Session")>=0){
-        // Only redirect to login if app is NOT already open
-        var appOn=document.getElementById("app")&&document.getElementById("app").classList.contains("on");
-        if(!appOn){ handleSessionExpired(); }
-        return false;
-      }
-      if(d&&d.status==="ok"&&Array.isArray(d.students)){
-        // Update current user info if returned
-        if(d.user)updateUserUI(d.user);
-        // Students
-        // Deduplicate by id - keep last occurrence
-        var _seen={};
-        students=d.students.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id,documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])});}).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
-        nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
-        // Courses
-        if(Array.isArray(d.courses)&&d.courses.length){
-          saveCourses(d.courses.map(function(c){return Object.assign({},c,{creditsAttempted:parseFloat(c.creditsAttempted)||0,creditsEarned:parseFloat(c.creditsEarned)||0,studentId:parseInt(c.studentId)||c.studentId});}));
-        }
-        // Transfer credits
-        if(Array.isArray(d.transfer)&&d.transfer.length){
-          saveTransfer(d.transfer.map(function(t){return Object.assign({},t,{creditsAwarded:parseFloat(t.creditsAwarded)||0,studentId:parseInt(t.studentId)||t.studentId});}));
-        }
-        // Settings
-        if(d.settings&&typeof d.settings==="object"&&Object.keys(d.settings).length){
-          SETT=Object.assign(defS(),d.settings);SETT=normSett(SETT);saveS(SETT);
-        }
-        // Attendance
-        if(Array.isArray(d.attendance)&&d.attendance.length){
-          var attObj={};
-          d.attendance.forEach(function(r){
-            if(r.attKey&&r.status) attObj[r.attKey]={status:r.status,note:r.note||""};
-          });
-          ATT=attObj;
-          localStorage.setItem("aws_att_v5",JSON.stringify(ATT));
-        }
-        // Interviews
-        if(Array.isArray(d.interviews)&&d.interviews.length){
-          INT=d.interviews.map(function(inv){
-            var scores=[];
-            try{scores=JSON.parse(inv.scores||"[]");}catch(e){}
-            return Object.assign({},inv,{
-              id:parseInt(inv.id)||Date.now(),
-              studentId:parseInt(inv.studentId)||inv.studentId,
-              scores:scores
-            });
-          });
-          localStorage.setItem("aws_int_v5",JSON.stringify(INT));
-        }
-        // Fees
-        if(Array.isArray(d.fees)&&d.fees.length){
-          FEE=d.fees.map(function(f){
-            return Object.assign({},f,{
-              id:parseInt(f.id)||Date.now(),
-              studentId:parseInt(f.studentId)||f.studentId,
-              currency:f.currency||"USD",
-              amount:parseFloat(f.amount)||0,
-              paid:f.paid==="true"||f.paid===true,
-              waived:f.waived==="true"||f.waived===true
-            });
-          });
-          localStorage.setItem("aws_fee_v5",JSON.stringify(FEE));
-        }
-        // Communications
-        if(Array.isArray(d.comms)&&d.comms.length){
-          COM=d.comms.map(function(log){
-            return Object.assign({},log,{
-              id:parseInt(log.id)||Date.now(),
-              studentId:parseInt(log.studentId)||log.studentId
-            });
-          });
-          localStorage.setItem("aws_com_v5",JSON.stringify(COM));
-        }
-        // TPMS
-        if(d.tpms){
-          if(Array.isArray(d.tpms.lessons)&&d.tpms.lessons.length){saveLessons(d.tpms.lessons);}
-          if(Array.isArray(d.tpms.units)&&d.tpms.units.length){saveUnits(d.tpms.units);}
-          if(Array.isArray(d.tpms.events)&&d.tpms.events.length){
-            var userEvents=d.tpms.events;
-            var existingEvents=loadTpmsEvents();
-            var schoolEvents=existingEvents.filter(function(e){return e.layer==="school";});
-            saveTpmsEvents(schoolEvents.concat(userEvents));
-          }
-          if(Array.isArray(d.tpms.pd)&&d.tpms.pd.length){savePdRecords(d.tpms.pd);}
-        }
-        // Staff
-        if(Array.isArray(d.staff)){
-          _STAFF=d.staff.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id});});
-        }
-        // Catalog
-        if(Array.isArray(d.catalog)&&d.catalog.length){
-          localStorage.setItem("aws_catalog_v5",JSON.stringify(d.catalog));
-        }
-        // Report card remarks
-        if(Array.isArray(d.remarks)){
-          _REMARKS={};
-          d.remarks.forEach(function(r){if(r.studentId&&r.term)_REMARKS[r.studentId+"_"+r.term]=r.remarks||"";});
-          localStorage.setItem("aws_remarks_v5",JSON.stringify(_REMARKS));
-        }
-        // Calendar
-        if(Array.isArray(d.calendar)){
-          _CAL=d.calendar.map(function(e){return Object.assign({},e,{id:e.id||("cal"+Date.now()+Math.random())});});
-        }
-        // Health
-        if(Array.isArray(d.health)&&d.health.length){
-          _HEALTH=d.health;localStorage.setItem("aws_health_v1",JSON.stringify(_HEALTH));
-        }
-        // Behaviour
-        if(Array.isArray(d.behaviour)&&d.behaviour.length){
-          _BEHAVIOUR=d.behaviour;localStorage.setItem("aws_beh_v1",JSON.stringify(_BEHAVIOUR));
-        }
-        saveLocal();setLive();return true;
-      }return false;
-    }).catch(function(e){clearTimeout(t);done=true;console.warn("SheetFetch error:",e);return false;});
+  if(!webUrl||!_supabaseKey)return Promise.resolve(false);
+  return Promise.all([
+    sbFetch("students"),
+    sbFetch("courses"),
+    sbFetch("transfer_credits"),
+    sbFetch("settings","select=*&id=eq.global"),
+    sbFetch("attendance"),
+    sbFetch("interviews"),
+    sbFetch("fees"),
+    sbFetch("communications"),
+    sbFetch("tpms_lessons"),
+    sbFetch("tpms_units"),
+    sbFetch("tpms_events"),
+    sbFetch("tpms_pd"),
+    sbFetch("staff"),
+    sbFetch("catalog"),
+    sbFetch("remarks"),
+    sbFetch("calendar"),
+    sbFetch("health"),
+    sbFetch("behaviour")
+  ]).then(function(results){
+    var studentsData=results[0],coursesData=results[1],transferData=results[2],
+        settData=results[3],attData=results[4],intData=results[5],
+        feesData=results[6],commsData=results[7],lessonsData=results[8],
+        unitsData=results[9],eventsData=results[10],pdData=results[11],
+        staffData=results[12],catalogData=results[13],remarksData=results[14],
+        calData=results[15],healthData=results[16],behData=results[17];
+
+    // Check for auth errors
+    if(studentsData&&studentsData.code==="PGRST301"){handleSessionExpired();return false;}
+
+    // Students
+    if(Array.isArray(studentsData)&&studentsData.length){
+      var _seen={};
+      students=studentsData.map(function(s){
+        return Object.assign({},s,{
+          id:parseInt(s.id)||s.id,
+          documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])
+        });
+      }).filter(function(s){if(_seen[s.id])return false;_seen[s.id]=true;return true;});
+      nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
+    }
+    // Courses
+    if(Array.isArray(coursesData)&&coursesData.length){
+      saveCourses(coursesData.map(function(c){
+        return Object.assign({},c,{creditsAttempted:parseFloat(c.creditsAttempted)||0,creditsEarned:parseFloat(c.creditsEarned)||0,studentId:parseInt(c.studentId)||c.studentId});
+      }));
+    }
+    // Transfer credits
+    if(Array.isArray(transferData)&&transferData.length){
+      saveTransfer(transferData.map(function(t){
+        return Object.assign({},t,{creditsAwarded:parseFloat(t.creditsAwarded)||0,studentId:parseInt(t.studentId)||t.studentId});
+      }));
+    }
+    // Settings
+    if(Array.isArray(settData)&&settData.length&&settData[0]){
+      var sRow=settData[0];delete sRow.id;
+      SETT=Object.assign(defS(),sRow);SETT=normSett(SETT);saveS(SETT);
+    }
+    // Attendance
+    if(Array.isArray(attData)&&attData.length){
+      var attObj={};
+      attData.forEach(function(r){if(r.att_key&&r.status)attObj[r.att_key]={status:r.status,note:r.note||""};});
+      ATT=attObj;localStorage.setItem("aws_att_v5",JSON.stringify(ATT));
+    }
+    // Interviews
+    if(Array.isArray(intData)&&intData.length){
+      INT=intData.map(function(inv){
+        var scores=[];try{scores=JSON.parse(inv.scores||"[]");}catch(e){}
+        return Object.assign({},inv,{id:parseInt(inv.id)||Date.now(),studentId:parseInt(inv.studentId)||inv.studentId,scores:scores});
+      });
+      localStorage.setItem("aws_int_v5",JSON.stringify(INT));
+    }
+    // Fees
+    if(Array.isArray(feesData)&&feesData.length){
+      FEE=feesData.map(function(f){
+        return Object.assign({},f,{id:parseInt(f.id)||Date.now(),studentId:parseInt(f.studentId)||f.studentId,currency:f.currency||"USD",amount:parseFloat(f.amount)||0,paid:f.paid===true,waived:f.waived===true});
+      });
+      localStorage.setItem("aws_fee_v5",JSON.stringify(FEE));
+    }
+    // Communications
+    if(Array.isArray(commsData)&&commsData.length){
+      COM=commsData.map(function(log){return Object.assign({},log,{id:parseInt(log.id)||Date.now(),studentId:parseInt(log.studentId)||log.studentId});});
+      localStorage.setItem("aws_com_v5",JSON.stringify(COM));
+    }
+    // TPMS
+    if(Array.isArray(lessonsData)&&lessonsData.length){tSave("lessons",lessonsData);}
+    if(Array.isArray(unitsData)&&unitsData.length){tSave("units",unitsData);}
+    if(Array.isArray(eventsData)&&eventsData.length){
+      var schoolEvents=loadTpmsEvents().filter(function(e){return e.layer==="school";});
+      saveTpmsEvents(schoolEvents.concat(eventsData));
+    }
+    if(Array.isArray(pdData)&&pdData.length){tSave("pdrecords",pdData);}
+    // Staff
+    if(Array.isArray(staffData)){_STAFF=staffData.map(function(s){return Object.assign({},s,{id:parseInt(s.id)||s.id});});}
+    // Catalog
+    if(Array.isArray(catalogData)&&catalogData.length){localStorage.setItem("aws_catalog_v5",JSON.stringify(catalogData));}
+    // Remarks
+    if(Array.isArray(remarksData)){
+      _REMARKS={};
+      remarksData.forEach(function(r){if(r.studentId&&r.term)_REMARKS[r.studentId+"_"+r.term]=r.remarks||"";});
+      localStorage.setItem("aws_remarks_v5",JSON.stringify(_REMARKS));
+    }
+    // Calendar
+    if(Array.isArray(calData)){_CAL=calData.map(function(e){return Object.assign({},e,{id:e.id||("cal"+Date.now()+Math.random())});});}
+    // Health
+    if(Array.isArray(healthData)&&healthData.length){_HEALTH=healthData;localStorage.setItem("aws_health_v1",JSON.stringify(_HEALTH));}
+    // Behaviour
+    if(Array.isArray(behData)&&behData.length){_BEHAVIOUR=behData;localStorage.setItem("aws_beh_v1",JSON.stringify(_BEHAVIOUR));}
+    saveLocal();setLive();return true;
+  }).catch(function(e){console.warn("Supabase fetch error:",e);return false;});
 }
 function sheetPush(student,action){
-  if(!webUrl)return;
+  if(!webUrl||!_supabaseKey)return;
   var s=Object.assign({},student,{documents:(student.documents||[]).join("|")});
-  var payload=encodeURIComponent(JSON.stringify({student:s,token:_sessionToken}));
-  var c=new AbortController(),t=setTimeout(function(){c.abort();},8000);
-  fetch(webUrl+"?action="+encodeURIComponent(action)+"&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).then(function(r){clearTimeout(t);return r.json();}).then(function(d){if(d.status==="ok")setLive();else if(d.message&&d.message.indexOf("Session")>=0)handleSessionExpired();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  if(action==="create"){
+    sbUpsert("students",[s]).then(function(r){if(r.ok||r.status===201)setLive();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  } else if(action==="update"){
+    fetch(sbUrl("students","id=eq."+s.id),{
+      method:"PATCH",
+      headers:sbH({"Prefer":"return=minimal"}),
+      body:JSON.stringify(s)
+    }).then(function(r){if(r.ok)setLive();}).catch(function(){toast("Saved locally. Sync failed.","err");});
+  }
 }
 function sheetDel(id){
-  if(!webUrl)return;
-  var payload=encodeURIComponent(JSON.stringify({id:String(id),token:_sessionToken}));
-  var c=new AbortController();setTimeout(function(){c.abort();},8000);
-  fetch(webUrl+"?action=delete&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{signal:c.signal}).catch(function(){});
+  if(!webUrl||!_supabaseKey)return;
+  sbDelete("students","id",id).catch(function(){});
 }
 
 // ── GMS SYNC FUNCTIONS ────────────────────────────────────────
 
 function gmsSheetRequest(action, payload, onOk) {
-  if(!webUrl) return;
-  payload.token = _sessionToken;
-  var body = encodeURIComponent(JSON.stringify(payload));
-  var c = new AbortController(), t = setTimeout(function(){c.abort();}, 30000);
-  fetch(webUrl+"?action="+action+"&payload="+body+"&token="+encodeURIComponent(_sessionToken), {signal:c.signal})
-    .then(function(r){clearTimeout(t); return r.json();})
-    .then(function(d){
-      if(d.status==="ok"){setLive();if(onOk)onOk(d);}
-      else if(d.message&&d.message.indexOf("Session")>=0){handleSessionExpired();}
-      else{console.warn("GMS sync error:",d.message);}
-    })
-    .catch(function(e){console.warn("GMS sync failed:",e);});
+  if(!webUrl||!_supabaseKey) return;
+  var tableMap={
+    saveCourses:     {table:"courses",          data:payload.courses},
+    saveTransfer:    {table:"transfer_credits",  data:payload.transfers},
+    saveECCredits:   {table:"ec_credits",        data:payload.records},
+    saveAttendance:  {table:"attendance",        data:(payload.records||[]).map(function(r){return Object.assign({},r,{att_key:r.attKey});})},
+    saveInterviews:  {table:"interviews",        data:payload.interviews},
+    saveFees:        {table:"fees",              data:payload.fees},
+    saveComms:       {table:"communications",    data:payload.comms},
+    saveCatalog:     {table:"catalog",           data:payload.catalog},
+    saveStaff:       {table:"staff",             data:payload.staff},
+    saveCalendar:    {table:"calendar",          data:payload.events},
+    saveHealth:      {table:"health",            data:payload.health},
+    saveBehaviour:   {table:"behaviour",         data:payload.behaviour},
+    saveLessons:     {table:"tpms_lessons",      data:payload.lessons},
+    saveUnits:       {table:"tpms_units",        data:payload.units},
+    saveTPMSEvents:  {table:"tpms_events",       data:payload.events},
+    savePD:          {table:"tpms_pd",           data:payload.pd},
+    saveATAssignments:{table:"at_assignments",   data:payload.assignments},
+    saveATNotes:     {table:"at_notes",          data:payload.notes},
+    saveATReports:   {table:"at_reports",        data:payload.reports},
+    savePTAssignments:{table:"pt_assignments",   data:payload.assignments},
+    savePTEvaluations:{table:"pt_evaluations",   data:payload.evaluations}
+  };
+  // Special cases
+  if(action==="saveSettings"){
+    var sRow=Object.assign({id:"global"},payload.settings);
+    sbUpsert("settings",[sRow]).then(function(r){if(r&&r.ok){setLive();if(onOk)onOk({status:"ok"});}}).catch(function(e){console.warn("Settings sync failed:",e);});
+    return;
+  }
+  if(action==="saveRemarks"){
+    var rRow={studentId:payload.studentId,term:payload.term,remarks:payload.remarks};
+    sbUpsert("remarks",[rRow]).then(function(r){if(r&&r.ok){setLive();if(onOk)onOk({status:"ok"});}}).catch(function(e){console.warn("Remarks sync failed:",e);});
+    return;
+  }
+  if(action==="saveATSubmissions"||action==="saveATExactPath"||action==="saveBlocks"){
+    // Store as JSON blob in a key-value table
+    var kvKey=action==="saveATSubmissions"?"at_submissions":action==="saveATExactPath"?"at_exactpath":"blocks";
+    sbUpsert("kv_store",[{key:kvKey,value:JSON.stringify(payload.submissions||payload.exactpath||payload.blocks)}]).catch(function(){});
+    return;
+  }
+  if(action==="saveTPMS"){
+    // Multi-table: lessons, units, events, pd
+    if(payload.lessons&&payload.lessons.length)sbUpsert("tpms_lessons",payload.lessons).catch(function(){});
+    if(payload.units&&payload.units.length)sbUpsert("tpms_units",payload.units).catch(function(){});
+    if(payload.events&&payload.events.length)sbUpsert("tpms_events",payload.events).catch(function(){});
+    if(payload.pd&&payload.pd.length)sbUpsert("tpms_pd",payload.pd).catch(function(){});
+    setLive();if(onOk)onOk({status:"ok"});
+    return;
+  }
+  var mapping=tableMap[action];
+  if(!mapping){console.warn("Unknown gmsSheetRequest action:",action);return;}
+  if(!mapping.data||!mapping.data.length){if(onOk)onOk({status:"ok"});return;}
+  sbUpsert(mapping.table,mapping.data)
+    .then(function(r){if(r&&r.ok){setLive();if(onOk)onOk({status:"ok"});}})
+    .catch(function(e){console.warn("Supabase sync failed ("+action+"):",e);});
 }
 
 // Push all course records for one student
@@ -1212,7 +1250,7 @@ function syncAllGMS() {
   syncSettings();
   syncECCredits();   // Sync EC/DE college credit conversions
   syncTPMS();        // Sync TPMS lesson plans, units, events
-  toast("GMS + EC Credits + TPMS synced to Sheets ✓", "ok");
+  toast("GMS + EC Credits + TPMS synced to Supabase ✓", "ok");
 }
 
 // ── EC Credits Sheet Sync ──────────────────────────────────────────────────
@@ -4040,7 +4078,7 @@ function rGmsTransfer(body,s){
   if(ab)ab.addEventListener("click",function(){openTransferModal(s.id,null);});
   var ecSyncBtn=document.getElementById("sync-ec-btn");
   if(ecSyncBtn)ecSyncBtn.addEventListener("click",function(){
-    if(!webUrl){toast("Connect Google Sheets in Settings first","err");return;}
+    if(!webUrl){toast("Connect Supabase in Settings first","err");return;}
     ecSyncBtn.textContent="Syncing…";ecSyncBtn.disabled=true;
     syncECCredits();syncTPMS();
     setTimeout(function(){ecSyncBtn.textContent="↑ Sync EC to Sheets";ecSyncBtn.disabled=false;},2000);
@@ -4758,15 +4796,14 @@ function rUsers(c){
   if(!_currentUser||_currentUser.role!=="admin"){
     c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">⛔ Admin access required.</div>';return;
   }
-  if(!webUrl){c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">User management requires Google Sheets connection.</div>';return;}
+  if(!webUrl||!_supabaseKey){c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">User management requires Supabase connection.</div>';return;}
 
-  // Load users from Sheets
-  var token=encodeURIComponent(_sessionToken);
-  fetch(webUrl+"?action=getUsers&token="+token,{mode:"cors"})
+  // Load users from Supabase profiles table
+  fetch(sbUrl("profiles","select=*&order=username"),{headers:sbH()})
     .then(function(r){return r.json();})
     .then(function(d){
-      if(d.status!=="ok"){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Error: '+esc(d.message)+'</div>';return;}
-      var users=d.users||[];
+      if(!Array.isArray(d)){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Error loading users. Check Supabase permissions.</div>';return;}
+      var users=d;
       var html='<div style="display:flex;flex-direction:column;gap:14px">';
       html+='<div style="display:flex;justify-content:space-between;align-items:center">';
       html+='<div><div style="font-size:15px;font-weight:800;color:#1A365E">👤 User Management</div><div style="font-size:12px;color:#7A92B0;margin-top:2px">Manage team access · '+users.length+' account'+(users.length!==1?"s":"")+'</div></div>';
@@ -4812,10 +4849,8 @@ function rUsers(c){
         b.addEventListener("click",function(e){
           e.stopPropagation();
           if(!confirm("Remove user '"+b.dataset.username+"'? They will no longer be able to sign in."))return;
-          var payload=encodeURIComponent(JSON.stringify({username:b.dataset.username,token:_sessionToken}));
-          fetch(webUrl+"?action=deleteUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
-            .then(function(r){return r.json();})
-            .then(function(d){if(d.status==="ok"){toast("User removed","ok");rUsers(c);}else toast(d.message||"Error","err");});
+          fetch(sbUrl("profiles","username=eq."+encodeURIComponent(b.dataset.username)),{method:"DELETE",headers:sbH()})
+            .then(function(r){if(r.ok){toast("User removed","ok");rUsers(c);}else toast("Error removing user","err");});
         });
       });
     })
@@ -4868,12 +4903,10 @@ function openUserModal(user,idx){
     if(actEl) uData.active=actEl.value;
     if(!uData.username){toast("Username is required","err");return;}
     if(isNew&&!pass){toast("Password is required for new users","err");return;}
-    var payload=encodeURIComponent(JSON.stringify({user:uData,token:_sessionToken}));
-    fetch(webUrl+"?action=saveUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
-      .then(function(r){return r.json();})
-      .then(function(d){
-        if(d.status==="ok"){toast((isNew?"User added":"Changes saved")+" ✓","ok");ov.remove();rUsers(document.getElementById("content"));}
-        else toast(d.message||"Error","err");
+    sbUpsert("profiles",[{username:uData.username,name:uData.name,role:uData.role,email:uData.email,campus:uData.campus,active:uData.active!=="false"}])
+      .then(function(r){
+        if(r&&r.ok){toast((isNew?"User added":"Changes saved")+" ✓","ok");ov.remove();rUsers(document.getElementById("content"));}
+        else toast("Error saving user","err");
       });
   });
 }
@@ -5168,7 +5201,7 @@ function rSettings(c){
     {key:"sidPrefix",label:"Student ID Format",ico:"🎓",col:"#0EA5E9",val:"Format: "+SETT.sidPrefix+"-YYYY-NNN",desc:"e.g. AWS-2024-001"},
     {key:"gradeScale",label:"Grading Scale",ico:"📝",col:"#1DBD6A",val:SETT.gradeScale,desc:"Used in grade reporting"},
     {key:"emailNotif",label:"Email Notifications",ico:"✉️",col:"#F5A623",val:SETT.emailNotif,desc:"Status change and document alerts"},
-    {key:"sheets",label:"Google Sheets Sync",ico:"🔗",col:webUrl?"#1FD6C4":"#7A92B0",val:webUrl?"✅ Connected":"⚠️ Not connected",desc:webUrl?webUrl.slice(0,50)+"…":"Connect via setup screen"}
+    {key:"sheets",label:"Supabase Sync",ico:"🔗",col:webUrl?"#1FD6C4":"#7A92B0",val:webUrl?"✅ Connected":"⚠️ Not connected",desc:webUrl?webUrl.slice(0,50)+"…":"Configure via setup screen"}
   ];
 
   var enr=students.filter(function(s){return s.status==="Enrolled";}).length;
@@ -5181,7 +5214,7 @@ function rSettings(c){
     +sc("Total Students",students.length,"#1A365E")
     +sc("Enrolled",enr,"#0EA5E9")
     +sc("Data Version","v5.0","#7040CC")
-    +sc("Sync Status",webUrl?"Connected":"Local Only",webUrl?"#1DBD6A":"#F5A623")
+    +sc("Sync Status",webUrl?"Supabase":"Local Only",webUrl?"#1DBD6A":"#F5A623")
     +'</div>';
 
   // Settings rows
@@ -5370,7 +5403,7 @@ function rSettings(c){
 }
 
 function openSettModal(key){
-  var labels={academicYear:"Academic Year",campuses:"Campuses",capacity:"Enrollment Capacity",docs:"Required Documents",cohorts:"Cohorts / Sections",sidPrefix:"Student ID Prefix",gradeScale:"Grading Scale",emailNotif:"Email Notifications",sheets:"Google Sheets URL"};
+  var labels={academicYear:"Academic Year",campuses:"Campuses",capacity:"Enrollment Capacity",docs:"Required Documents",cohorts:"Cohorts / Sections",sidPrefix:"Student ID Prefix",gradeScale:"Grading Scale",emailNotif:"Email Notifications",sheets:"Supabase URL"};
   var val=["campuses","docs","cohorts"].includes(key)?(SETT[key]||[]).join("\n"):(key==="sheets"?webUrl:SETT[key]);
   var inputHtml;
   if(["campuses","docs","cohorts"].includes(key))inputHtml='<textarea id="sval" rows="6" style="width:100%;padding:9px 11px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:13px;font-family:Poppins,sans-serif;outline:none;resize:vertical">'+esc(val||"")+'</textarea><div style="font-size:11px;color:#7A92B0;margin-top:4px">One item per line.</div>';
@@ -5386,7 +5419,7 @@ function openSettModal(key){
   ov.querySelector("#sm-s").addEventListener("click",function(){
     var raw=document.getElementById("sval").value.trim();
     if(!raw){toast("Please enter a value.","err");return;}
-    if(key==="sheets"){if(!raw.includes("script.google.com")){toast("Enter a valid Apps Script URL","err");return;}webUrl=raw;localStorage.setItem("aws_url",raw);ov.remove();toast("URL saved. Connecting...","ok");sheetFetch().then(function(ok){if(ok){render();toast("Connected!","ok");}else toast("Could not connect.","err");});return;}
+    if(key==="sheets"){if(!raw.startsWith("https://")||!raw.includes("supabase")){toast("Enter a valid Supabase URL (https://xxxx.supabase.co)","err");return;}webUrl=raw.replace(/\/$/,"");localStorage.setItem("aws_supabase_url",webUrl);ov.remove();toast("URL saved. Connecting...","ok");sheetFetch().then(function(ok){if(ok){render();toast("Connected!","ok");}else toast("Could not connect.","err");});return;}
     if(["campuses","docs","cohorts"].includes(key))SETT[key]=raw.split("\n").map(function(s){return s.trim();}).filter(Boolean);
     else SETT[key]=raw;
     saveS(SETT);ov.remove();toast("Saved ✓","ok");render();
@@ -5833,8 +5866,8 @@ function handleSessionExpired(){
 }
 
 function doLogout(){
-  if(webUrl&&_sessionToken){
-    fetch(webUrl+"?action=logout&token="+encodeURIComponent(_sessionToken),{mode:"cors"}).catch(function(){});
+  if(webUrl&&_supabaseKey&&_sessionToken){
+    fetch(webUrl+"/auth/v1/logout",{method:"POST",headers:sbH()}).catch(function(){});
   }
   _sessionToken="";_currentUser=null;
   localStorage.removeItem("aws_token");localStorage.removeItem("aws_user");
@@ -5853,54 +5886,43 @@ document.getElementById("login-pass").addEventListener("keydown",function(e){if(
 document.getElementById("login-user").addEventListener("keydown",function(e){if(e.key==="Enter")document.getElementById("login-pass").focus();});
 document.getElementById("logout-btn").addEventListener("click",doLogout);
 
-// URL config toggle (backup handler — inline onclick on button handles it too)
+// URL config toggle (backup handler)
 var _showUrlBtn=document.getElementById("show-url-btn");
 if(_showUrlBtn&&!_showUrlBtn.dataset.bound){_showUrlBtn.dataset.bound="1";_showUrlBtn.addEventListener("click",function(){
   var sec=document.getElementById("url-section");
   sec.style.display=sec.style.display==="none"?"block":"none";
-  if(sec.style.display==="block") document.getElementById("url-inp").value=webUrl;
+  if(sec.style.display==="block"){
+    document.getElementById("url-inp").value=webUrl;
+    var ki=document.getElementById("sb-key-inp");if(ki)ki.value=_supabaseKey;
+  }
 });}
 var _saveUrlBtn=document.getElementById("save-url-btn");
 if(_saveUrlBtn&&!_saveUrlBtn.dataset.bound){_saveUrlBtn.dataset.bound="1";_saveUrlBtn.addEventListener("click",function(){
-  var url=document.getElementById("url-inp").value.trim();
-  if(!url||!url.startsWith("https://script.google.com")){showLoginErr("URL must start with https://script.google.com");return;}
-  webUrl=url;localStorage.setItem("aws_url",url);
+  var url=(document.getElementById("url-inp").value||"").trim();
+  var ki=document.getElementById("sb-key-inp");
+  var key=ki?(ki.value||"").trim():"";
+  if(!url||!url.startsWith("https://")||!url.includes("supabase")){showLoginErr("Enter a valid Supabase URL (https://xxxx.supabase.co)");return;}
+  if(!key){showLoginErr("Please enter your Supabase anon key.");return;}
+  webUrl=url.replace(/\/$/,"");_supabaseKey=key;
+  localStorage.setItem("aws_supabase_url",webUrl);
+  localStorage.setItem("aws_supabase_key",_supabaseKey);
   document.getElementById("url-section").style.display="none";
   document.getElementById("login-err").style.display="none";
-  toast("API URL saved.","ok");
+  toast("Supabase config saved.","ok");
 });}
 
 // Auto-login if session token exists
 (function(){
   SETT=loadS();loadLocal();
-  // Pre-fill URL input if saved
   if(webUrl) document.getElementById("url-inp").value=webUrl;
+  if(document.getElementById("sb-key-inp")&&_supabaseKey) document.getElementById("sb-key-inp").value=_supabaseKey;
   if(_sessionToken){
-    // Launch immediately with local cached data — works even without webUrl
+    // Launch immediately with local cached data
     setLive();launchApp();
-    // Sync fresh data from sheet in background (2s delay)
+    // Sync fresh data from Supabase in background
     setTimeout(function(){
-      if(!webUrl||!_sessionToken) return;
-      fetch(webUrl+"?action=getAll&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
-        .then(function(r){return r.json();})
-        .then(function(d){
-          if(d&&d.status==="ok"){
-            if(d.user) updateUserUI(d.user);
-            if(Array.isArray(d.students)&&d.students.length){
-              // Deduplicate by id
-              var _bgseen={};
-              students=d.students.map(function(s){return Object.assign({},s,{
-                id:parseInt(s.id)||s.id,
-                documents:typeof s.documents==="string"?s.documents.split("|").filter(Boolean):(s.documents||[])
-              });}).filter(function(s){if(_bgseen[s.id])return false;_bgseen[s.id]=true;return true;});
-              nextId=Math.max.apply(null,students.map(function(s){return parseInt(s.id)||0;}).concat([99]))+1;
-              saveLocal();
-            }
-            if(d.settings&&Object.keys(d.settings).length){SETT=Object.assign(defS(),d.settings);SETT=normSett(SETT);saveS(SETT);}
-            render();
-          }
-          // Silently ignore errors — user stays in app
-        }).catch(function(){});
+      if(!webUrl||!_supabaseKey||!_sessionToken) return;
+      sheetFetch().then(function(ok){if(ok)render();}).catch(function(){});
     }, 2000);
   }
 })();
@@ -7359,8 +7381,8 @@ function syncComms(){
 // ── FULL SYNC (all data) ──────────────────────────────────────
 window.syncAllGMS = function(){ syncAllGMS(); };
 window.syncAll = function(){
-  if(!webUrl){toast("Connect to Google Sheets first","err");return;}
-  toast("Syncing all data to Sheets…","");
+  if(!webUrl){toast("Connect to Supabase first","err");return;}
+  toast("Syncing all data to Supabase…","");
   // Students
   students.forEach(function(s){sheetPush(s,"update");});
   // Courses & transfers per student
