@@ -3453,42 +3453,42 @@ function openCourseModal(studentId,idx){
     +'</div></div>';
   document.body.appendChild(ov);
   // Auto-fill from catalog
-  document.getElementById("cm-cat").addEventListener("change",function(){
+  ov.querySelector("#cm-cat").addEventListener("change",function(){
     var code=this.value;var cat=catalog.find(function(c){return c.code===code;});
     if(cat){
-      document.getElementById("cm-code").value=cat.code||"";
-      document.getElementById("cm-title").value=cat.title||"";
-      if(document.getElementById("cm-type"))document.getElementById("cm-type").value=cat.type||"STD";
-      if(document.getElementById("cm-area"))document.getElementById("cm-area").value=cat.area||SUBJECT_AREAS[0];
-      document.getElementById("cm-cra").value=cat.credits||1;
-      document.getElementById("cm-cre").value=cat.credits||1;
+      ov.querySelector("#cm-code").value=cat.code||"";
+      ov.querySelector("#cm-title").value=cat.title||"";
+      if(ov.querySelector("#cm-type"))ov.querySelector("#cm-type").value=cat.type||"STD";
+      if(ov.querySelector("#cm-area"))ov.querySelector("#cm-area").value=cat.area||SUBJECT_AREAS[0];
+      ov.querySelector("#cm-cra").value=cat.credits||1;
+      ov.querySelector("#cm-cre").value=cat.credits||1;
       // Set duration based on credit amount
-      var sem=document.getElementById("cm-sem");
+      var sem=ov.querySelector("#cm-sem");
       if(sem){sem.value=(cat.credits===0.5)?"Semester":(cat.credits&&cat.credits>1?"Full Year":"Full Year");}
     }
   });
-  if(cr&&cr.semester)document.getElementById("cm-sem").value=cr.semester;
+  if(cr&&cr.semester)ov.querySelector("#cm-sem").value=cr.semester;
   ov.querySelector("#cm-c").addEventListener("click",function(){ov.remove();});
   ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
   ov.querySelector("#cm-s").addEventListener("click",function(){
-    var title=document.getElementById("cm-title").value.trim();
+    var title=ov.querySelector("#cm-title").value.trim();
     if(!title){toast("Course title is required","err");return;}
     var record={
       studentId:studentId,
-      code:document.getElementById("cm-code").value.trim(),
+      code:ov.querySelector("#cm-code").value.trim(),
       title:title,
-      type:document.getElementById("cm-type").value,
-      area:document.getElementById("cm-area").value,
-      year:document.getElementById("cm-year").value,
-      semester:document.getElementById("cm-sem").value,
-      gradeLevel:document.getElementById("cm-glevel").value,
-      creditsAttempted:parseFloat(document.getElementById("cm-cra").value)||0,
-      creditsEarned:parseFloat(document.getElementById("cm-cre").value)||0,
-      grade:document.getElementById("cm-grade").value,
-      courseStatus:document.getElementById("cm-status")?document.getElementById("cm-status").value:"Completed",
-      apScore:document.getElementById("cm-ap").value,
-      instructor:document.getElementById("cm-instr").value.trim(),
-      section:document.getElementById("cm-sec").value.trim()
+      type:ov.querySelector("#cm-type").value,
+      area:ov.querySelector("#cm-area").value,
+      year:ov.querySelector("#cm-year").value,
+      semester:ov.querySelector("#cm-sem").value,
+      gradeLevel:ov.querySelector("#cm-glevel").value,
+      creditsAttempted:parseFloat(ov.querySelector("#cm-cra").value)||0,
+      creditsEarned:parseFloat(ov.querySelector("#cm-cre").value)||0,
+      grade:ov.querySelector("#cm-grade").value,
+      courseStatus:ov.querySelector("#cm-status")?ov.querySelector("#cm-status").value:"Completed",
+      apScore:ov.querySelector("#cm-ap").value,
+      instructor:ov.querySelector("#cm-instr").value.trim(),
+      section:ov.querySelector("#cm-sec").value.trim()
     };
     if(idx!==null&&idx!==undefined)all[idx]=record;
     else all.push(record);
