@@ -3495,8 +3495,8 @@ function calcCollegeCredits(deRecords){
 function getGradCredits(courses,transfers){
   // 24-credit system: match courses to GRAD_REQS by area field
   // Approved DE/transfer credits count toward graduation (0.5 cr per semester per policy)
+  // Note: caller is responsible for passing only approved transfers
   var transCourses=transfers
-    .filter(function(t){return t.status==="Approved";})
     .map(function(t){
       return{area:t.area||"Electives",creditsEarned:parseFloat(t.creditsAwarded)||0,
              creditsAttempted:parseFloat(t.creditsAwarded)||0,
@@ -4800,7 +4800,7 @@ function openTransferModal(studentId,idx){
     +'<div class="fl"><label class="flb">Credits Awarded (AWS) <span style="font-size:9px;color:#7A92B0">(0.5 per semester)</span></label><input class="fi" type="number" id="tr-credits" value="'+(tr?tr.creditsAwarded:0.5)+'" min="0" max="8" step="0.5"/></div>'
     +'<div class="fl"><label class="flb">Subject Area *</label><select class="fsel2" id="tr-ag">'+deAreaOpts+'</select></div>'
     +'<div class="fl"><label class="flb">Grade Level</label><select class="fsel2" id="tr-glevel"><option '+(tr&&tr.gradeLevel==="Grade 9"?"selected":"")+'>Grade 9</option><option '+(tr&&tr.gradeLevel==="Grade 10"?"selected":"")+'>Grade 10</option><option '+(tr&&tr.gradeLevel==="Grade 11"?"selected":"")+'>Grade 11</option><option '+(tr&&tr.gradeLevel==="Grade 12"?"selected":"")+'>Grade 12</option><option '+(tr&&tr.gradeLevel==="College"?"selected":"")+'>College (EC Program)</option></select></div>'
-    +'<div class="fl"><label class="flb">Status</label><select class="fsel2" id="tr-status"><option '+(tr&&tr.status==="Pending"?"selected":"")+'>Pending</option><option '+(tr&&tr.status==="Approved"?"selected":"")+'>Approved</option><option '+(tr&&tr.status==="Denied"?"selected":"")+'>Denied</option></select></div>'
+    +'<div class="fl"><label class="flb">Status</label><select class="fsel2" id="tr-status"><option '+(tr&&tr.status==="Pending"?"selected":"")+((!tr&&!isDE2)?"selected":"")+'>Pending</option><option '+(tr&&tr.status==="Approved"?"selected":"")+((!tr&&isDE2)?"selected":"")+'>Approved</option><option '+(tr&&tr.status==="Denied"?"selected":"")+'>Denied</option></select></div>'
     +'</div>'
     +'<div class="fl"><label class="flb">Notes / Equivalency Rationale</label><textarea class="fta" id="tr-notes" rows="2" placeholder="Equivalency decision, EC program details, university course number...">'+esc(tr?tr.notes:"")+'</textarea></div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid #E4EAF2"><button id="tr-c" class="btn-c">Cancel</button><button id="tr-s" class="btn-s">💾 Save Credit</button></div>'
@@ -8659,6 +8659,15 @@ function spRequest(action, payload, onOk) {
   }).catch(function(e){ toast('Sync failed: ' + (e.message||''), 'err'); });
 }
 
+
+// Ensure URL has a valid protocol prefix (prevents 404 on relative URL resolution)
+function spSafeUrl(url) {
+  if (!url) return '';
+  url = url.trim();
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//')) return url;
+  return 'https://' + url;
+}
 // ══════════════════════════════════════════════════════════════════════════════
 // PORTAL SHELL — Layout, Navigation, Login
 // ══════════════════════════════════════════════════════════════════════════════
@@ -9009,7 +9018,9 @@ function spRenderGrades(c) {
     if (selTab === 'audit') {
       // ── FULL GRADUATION AUDIT (read-only) ──────────────────────────────────
       var courses = _SP.courses || [];
-      var trans   = (_SP.transfer || []).filter(function(t){return t.status==='Approved';});
+      var transAll    = _SP.transfer || [];
+      var trans       = transAll.filter(function(t){return t.status==='Approved';});
+      var transPending= transAll.filter(function(t){return t.status==='Pending'||!t.status;});
       var credits = getGradCredits(courses, trans);
       var wgpa    = calcWeightedGPA(courses);
       var ugpa    = calcGPA(courses, false);
@@ -9115,6 +9126,43 @@ function spRenderGrades(c) {
         var assocPct = Math.min(100, Math.round(deCollege/60*100));
         h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:700;color:#1A365E">College Credits</span><span style="font-size:12px;font-weight:800;color:' + SP_PURPLE + '">' + deCollege + ' / 60</span></div>';
         h += '<div style="background:#E4EAF2;border-radius:6px;height:10px"><div style="background:' + SP_PURPLE + ';width:' + assocPct + '%;height:100%;border-radius:6px"></div></div>';
+        h += '</div>';
+      }
+
+      // ── Transfer & EC Credits section ──────────────────────────────────────
+      if (trans.length > 0 || transPending.length > 0) {
+        h += '<div class="card" style="padding:18px;border-left:4px solid ' + SP_TEAL + '">';
+        h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:10px">🏛️ Transfer & EC Credits</div>';
+        if (trans.length > 0) {
+          h += '<div style="margin-bottom:10px">';
+          h += '<div style="font-size:10px;font-weight:700;color:' + SP_GREEN + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✅ Approved (' + trans.length + ' record' + (trans.length!==1?'s':'') + ')</div>';
+          trans.forEach(function(t){
+            var cr = parseFloat(t.creditsAwarded)||0;
+            h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #F0F4FA">';
+            h += '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">' + esc(t.origTitle||t.title||'Transfer Credit') + '</div>';
+            h += '<div style="font-size:10px;color:#7A92B0">' + esc(t.sourceSchool||'') + (t.area?' · '+t.area:'') + (t.type?' · '+t.type:'') + '</div></div>';
+            h += '<div style="text-align:right"><div style="font-size:13px;font-weight:800;color:' + SP_GREEN + '">' + cr + ' cr</div>';
+            h += '<div style="font-size:9px;color:' + SP_GREEN + '">Approved</div></div>';
+            h += '</div>';
+          });
+          var transTotal = trans.reduce(function(s,t){return s+(parseFloat(t.creditsAwarded)||0);},0);
+          h += '<div style="display:flex;justify-content:flex-end;margin-top:8px;font-size:12px;font-weight:800;color:' + SP_GREEN + '">Total: ' + Math.round(transTotal*10)/10 + ' credits</div>';
+          h += '</div>';
+        }
+        if (transPending.length > 0) {
+          h += '<div style="background:#FEF3C7;border-radius:8px;padding:10px 14px;margin-top:6px">';
+          h += '<div style="font-size:10px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⏳ Pending Approval (' + transPending.length + ' record' + (transPending.length!==1?'s':'') + ')</div>';
+          h += '<div style="font-size:11px;color:#7A5100;margin-bottom:8px">These credits are not yet counted toward your graduation total. Ask your admin to mark them as Approved.</div>';
+          transPending.forEach(function(t){
+            var cr = parseFloat(t.creditsAwarded)||0;
+            h += '<div style="display:flex;align-items:center;gap:10px;padding:5px 0">';
+            h += '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#92400E">' + esc(t.origTitle||t.title||'Transfer Credit') + '</div>';
+            h += '<div style="font-size:10px;color:#B45309">' + esc(t.sourceSchool||'') + (t.area?' · '+t.area:'') + '</div></div>';
+            h += '<div style="font-size:12px;font-weight:800;color:#B45309">' + cr + ' cr pending</div>';
+            h += '</div>';
+          });
+          h += '</div>';
+        }
         h += '</div>';
       }
 
@@ -9665,7 +9713,7 @@ function spRenderProject(c) {
       if (a.wurl) {
         h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F0FDF4;border-radius:8px;border:1px solid #BBF7D0">';
         h += '<span style="font-size:16px">🔗</span>';
-        h += '<a href="' + esc(a.wurl) + '" target="_blank" style="font-size:12px;color:#0E6B3B;font-weight:700;text-decoration:none">View My Submitted Work →</a>';
+        h += '<a href="' + esc(spSafeUrl(a.wurl)) + '" target="_blank" style="font-size:12px;color:#0E6B3B;font-weight:700;text-decoration:none">View My Submitted Work →</a>';
         h += '</div>';
       }
 
@@ -9705,7 +9753,7 @@ function spRenderProject(c) {
         h += '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">';
         h += '<div>';
         h += '<label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Work Link (Google Drive, Slides, Doc, etc.) *</label>';
-        h += '<input id="pt-wurl-' + ai + '" class="fi" type="url" placeholder="https://drive.google.com/..." value="' + esc(a.wurl||'') + '" style="margin:0"/>';
+        h += '<input id="pt-wurl-' + ai + '" class="fi" type="url" placeholder="Paste Google Drive, Slides, Doc or any link here..." value="' + esc(a.wurl||'') + '" style="margin:0"/>';
         h += '</div>';
         h += '<button class="pt-status-btn" data-ai="' + ai + '" data-status="In Progress" ';
         h += 'style="padding:8px 14px;background:#FEF3C7;color:#92400E;border:1.5px solid #FDE68A;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap;margin-top:18px">💾 Save Progress</button>';
@@ -9749,7 +9797,7 @@ function spRenderProject(c) {
     btn.addEventListener('click', function(){
       var ai   = parseInt(btn.dataset.ai);
       var a    = assigns[ai];
-      var wurl = (document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim();
+      var wurl = spSafeUrl((document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim());
       if (!wurl) { toast('Please enter a work link first', 'err'); return; }
       btn.disabled = true; btn.textContent = 'Saving...';
       a.wurl    = wurl;
@@ -9768,7 +9816,7 @@ function spRenderProject(c) {
     btn.addEventListener('click', function(){
       var ai   = parseInt(btn.dataset.ai);
       var a    = assigns[ai];
-      var wurl = (document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim();
+      var wurl = spSafeUrl((document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim());
       if (!wurl) { toast('A work link is required to submit', 'err'); return; }
       var fileInp = document.getElementById('pt-file-' + ai);
       btn.disabled = true; btn.textContent = 'Submitting...';
@@ -15770,6 +15818,11 @@ function ptModal(sid,mn,c,cb){
 
 // ─── TRACK ────────────────────────────────────────────────────────────────────
 function rPTT(c){
+  // Auto-refresh from Sheets every 60s to catch student submissions
+  if(webUrl && (!window._ptLastRefresh || (Date.now()-(window._ptLastRefresh||0))>60000)){
+    window._ptLastRefresh=Date.now();
+    sheetFetch().then(function(){rPTT(c);}).catch(function(){});
+  }
   var enr=students.filter(function(s){return s.status==="Enrolled";});
   var all=ptGA(),ev=ptGE();
   var selS=window._ptTS||null,selQ=window._ptTQ||"All",selSt=window._ptTSt||"All";
@@ -15814,9 +15867,9 @@ function rPTT(c){
         var m=PTM.find(function(x){return x.n===a.mn;})||{};
         var evr=ev.find(function(e){return e.aid===a.id;})||{};
         var iov=a.due&&a.due<today&&a.status!=="Approved"&&a.status!=="Not Assigned";
-        var ipend=a.status==="Work Uploaded"||a.status==="Under Review";
-        var bc=iov?"#FCA5A5":ipend?"#FDE68A":a.status==="Approved"?"#BBF7D0":"#E4EAF2";
-        h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid '+bc+';border-radius:10px;background:'+(iov?"#FFFAFA":ipend?"#FFFBEB":"#fff")+'">';
+        var isSubmitted=a.status==="Submitted"; var ipend=a.status==="Work Uploaded"||a.status==="Under Review"||isSubmitted;
+        var bc=isSubmitted?"#A78BFA":iov?"#FCA5A5":ipend?"#FDE68A":a.status==="Approved"?"#BBF7D0":"#E4EAF2";
+        h+='<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1.5px solid '+bc+';border-radius:10px;background:'+(isSubmitted?"#F5F3FF":iov?"#FFFAFA":ipend?"#FFFBEB":"#fff")+'">';
         h+='<span style="font-size:18px;width:22px;text-align:center;flex-shrink:0">'+m.icon+'</span>';
         h+='<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">';
         h+='<span style="font-size:9px;font-weight:700;color:#94A3B8;white-space:nowrap">#'+m.n+' · '+a.q+'</span>';
@@ -15852,6 +15905,7 @@ function rPTT(c){
 
 // ─── EVALUATE ─────────────────────────────────────────────────────────────────
 function rPTE(c){
+  if(webUrl&&(!window._pteLastRefresh||(Date.now()-(window._pteLastRefresh||0))>60000)){window._pteLastRefresh=Date.now();sheetFetch().then(function(){rPTE(c);}).catch(function(){});}
   var all=ptGA(),evs=ptGE();
   var queue=all.filter(function(a){return a.status==="Work Uploaded"||a.status==="Under Review";});
   var selId=window._ptEID||(queue[0]&&queue[0].id)||null;
@@ -15883,7 +15937,7 @@ function rPTE(c){
     h+='<div style="display:flex;flex-direction:column;gap:12px">';
     // Context card
     h+='<div class="card" style="padding:16px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><div style="width:46px;height:46px;border-radius:12px;background:'+selM.col+'18;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">'+selM.icon+'</div><div style="flex:1"><div style="font-size:14px;font-weight:800;color:#1A365E">'+esc(selA.title||selM.name)+'</div><div style="font-size:11px;color:#7A92B0">'+selM.name+' · '+(selA.ptype==="C"?"Collaborative":"Independent")+' · '+selA.q+'</div></div><div style="text-align:right"><div class="ava" style="width:36px;height:36px;font-size:13px;margin-left:auto">'+esc(ini(stu))+'</div><div style="font-size:10px;font-weight:700;color:#1A365E;margin-top:3px">'+esc(stu.firstName+' '+stu.lastName)+'</div></div></div>';
-    if(selA.wurl)h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;margin-bottom:8px"><span style="font-size:16px">📂</span><div style="flex:1"><div style="font-size:11px;font-weight:700;color:#059669">Submitted Work</div><a href="'+esc(selA.wurl)+'" target="_blank" style="font-size:10px;color:#0369A1;word-break:break-all">'+esc(selA.wurl)+'</a></div><a href="'+esc(selA.wurl)+'" target="_blank" style="padding:5px 12px;background:#059669;color:#fff;border-radius:6px;font-size:10px;font-weight:700;text-decoration:none">Open ↗</a></div>';
+    if(selA.wurl)h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:8px;margin-bottom:8px"><span style="font-size:16px">📂</span><div style="flex:1"><div style="font-size:11px;font-weight:700;color:#059669">Submitted Work</div><a href="'+esc(spSafeUrl(selA.wurl))+'" target="_blank" style="font-size:10px;color:#0369A1;word-break:break-all">'+esc(selA.wurl)+'</a></div><a href="'+esc(spSafeUrl(selA.wurl))+'" target="_blank" style="padding:5px 12px;background:#059669;color:#fff;border-radius:6px;font-size:10px;font-weight:700;text-decoration:none">Open ↗</a></div>';
     if(selA.brief)h+='<div style="background:#F7F9FC;border-left:3px solid '+selM.col+';border-radius:0 8px 8px 0;padding:8px 12px;font-size:11px;color:#3D5475;margin-bottom:6px"><div style="font-size:9px;font-weight:700;color:#94A3B8;text-transform:uppercase;margin-bottom:3px">Project Brief</div>'+esc(selA.brief)+'</div>';
     if(selA.reflect)h+='<div style="background:#F7F9FC;border-left:3px solid #7C3AED;border-radius:0 8px 8px 0;padding:8px 12px;font-size:11px;color:#3D5475"><div style="font-size:9px;font-weight:700;color:#94A3B8;text-transform:uppercase;margin-bottom:3px">Student Reflection</div>'+esc(selA.reflect)+'</div>';
     h+='</div>';
