@@ -5178,89 +5178,349 @@ function rUsers(c){
   }
   if(!webUrl){c.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">User management requires Google Sheets connection.</div>';return;}
 
-  // Load users from Sheets
   var token=encodeURIComponent(_sessionToken);
   fetch(webUrl+"?action=getUsers&token="+token,{mode:"cors"})
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.status!=="ok"){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Error: '+esc(d.message)+'</div>';return;}
       var users=d.users||[];
-      var html='<div style="display:flex;flex-direction:column;gap:14px">';
-      html+='<div style="display:flex;justify-content:space-between;align-items:center">';
-      html+='<div><div style="font-size:15px;font-weight:800;color:#1A365E">👤 User Management</div><div style="font-size:12px;color:#7A92B0;margin-top:2px">Manage team access · '+users.length+' account'+(users.length!==1?"s":"")+'</div></div>';
-      html+='<button id="add-user-btn" style="padding:8px 18px;background:#D61F31;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">+ Add User</button>';
-      html+='</div>';
-      html+='<div class="card" style="overflow:hidden">';
-      html+='<table class="tbl"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Portal Access</th><th>Last Login</th><th></th></tr></thead><tbody>';
-      users.forEach(function(u,i){
-        var isMe=u.username===(_currentUser&&_currentUser.username);
-        var active=u.active!=="false";
-        var role=u.role||"staff";
-        var roleMap={
-          admin:    {bg:"#EEF3FF",col:"#1A365E",label:"Admin"},
-          staff:    {bg:"#F0FFF4",col:"#0E6B3B",label:"Staff"},
-          principal:{bg:"#FFF7ED",col:"#C2500A",label:"Principal"},
-          partner:  {bg:"#FDF4FF",col:"#7C3AED",label:"Partner"}
-        };
-        var roleInfo=roleMap[role]||roleMap.staff;
-        var roleBg=roleInfo.bg;var roleCol=roleInfo.col;var roleLabel=roleInfo.label+(role==="partner"&&u.campus?" · "+u.campus:"");
-        var lastLogin=u.lastlogin?new Date(u.lastlogin).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Never";
-        html+='<tr>'
-          +'<td><span style="font-family:monospace;font-weight:700;color:#1A365E">'+esc(u.username)+'</span>'+(isMe?' <span style="font-size:9px;background:#FAC600;color:#7A5100;padding:1px 5px;border-radius:4px;font-weight:700">YOU</span>':'')+'</td>'
-          +'<td style="font-weight:600">'+esc(u.name||"—")+'</td>'
-          +'<td><span style="background:'+roleBg+';color:'+roleCol+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase">'+esc(role)+'</span></td>'
-          +'<td style="color:#7A92B0;font-size:11px">'+esc(u.email||"—")+'</td>'
-          +'<td><span style="font-size:11px;font-weight:700;color:'+(active?"#1DBD6A":"#D61F31")+'">'+(active?"✓ Active":"✕ Inactive")+'</span></td>'
-          +'<td style="font-size:11px;color:#7A92B0">'+lastLogin+'</td>'
-          +(u.studentid?'<td><span style="font-size:10px;font-weight:700;color:'+(u.portalpassword&&u.portalpassword!=="null"?'#1DBD6A':'#D61F31')+'">'+(u.portalpassword&&u.portalpassword!=="null"?'✓ Set':'Not Set')+'</span></td>':'<td style="color:#7A92B0;font-size:10px">—</td>')
-          +'<td style="text-align:right">'
-          +(isMe?'<span style="font-size:11px;color:#7A92B0">—</span>':
-            '<button class="edit-user-btn sedit" data-idx="'+i+'" style="margin-right:5px">Edit</button>'
-            +(u.studentid?'<button class="set-portal-pwd sedit" data-sid="'+esc(u.studentid)+'" data-name="'+esc(u.name||u.username)+'" data-campus="'+esc(u.campus||"")+'" style="background:#EEF3FF;color:#1A365E;border-color:#C4D4E8;margin-right:5px;font-size:10px">🔑 Portal</button>':'')
-            +'<button class="del-user-btn sedit" data-username="'+esc(u.username)+'" style="color:#D61F31;border-color:#F5C2C7">Remove</button>')
-          +'</td></tr>';
-      });
-      html+='</tbody></table></div></div>';
-      c.innerHTML=html;
 
-      // Add user button
-      document.getElementById("add-user-btn").addEventListener("click",function(){openUserModal(null,null);});
-      c.querySelectorAll(".edit-user-btn").forEach(function(b){
-        b.addEventListener("click",function(e){e.stopPropagation();openUserModal(users[parseInt(b.dataset.idx)],b.dataset.idx);});
-      });
-      c.querySelectorAll(".del-user-btn").forEach(function(b){
-        b.addEventListener("click",function(e){
-          e.stopPropagation();
-          if(!confirm("Remove user '"+b.dataset.username+"'? They will no longer be able to sign in."))return;
-          var payload=encodeURIComponent(JSON.stringify({username:b.dataset.username,token:_sessionToken}));
-          fetch(webUrl+"?action=deleteUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
-            .then(function(r){return r.json();})
-            .then(function(d){if(d.status==="ok"){toast("User removed","ok");rUsers(c);}else toast(d.message||"Error","err");});
+      // Split into staff/admin and students
+      var staffUsers   = users.filter(function(u){ return u.role!=="student"; });
+      var studentUsers = users.filter(function(u){ return u.role==="student"; });
+      var activeTab    = window._umTab || "staff";
+
+      var html2='<div style="display:flex;flex-direction:column;gap:14px">';
+
+      // Header
+      html2+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">';
+      html2+='<div><div style="font-size:16px;font-weight:800;color:#1A365E">👥 User Management</div>';
+      html2+='<div style="font-size:11px;color:#7A92B0;margin-top:2px">'+users.length+' total accounts · '+staffUsers.length+' staff · '+studentUsers.length+' student portal</div></div>';
+      html2+='<div style="display:flex;gap:8px">';
+      html2+='<button id="um-add-btn" style="padding:9px 18px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">'+(activeTab==="student"?"🔑 Set Student Password":"+ Add Staff User")+'</button>';
+      html2+='</div></div>';
+
+      // Tabs
+      html2+='<div style="display:flex;gap:0;border-radius:10px;overflow:hidden;border:1.5px solid #E4EAF2">';
+      html2+='<button id="um-tab-staff" style="flex:1;padding:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:'+(activeTab==="staff"?"#1A365E":"#F7F9FC")+';color:'+(activeTab==="staff"?"#fff":"#7A92B0")+'">👤 Staff & Admins ('+staffUsers.length+')</button>';
+      html2+='<button id="um-tab-students" style="flex:1;padding:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;background:'+(activeTab==="student"?"#1A365E":"#F7F9FC")+';color:'+(activeTab==="student"?"#fff":"#7A92B0")+'">🎓 Student Portal ('+studentUsers.length+')</button>';
+      html2+='</div>';
+
+      // ── STAFF TAB ─────────────────────────────────────────────────────────
+      if(activeTab==="staff"){
+        html2+='<div class="card" style="overflow:hidden;padding:0">';
+        html2+='<table class="tbl"><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Campus</th><th>Status</th><th>Last Login</th><th></th></tr></thead><tbody>';
+        staffUsers.forEach(function(u,i){
+          var isMe=u.username===(_currentUser&&_currentUser.username);
+          var active=u.active!=="false";
+          var role=u.role||"staff";
+          var roleMap={
+            admin:    {bg:"#EEF3FF",col:"#1A365E",label:"Admin"},
+            staff:    {bg:"#F0FFF4",col:"#0E6B3B",label:"Staff"},
+            principal:{bg:"#FFF7ED",col:"#C2500A",label:"Principal"},
+            partner:  {bg:"#FDF4FF",col:"#7C3AED",label:"Partner"},
+            coach:    {bg:"#FFF7ED",col:"#D97706",label:"Coach"}
+          };
+          var ri=roleMap[role]||roleMap.staff;
+          var lastLogin=u.lastlogin?new Date(u.lastlogin).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Never";
+          html2+='<tr>'
+            +'<td><span style="font-family:monospace;font-weight:700;color:#1A365E">'+esc(u.username)+'</span>'+(isMe?' <span style="font-size:9px;background:#FAC600;color:#7A5100;padding:1px 5px;border-radius:4px;font-weight:700">YOU</span>':'')+'</td>'
+            +'<td style="font-weight:600">'+esc(u.name||"—")+'</td>'
+            +'<td><span style="background:'+ri.bg+';color:'+ri.col+';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase">'+esc(ri.label)+'</span></td>'
+            +'<td style="color:#7A92B0;font-size:11px">'+esc(u.email||"—")+'</td>'
+            +'<td style="color:#7A92B0;font-size:11px">'+esc(u.campus||"—")+'</td>'
+            +'<td><span style="font-size:11px;font-weight:700;color:'+(active?"#1DBD6A":"#D61F31")+'">'+(active?"✓ Active":"✕ Inactive")+'</span></td>'
+            +'<td style="font-size:11px;color:#7A92B0">'+lastLogin+'</td>'
+            +'<td style="text-align:right">'
+            +(isMe?'<span style="font-size:11px;color:#7A92B0">—</span>':
+              '<button class="edit-user-btn sedit" data-idx="'+i+'" style="margin-right:5px">Edit</button>'
+              +'<button class="del-user-btn sedit" data-username="'+esc(u.username)+'" style="color:#D61F31;border-color:#F5C2C7">Remove</button>')
+            +'</td></tr>';
         });
-      });
-      // Set portal password handler
-      c.querySelectorAll(".set-portal-pwd").forEach(function(b){
-        b.addEventListener("click",function(e){
-          e.stopPropagation();
-          var sid=b.dataset.sid; var name=b.dataset.name;
-          var pwd=prompt("Set portal password for "+name+" (Student ID: "+sid+"). Min 4 chars:");
-          if(!pwd||pwd.trim().length<4){if(pwd!==null)toast("Password must be at least 4 characters","err");return;}
-          var payload=encodeURIComponent(JSON.stringify({studentId:sid,portalPassword:pwd.trim(),studentName:name,campus:b.dataset.campus||"",token:_sessionToken}));
-          fetch(webUrl+"?action=setPortalPassword&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
-            .then(function(r){return r.json();})
-            .then(function(d){
-              if(d.status==="ok"){
-                toast("Portal password "+(d.created?"created":"updated")+" for "+name+" ✓","ok");
-                rUsers(c);
-              } else toast(d.message||"Error setting password","err");
+        if(!staffUsers.length) html2+='<tr><td colspan="8" style="text-align:center;padding:24px;color:#7A92B0">No staff accounts yet.</td></tr>';
+        html2+='</tbody></table></div>';
+      }
+
+      // ── STUDENT PORTAL TAB ────────────────────────────────────────────────
+      if(activeTab==="student"){
+        // Info banner
+        html2+='<div style="background:#EEF3FF;border-left:4px solid #1A365E;border-radius:8px;padding:12px 16px;font-size:11px;color:#1A365E">';
+        html2+='<strong>🎓 Student Portal Accounts</strong> — Students log in at the same URL using the <strong>🎓 Student</strong> tab with their Student ID and portal password. Click <strong>🔑 Set Password</strong> to activate a student\'s portal access.';
+        html2+='</div>';
+
+        html2+='<div class="card" style="overflow:hidden;padding:0">';
+        html2+='<table class="tbl"><thead><tr><th>Student ID</th><th>Name</th><th>Campus</th><th>Portal Password</th><th>Last Portal Login</th><th></th></tr></thead><tbody>';
+
+        // Also pull enrolled students who DON'T have a portal account yet
+        var enrolledWithPortal = {};
+        studentUsers.forEach(function(u){ if(u.studentid) enrolledWithPortal[u.studentid]=u; });
+
+        // Get enrolled students from local data
+        var enrolled = students.filter(function(s){ return s.status==="Enrolled" && s.studentId; });
+
+        // Merge: show portal accounts + enrolled students without portal
+        var rows = [];
+        enrolled.forEach(function(s){
+          var portal = enrolledWithPortal[s.studentId];
+          rows.push({
+            studentId: s.studentId,
+            name: (s.firstName||"")+" "+(s.lastName||""),
+            campus: s.campus||"",
+            grade: s.grade||"",
+            hasPortal: !!portal,
+            portalSet: portal && portal.portalpassword && portal.portalpassword!=="null",
+            lastLogin: portal ? (portal.lastlogin||"") : "",
+            username: portal ? portal.username : ""
+          });
+        });
+        // Also add portal users who don't match enrolled (edge case)
+        studentUsers.forEach(function(u){
+          if(!enrolledWithPortal[u.studentid] || !enrolled.find(function(s){return s.studentId===u.studentid;})){
+            rows.push({
+              studentId: u.studentid||"—",
+              name: u.name||"—",
+              campus: u.campus||"",
+              grade: "",
+              hasPortal: true,
+              portalSet: u.portalpassword && u.portalpassword!=="null",
+              lastLogin: u.lastlogin||"",
+              username: u.username
             });
+          }
         });
+
+        if(!rows.length){
+          html2+='<tr><td colspan="6" style="text-align:center;padding:30px;color:#7A92B0">';
+          html2+='<div style="font-size:24px;margin-bottom:6px">🎓</div>';
+          html2+='No enrolled students found. Enroll students first, then set their portal passwords here.';
+          html2+='</td></tr>';
+        } else {
+          rows.forEach(function(r){
+            var portalStatus = !r.hasPortal
+              ? '<span style="background:#FEE2E2;color:#D61F31;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700">✕ Not Created</span>'
+              : r.portalSet
+                ? '<span style="background:#DCFCE7;color:#0E6B3B;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700">✓ Active</span>'
+                : '<span style="background:#FEF3C7;color:#92400E;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700">⚠ No Password Set</span>';
+            var lastLogin = r.lastLogin ? new Date(r.lastLogin).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "Never";
+            html2+='<tr>'
+              +'<td><span style="font-family:monospace;font-weight:800;color:#1A365E;font-size:12px">'+esc(r.studentId)+'</span>'
+              +(r.grade?' <span style="font-size:9px;color:#7A92B0">'+esc(r.grade)+'</span>':'')+'</td>'
+              +'<td style="font-weight:600">'+esc(r.name)+'</td>'
+              +'<td style="color:#7A92B0;font-size:11px">'+esc(r.campus)+'</td>'
+              +'<td>'+portalStatus+'</td>'
+              +'<td style="font-size:11px;color:#7A92B0">'+esc(lastLogin)+'</td>'
+              +'<td style="text-align:right">'
+              +'<button class="set-portal-pwd sedit" data-sid="'+esc(r.studentId)+'" data-name="'+esc(r.name)+'" data-campus="'+esc(r.campus)+'" style="background:#EEF3FF;color:#1A365E;border-color:#C4D4E8;font-size:10px;font-weight:700;padding:5px 10px">🔑 Set Password</button>'
+              +(r.hasPortal?'<button class="del-user-btn sedit" data-username="'+esc(r.username)+'" style="color:#D61F31;border-color:#F5C2C7;margin-left:5px;font-size:10px">🗑</button>':'')
+              +'</td></tr>';
+          });
+        }
+        html2+='</tbody></table></div>';
+      }
+
+      html2+='</div>';
+      c.innerHTML=html2;
+
+      // Tab switching
+      document.getElementById("um-tab-staff").addEventListener("click",function(){
+        window._umTab="staff"; rUsers(c);
       });
+      document.getElementById("um-tab-students").addEventListener("click",function(){
+        window._umTab="student"; rUsers(c);
+      });
+
+      // Add button
+      document.getElementById("um-add-btn").addEventListener("click",function(){
+        if(window._umTab==="student") openStudentPortalModal(c);
+        else openUserModal(null,null,c);
+      });
+
+      // Staff tab handlers
+      if(activeTab==="staff"){
+        c.querySelectorAll(".edit-user-btn").forEach(function(b){
+          b.addEventListener("click",function(e){
+            e.stopPropagation();
+            openUserModal(staffUsers[parseInt(b.dataset.idx)],b.dataset.idx,c);
+          });
+        });
+        c.querySelectorAll(".del-user-btn").forEach(function(b){
+          b.addEventListener("click",function(e){
+            e.stopPropagation();
+            if(!confirm("Remove user '"+b.dataset.username+"'? They will no longer be able to sign in."))return;
+            var payload=encodeURIComponent(JSON.stringify({username:b.dataset.username,token:_sessionToken}));
+            fetch(webUrl+"?action=deleteUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+              .then(function(r){return r.json();})
+              .then(function(d){if(d.status==="ok"){toast("User removed","ok");rUsers(c);}else toast(d.message||"Error","err");});
+          });
+        });
+      }
+
+      // Student tab handlers
+      if(activeTab==="student"){
+        c.querySelectorAll(".set-portal-pwd").forEach(function(b){
+          b.addEventListener("click",function(e){
+            e.stopPropagation();
+            var sid=b.dataset.sid; var name=b.dataset.name;
+            openSetPortalPasswordModal(sid, name, b.dataset.campus, c);
+          });
+        });
+        c.querySelectorAll(".del-user-btn").forEach(function(b){
+          b.addEventListener("click",function(e){
+            e.stopPropagation();
+            if(!confirm("Remove portal access for '"+b.dataset.username+"'?"))return;
+            var payload=encodeURIComponent(JSON.stringify({username:b.dataset.username,token:_sessionToken}));
+            fetch(webUrl+"?action=deleteUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+              .then(function(r){return r.json();})
+              .then(function(d){if(d.status==="ok"){toast("Portal access removed","ok");rUsers(c);}else toast(d.message||"Error","err");});
+          });
+        });
+      }
     })
-    .catch(function(e){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Could not load users. Check connection.</div>';});
+    .catch(function(e){c.innerHTML='<div class="card" style="padding:24px;color:#D61F31">Could not load users: '+esc(e.message)+'</div>';});
 }
 
-function openUserModal(user,idx){
+// ── Set Portal Password Modal ─────────────────────────────────────────────────
+function openSetPortalPasswordModal(sid, name, campus, parentC) {
+  var ov=document.createElement("div"); ov.className="mbg open";
+  ov.innerHTML='<div class="mbox" style="max-width:420px">'
+    +'<div class="mhead"><div><h2 style="color:#1A365E">🔑 Set Portal Password</h2>'
+    +'<p style="color:#7A92B0;font-size:12px">Student: '+esc(name)+' · ID: '+esc(sid)+'</p></div>'
+    +'<button id="spp-close" class="mclose">×</button></div>'
+    +'<div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">'
+    +'<div style="background:#EEF3FF;border-radius:8px;padding:12px;font-size:11px;color:#1A365E">'
+    +'The student will use their <strong>Student ID ('+esc(sid)+')</strong> and this password to log in at the <strong>🎓 Student tab</strong> on the login screen.'
+    +'</div>'
+    +'<div class="fl"><label class="flb">New Portal Password *</label>'
+    +'<input class="fi" id="spp-pass" type="password" placeholder="Minimum 4 characters" autocomplete="new-password"/></div>'
+    +'<div class="fl"><label class="flb">Confirm Password *</label>'
+    +'<input class="fi" id="spp-conf" type="password" placeholder="Re-enter password" autocomplete="new-password"/></div>'
+    +'<div style="font-size:11px;color:#7A92B0">💡 Share the Student ID and password with the student. They can change their password after logging in under My Profile.</div>'
+    +'</div>'
+    +'<div class="mfooter">'
+    +'<button id="spp-cancel" class="btn-c">Cancel</button>'
+    +'<button id="spp-save" class="btn-s">✓ Set Password & Activate Portal</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector("#spp-close").onclick=function(){ov.remove();};
+  ov.querySelector("#spp-cancel").onclick=function(){ov.remove();};
+  ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
+  document.getElementById("spp-pass").focus();
+
+  ov.querySelector("#spp-save").addEventListener("click",function(){
+    var pass=document.getElementById("spp-pass").value.trim();
+    var conf=document.getElementById("spp-conf").value.trim();
+    if(!pass||pass.length<4){toast("Password must be at least 4 characters","err");return;}
+    if(pass!==conf){toast("Passwords do not match","err");return;}
+    var btn=ov.querySelector("#spp-save");
+    btn.disabled=true; btn.textContent="Saving...";
+    var payload=encodeURIComponent(JSON.stringify({
+      studentId:sid, portalPassword:pass, studentName:name, campus:campus, token:_sessionToken
+    }));
+    fetch(webUrl+"?action=setPortalPassword&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status==="ok"){
+          toast("✓ Portal password "+(d.created?"created":"updated")+" for "+name,"ok");
+          ov.remove();
+          rUsers(parentC);
+        } else {
+          btn.disabled=false; btn.textContent="✓ Set Password & Activate Portal";
+          toast(d.message||"Error setting password","err");
+        }
+      }).catch(function(e){
+        btn.disabled=false; btn.textContent="✓ Set Password & Activate Portal";
+        toast("Connection error: "+e.message,"err");
+      });
+  });
+}
+
+// ── Add Student Portal Modal (from + Add Student button) ─────────────────────
+function openStudentPortalModal(parentC) {
+  var enrolledWithoutPortal = students.filter(function(s){
+    return s.status==="Enrolled" && s.studentId;
+  });
+  var ov=document.createElement("div"); ov.className="mbg open";
+  ov.innerHTML='<div class="mbox" style="max-width:460px">'
+    +'<div class="mhead"><div><h2 style="color:#1A365E">🎓 Create Student Portal Access</h2>'
+    +'<p style="color:#7A92B0;font-size:12px">Select an enrolled student and set their password</p></div>'
+    +'<button id="spa-close" class="mclose">×</button></div>'
+    +'<div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">'
+    +'<div class="fl"><label class="flb">Select Student *</label>'
+    +'<select class="fsel2" id="spa-student" style="font-size:12px">'
+    +'<option value="">— Select enrolled student —</option>'
+    +enrolledWithoutPortal.map(function(s){
+      return '<option value="'+esc(s.studentId)+'|'+esc((s.firstName||"")+" "+(s.lastName||""))+'|'+esc(s.campus||"")+'">'+
+        esc((s.firstName||"")+" "+(s.lastName||""))+" — "+esc(s.studentId)+" ("+esc(s.grade||"")+")"+
+        "</option>";
+    }).join("")
+    +'</select></div>'
+    +'<div id="spa-sid-display" style="display:none;background:#EEF3FF;border-radius:8px;padding:10px 14px;font-size:12px;color:#1A365E">'
+    +'<strong>Student ID:</strong> <span id="spa-sid-val" style="font-family:monospace;font-weight:800"></span>'
+    +'<br><span style="font-size:11px;color:#7A92B0;margin-top:4px;display:block">Student will use this ID + the password below to log in.</span>'
+    +'</div>'
+    +'<div class="fl"><label class="flb">Portal Password *</label>'
+    +'<input class="fi" id="spa-pass" type="password" placeholder="Minimum 4 characters"/></div>'
+    +'<div class="fl"><label class="flb">Confirm Password *</label>'
+    +'<input class="fi" id="spa-conf" type="password" placeholder="Re-enter password"/></div>'
+    +'</div>'
+    +'<div class="mfooter">'
+    +'<button id="spa-cancel" class="btn-c">Cancel</button>'
+    +'<button id="spa-save" class="btn-s">🎓 Create Portal Access</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector("#spa-close").onclick=function(){ov.remove();};
+  ov.querySelector("#spa-cancel").onclick=function(){ov.remove();};
+  ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
+
+  // Show student ID when student selected
+  document.getElementById("spa-student").addEventListener("change",function(){
+    var parts=this.value.split("|");
+    var display=document.getElementById("spa-sid-display");
+    var sidVal=document.getElementById("spa-sid-val");
+    if(parts[0]){
+      sidVal.textContent=parts[0];
+      display.style.display="block";
+    } else {
+      display.style.display="none";
+    }
+  });
+
+  ov.querySelector("#spa-save").addEventListener("click",function(){
+    var sel=document.getElementById("spa-student").value;
+    var pass=document.getElementById("spa-pass").value.trim();
+    var conf=document.getElementById("spa-conf").value.trim();
+    if(!sel){toast("Please select a student","err");return;}
+    if(!pass||pass.length<4){toast("Password must be at least 4 characters","err");return;}
+    if(pass!==conf){toast("Passwords do not match","err");return;}
+    var parts=sel.split("|");
+    var sid=parts[0]; var name=parts[1]||sid; var campus=parts[2]||"";
+    var btn=ov.querySelector("#spa-save");
+    btn.disabled=true; btn.textContent="Creating...";
+    var payload=encodeURIComponent(JSON.stringify({
+      studentId:sid, portalPassword:pass, studentName:name, campus:campus, token:_sessionToken
+    }));
+    fetch(webUrl+"?action=setPortalPassword&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status==="ok"){
+          toast("🎓 Portal access created for "+name+" ✓","ok");
+          ov.remove();
+          window._umTab="student";
+          rUsers(parentC);
+        } else {
+          btn.disabled=false; btn.textContent="🎓 Create Portal Access";
+          toast(d.message||"Error","err");
+        }
+      }).catch(function(e){
+        btn.disabled=false; btn.textContent="🎓 Create Portal Access";
+        toast("Connection error","err");
+      });
+  });
+}
+
+
+
+function openUserModal(user,idx,parentC){
   var isNew=!user;
   var ov=document.createElement("div");
   ov.style.cssText="display:flex;position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:300;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)";
@@ -5276,13 +5536,18 @@ function openUserModal(user,idx){
     +'</div>'
     +'<div class="fg c2">'
     +'<div class="fl"><label class="flb">Password '+(isNew?"*":"(leave blank to keep)")+'</label><input class="fi" id="um-pass" type="password" placeholder="'+(isNew?"Set password":"Leave blank to keep")+'"/></div>'
-    +'<div class="fl"><label class="flb">Role</label><select class="fsel2" id="um-role"><option value="staff" '+((!user||user.role==="staff")?"selected":"")+'>Staff</option><option value="admin" '+(user&&user.role==="admin"?"selected":"")+'>Admin</option><option value="principal" '+(user&&user.role==="principal"?"selected":"")+'>Principal</option><option value="partner" '+(user&&user.role==="partner"?"selected":"")+'>Campus Partner</option></select></div>'
+    +'<div class="fl"><label class="flb">Role</label><select class="fsel2" id="um-role"><option value="staff" '+((!user||user.role==="staff")?"selected":"")+'>Staff</option><option value="admin" '+(user&&user.role==="admin"?"selected":"")+'>Admin</option><option value="principal" '+(user&&user.role==="principal"?"selected":"")+'>Principal</option><option value="partner" '+(user&&user.role==="partner"?"selected":"")+'>Campus Partner</option><option value="student" '+(user&&user.role==="student"?"selected":"")+'>Student Portal</option></select></div>'
     +'</div>'
     +'<div class="fl"><label class="flb">Email</label><input class="fi" id="um-email" value="'+esc(user?user.email:"")+'\" placeholder=\"user@school.edu\"/></div>'
     +'<div class="fl"><label class="flb">Campus <span style="color:#D61F31;font-size:10px">(required for Partner)</span></label><select class="fsel2" id="um-campus"><option value="">— Any Campus —</option>'+getSA('campuses').map(function(ca){return'<option value="'+esc(ca)+'" '+(user&&user.campus===ca?"selected":"")+'>'+esc(ca)+'</option>';}).join("")+"'</select></div>'"
     +(isNew?"":
       '<div class="fl"><label class="flb">Account Status</label><select class="fsel2" id="um-active"><option value="true" '+(user.active!=="false"?"selected":"")+'>Active</option><option value="false" '+(user.active==="false"?"selected":"")+'>Inactive (cannot log in)</option></select></div>'
     )
+    +'<div id="um-student-id-row" style="display:'+(user&&user.role==="student"?"block":"none")+'">'
+    +'<div class="fl"><label class="flb">Student ID <span style="color:#D61F31">*</span></label>'
+    +'<input class="fi" id="um-student-id" value="'+esc(user?user.studentid||"":"")+'" placeholder="e.g. AWS-2026-001"/></div>'
+    +'<div style="font-size:10px;color:#7A92B0;margin-top:-6px;margin-bottom:8px;padding:0 2px">Must match the Student ID assigned in the student profile. Portal password is set separately via the Student Portal tab.</div>'
+    +'</div>'
     +'<div style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #E4EAF2">'
     +'<button class="btn-c" id="um-cancel">Cancel</button>'
     +'<button class="btn-s" id="um-save">'+(isNew?"Add User":"Save Changes")+'</button>'
@@ -5291,12 +5556,19 @@ function openUserModal(user,idx){
   ov.querySelector("#um-close").addEventListener("click",function(){ov.remove();});
   ov.querySelector("#um-cancel").addEventListener("click",function(){ov.remove();});
   ov.addEventListener("click",function(e){if(e.target===ov)ov.remove();});
+  // Show/hide Student ID row based on role
+  var umRole=ov.querySelector("#um-role");
+  var umSidRow=ov.querySelector("#um-student-id-row");
+  function toggleSidRow(){ if(umSidRow) umSidRow.style.display=umRole.value==="student"?"block":"none"; }
+  if(umRole) umRole.addEventListener("change", toggleSidRow);
+  toggleSidRow();
   ov.querySelector("#um-save").addEventListener("click",function(){
     var uData={
       username:ov.querySelector("#um-user").value.trim().toLowerCase(),
       name:ov.querySelector("#um-name").value.trim(),
       role:ov.querySelector("#um-role").value,
       email:ov.querySelector("#um-email").value.trim(),
+      studentId:(ov.querySelector("#um-student-id")||{value:""}).value.trim(),
       campus:ov.querySelector("#um-campus")?ov.querySelector("#um-campus").value:""
     };
     if(uData.role==="partner"&&!uData.campus){toast("Campus is required for Partner role","err");return;}
@@ -5310,7 +5582,7 @@ function openUserModal(user,idx){
     fetch(webUrl+"?action=saveUser&payload="+payload+"&token="+encodeURIComponent(_sessionToken),{mode:"cors"})
       .then(function(r){return r.json();})
       .then(function(d){
-        if(d.status==="ok"){toast((isNew?"User added":"Changes saved")+" ✓","ok");ov.remove();rUsers(document.getElementById("content"));}
+        if(d.status==="ok"){toast((isNew?"User added":"Changes saved")+" ✓","ok");ov.remove();rUsers(parentC||document.getElementById("content"));}
         else toast(d.message||"Error","err");
       });
   });
@@ -7710,11 +7982,17 @@ function rComms(c){
     +'<input type="text" id="com-subject" placeholder="Brief subject..." style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">NOTES / SUMMARY</label>'
     +'<textarea id="com-body" rows="4" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px;resize:vertical" placeholder="What was discussed..."></textarea></div>'
+    +'<div><label style="font-size:11px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">VISIBILITY</label>'
+    +'<select id="com-vis" style="width:100%;padding:8px 10px;border:1px solid #E4EAF2;border-radius:8px;font-size:13px"><option value="Internal">Internal (Staff Only)</option><option value="Shared">Shared with Parent/Student</option></select></div>'
     +'</div>'
     +'<div style="display:flex;gap:10px;margin-top:18px">'
     +'<button id="com-save" style="flex:1;background:#1A365E;color:#fff;border:none;padding:10px;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">Save Log</button>'
     +'<button id="com-cancel-btn" style="padding:10px 16px;background:#F5F7FA;color:#7A92B0;border:none;border-radius:9px;font-size:14px;cursor:pointer">Cancel</button>'
     +'</div></div>';
+  // Remove any stale modal from a previous rComms call
+  var staleModal=document.getElementById("com-modal");
+  if(staleModal) staleModal.remove();
+
   document.body.appendChild(modal);
 
   c.innerHTML="";
@@ -7727,26 +8005,34 @@ function rComms(c){
     rComms(c);
   });
 
+  // Use modal.querySelector() — scoped to this modal instance, never stale
   document.getElementById("add-com-btn").addEventListener("click",function(){modal.style.display="flex";});
-  document.getElementById("com-close").addEventListener("click",function(){modal.style.display="none";modal.remove();rComms(c);});
-  document.getElementById("com-cancel-btn").addEventListener("click",function(){modal.style.display="none";modal.remove();rComms(c);});
+  modal.querySelector("#com-close").addEventListener("click",function(){modal.style.display="none";modal.remove();rComms(c);});
+  modal.querySelector("#com-cancel-btn").addEventListener("click",function(){modal.style.display="none";modal.remove();rComms(c);});
 
-  document.getElementById("com-save").addEventListener("click",function(){
-    var sid=parseInt(document.getElementById("com-sid").value);
+  modal.querySelector("#com-save").addEventListener("click",function(){
+    var sid=parseInt(modal.querySelector("#com-sid").value);
     if(!sid){toast("Please select a student","err");return;}
+    var subj=modal.querySelector("#com-subject").value.trim();
+    if(!subj){toast("Please enter a subject","err");return;}
+    var btn=modal.querySelector("#com-save");
+    btn.disabled=true; btn.textContent="Saving...";
     COM.push({
-      id:nextComId,studentId:sid,
-      date:document.getElementById("com-date").value,
-      type:document.getElementById("com-type").value,
-      direction:document.getElementById("com-dir").value,
-      staff:document.getElementById("com-staff").value,
-      outcome:document.getElementById("com-outcome").value,
-      subject:document.getElementById("com-subject").value,
-      body:document.getElementById("com-body").value
+      id:nextComId,
+      studentId:sid,
+      date:modal.querySelector("#com-date").value,
+      type:modal.querySelector("#com-type").value,
+      direction:modal.querySelector("#com-dir").value,
+      staff:modal.querySelector("#com-staff").value.trim(),
+      outcome:modal.querySelector("#com-outcome").value,
+      subject:subj,
+      body:modal.querySelector("#com-body").value.trim(),
+      visibility:modal.querySelector("#com-vis").value,
+      createdAt:new Date().toISOString()
     });
     saveCOM();
-    modal.style.display="none";modal.remove();
-    toast("Communication logged","ok");
+    modal.style.display="none"; modal.remove();
+    toast("Communication logged ✓","ok");
     rComms(c);
   });
 
@@ -8339,136 +8625,246 @@ function spRenderDash(c) {
 // ══════════════════════════════════════════════════════════════════════════════
 function spRenderGrades(c) {
   var s = _SP.student || {};
-  var isHS  = ['Grade 9','Grade 10','Grade 11','Grade 12'].includes(s.grade);
-  var isMS  = ['Grade 6','Grade 7','Grade 8'].includes(s.grade);
-  var isElem= ['Pre-K','Kindergarten','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5'].includes(s.grade);
-  var selTerm = window._spGradeTerm || 'Term 1';
+  var isHS   = ['Grade 9','Grade 10','Grade 11','Grade 12'].includes(s.grade);
+  var isMS   = ['Grade 6','Grade 7','Grade 8'].includes(s.grade);
+  var selTab = window._spGradeTab || (isHS ? 'audit' : 'report');
+  var selTerm= window._spGradeTerm || 'Term 1';
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
   h += '<div style="font-size:18px;font-weight:800;color:#1A365E">📊 My Grades</div>';
 
-  // Term selector
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  ['Term 1','Term 2','Term 3','Term 4'].forEach(function(t){
-    var act = t === selTerm;
-    h += '<button class="sp-term-btn" data-term="' + t + '" style="padding:6px 14px;border:1.5px solid ' + (act?SP_RED:'#E4EAF2') + ';background:' + (act?SP_RED:'#fff') + ';color:' + (act?'#fff':'#3D5475') + ';border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">' + t + '</button>';
-  });
-  h += '</div>';
-
   if (isHS) {
-    var gpa  = spGPA();
-    var wgpa = spWeightedGPA();
-    var cr   = spGradCredits();
-    h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">';
-    h += spCard('Unweighted GPA', gpa.toFixed(2), '4.0 scale', gpa>=3.5?SP_GREEN:gpa>=2.5?SP_GOLD:SP_RED, '📊');
-    h += spCard('Weighted GPA', wgpa.toFixed(2), 'AP/IB bonus included', SP_PURPLE, '⭐');
-    h += spCard('Credits Earned', Math.round((cr.total||0)*10)/10 + ' / 24', 'Graduation progress', SP_NAVY, '📚');
-    h += spCard('Graduation', Math.round((cr.total||0)/24*100) + '%', 'Complete', (cr.total||0)>=24?SP_GREEN:SP_GOLD, '🎓');
+    // ── HS: Tab bar
+    var tabs = [
+      {k:'audit',   label:'🎓 Graduation Audit'},
+      {k:'courses', label:'📚 Course Records'},
+      {k:'remark',  label:'📝 Report Card'}
+    ];
+    h += '<div style="display:flex;gap:0;border:1.5px solid #E4EAF2;border-radius:10px;overflow:hidden">';
+    tabs.forEach(function(t){
+      var act = t.k === selTab;
+      h += '<button class="spgt-tab" data-tab="' + t.k + '" style="flex:1;padding:10px;border:none;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;background:' + (act?'#1A365E':'#F7F9FC') + ';color:' + (act?'#fff':'#7A92B0') + '">' + t.label + '</button>';
+    });
     h += '</div>';
 
-    // Graduation progress bars
-    h += '<div class="card" style="padding:18px">';
-    h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:14px">🎓 Graduation Progress — 24 Credits</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:10px">';
-    GRAD_REQS.forEach(function(req){
-      var earned = Math.round((cr[req.key]||0)*10)/10;
-      var pct = Math.min(100, Math.round(earned/req.required*100));
-      var col = pct>=100?SP_GREEN:pct>=60?SP_GOLD:SP_RED;
-      h += '<div>';
-      h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:700;color:#1A365E">' + req.icon + ' ' + esc(req.label) + '</span><span style="font-size:11px;font-weight:800;color:' + col + '">' + earned + ' / ' + req.required + ' cr</span></div>';
-      h += '<div style="background:#E4EAF2;border-radius:4px;height:7px"><div style="background:' + col + ';width:' + pct + '%;height:100%;border-radius:4px;transition:width .3s"></div></div>';
-      h += '</div>';
-    });
-    h += '</div></div>';
+    if (selTab === 'audit') {
+      // ── FULL GRADUATION AUDIT (read-only) ──────────────────────────────────
+      var courses = _SP.courses || [];
+      var trans   = (_SP.transfer || []).filter(function(t){return t.status==='Approved';});
+      var credits = getGradCredits(courses, trans);
+      var wgpa    = calcWeightedGPA(courses);
+      var ugpa    = calcGPA(courses, false);
+      var TOTAL_REQ = 24;
+      var totalEarned = Math.round((credits.total||0)*10)/10;
+      var pctDone = Math.min(100, Math.round(totalEarned/TOTAL_REQ*100));
+      var allMet  = GRAD_REQS.every(function(r){return(credits[r.key]||0)>=r.required;}) && totalEarned>=TOTAL_REQ;
+      var dist    = getDistinction(wgpa);
 
-    // Course table
-    if (_SP.courses.length) {
-      var byYear = {};
-      _SP.courses.forEach(function(c){ var y=c.year||'Unknown'; if(!byYear[y])byYear[y]=[]; byYear[y].push(c); });
-      Object.keys(byYear).sort().reverse().forEach(function(yr){
-        var yc = byYear[yr];
-        h += '<div class="card" style="padding:0;overflow:hidden">';
-        h += '<div style="background:' + SP_NAVY + ';padding:10px 16px;display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:700;color:#fff">📅 ' + esc(yr) + '</span><span style="font-size:11px;color:rgba(255,255,255,.6)">GPA: ' + calcGPA(yc).toFixed(2) + ' / W: ' + calcWeightedGPA(yc).toFixed(2) + '</span></div>';
-        h += '<table class="tbl" style="border:none"><thead><tr><th>Course</th><th>Type</th><th>Credits</th><th>Grade</th><th>Wt.Pts</th></tr></thead><tbody>';
-        yc.forEach(function(cr2){
-          var gpts = GRADE_PTS[cr2.grade]; var col2 = (gpts>=3.5)?SP_GREEN:(gpts>=2)?SP_GOLD:SP_RED;
-          var wp = getWeightedPts(cr2.grade, cr2.type);
-          var tcol = TYPE_COLOR[cr2.type]||SP_NAVY;
-          h += '<tr>';
-          h += '<td><div style="font-weight:700;font-size:12px">' + esc(cr2.title) + '</div><div style="font-size:10px;color:#7A92B0">' + esc(cr2.code||'') + '</div></td>';
-          h += '<td><span style="background:' + tcol + '18;color:' + tcol + ';border:1px solid ' + tcol + '44;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:800">' + esc(cr2.type) + '</span></td>';
-          h += '<td style="font-weight:700">' + (cr2.creditsEarned||0) + '</td>';
-          h += '<td><span style="font-size:15px;font-weight:800;color:' + col2 + '">' + esc(cr2.grade||'—') + '</span></td>';
-          h += '<td style="color:' + SP_PURPLE + ';font-weight:700">' + (wp!==null?wp.toFixed(1):'—') + '</td>';
-          h += '</tr>';
+      // Failed courses
+      var failedCourses = courses.filter(function(c){return c.grade==='F';});
+      // Mandatory alerts
+      var mandatoryAlerts = [];
+      GRAD_REQS.forEach(function(req){
+        if(!req.mandatory||!req.mandatory.length)return;
+        req.mandatory.forEach(function(m){
+          var taken = courses.some(function(c){return (c.title||'').toLowerCase().includes(m.toLowerCase())&&c.grade!=='F';});
+          if(!taken) mandatoryAlerts.push({req:req.label, course:m});
         });
-        h += '</tbody></table></div>';
       });
-    } else {
-      h += '<div class="card" style="padding:30px;text-align:center;color:#7A92B0">No course records yet. Your teacher will add them.</div>';
-    }
 
-    // Report card remark for selected term
-    var remark = _SP.remarks[selTerm] || '';
-    if (remark) {
-      h += '<div class="card" style="padding:16px;border-left:4px solid ' + SP_TEAL + '">';
-      h += '<div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Teacher Remarks — ' + selTerm + '</div>';
-      h += '<div style="font-size:13px;color:#1A365E;line-height:1.6">' + esc(remark) + '</div></div>';
+      // GPA cards
+      h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">';
+      h += spCard('Unweighted GPA', ugpa.toFixed(2), '4.0 scale', ugpa>=3.5?SP_GREEN:ugpa>=2.5?SP_GOLD:SP_RED, '📊');
+      h += spCard('Weighted GPA', wgpa.toFixed(2), dist?dist:'No distinction yet', SP_PURPLE, '⭐');
+      h += spCard('Credits Earned', totalEarned + ' / 24', Math.round(pctDone)+'% complete', pctDone>=100?SP_GREEN:SP_GOLD, '📚');
+      h += spCard('Status', allMet?'On Track':'In Progress', allMet?'All requirements met':'Keep going!', allMet?SP_GREEN:SP_GOLD, '🎓');
+      h += '</div>';
+
+      // Alerts
+      if (failedCourses.length) {
+        h += '<div style="background:#FEE2E2;border-left:4px solid #D61F31;border-radius:8px;padding:12px 16px">';
+        h += '<div style="font-size:12px;font-weight:700;color:#7F1D1D;margin-bottom:6px">⚠️ Failed Course' + (failedCourses.length>1?'s':'') + ' — No Credit Awarded</div>';
+        failedCourses.forEach(function(c){ h += '<div style="font-size:11px;color:#7F1D1D">• ' + esc(c.title||'') + ' (' + esc(c.year||'') + ') — Must repeat to earn credit</div>'; });
+        h += '</div>';
+      }
+      if (mandatoryAlerts.length) {
+        h += '<div style="background:#FEF3C7;border-left:4px solid #D97706;border-radius:8px;padding:12px 16px">';
+        h += '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:6px">⚡ Mandatory Course' + (mandatoryAlerts.length>1?'s':'') + ' Not Yet Completed</div>';
+        mandatoryAlerts.forEach(function(a){ h += '<div style="font-size:11px;color:#92400E">• ' + esc(a.course) + ' (required for ' + esc(a.req) + ')</div>'; });
+        h += '</div>';
+      }
+
+      // Big progress ring + area breakdown
+      h += '<div style="display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start">';
+      // Donut ring
+      var R = 80; var circ = 2*Math.PI*R;
+      var fill = circ * Math.min(pctDone,100) / 100;
+      h += '<div class="card" style="padding:20px;text-align:center">';
+      h += '<div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Graduation Progress</div>';
+      h += '<svg width="180" height="180" viewBox="0 0 180 180"><circle cx="90" cy="90" r="' + R + '" fill="none" stroke="#E4EAF2" stroke-width="14"/><circle cx="90" cy="90" r="' + R + '" fill="none" stroke="' + (allMet?SP_GREEN:SP_GOLD) + '" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + fill.toFixed(1) + ' ' + circ.toFixed(1) + '" transform="rotate(-90 90 90)"/>';
+      h += '<text x="90" y="84" text-anchor="middle" font-size="30" font-weight="900" fill="' + (allMet?SP_GREEN:SP_GOLD) + '" font-family="Arial">' + pctDone + '%</text>';
+      h += '<text x="90" y="102" text-anchor="middle" font-size="12" fill="#7A92B0" font-family="Arial">' + totalEarned + ' of 24 cr</text></svg>';
+      if (allMet) h += '<div style="font-size:12px;font-weight:800;color:' + SP_GREEN + ';margin-top:6px">🎉 Graduation Requirements Met!</div>';
+      h += '</div>';
+
+      // Area breakdown
+      h += '<div style="display:flex;flex-direction:column;gap:8px">';
+      GRAD_REQS.forEach(function(req){
+        var earned = Math.round((credits[req.key]||0)*10)/10;
+        var pct    = Math.min(100, Math.round(earned/req.required*100));
+        var col    = pct>=100?SP_GREEN:pct>=50?SP_GOLD:SP_RED;
+        h += '<div class="card" style="padding:12px 16px">';
+        h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+        h += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">' + esc(req.icon) + '</span><span style="font-size:12px;font-weight:700;color:#1A365E">' + esc(req.label) + '</span></div>';
+        h += '<span style="font-size:12px;font-weight:800;color:' + col + '">' + earned + ' / ' + req.required + ' cr ' + (pct>=100?'✅':'') + '</span>';
+        h += '</div>';
+        h += '<div style="background:#E4EAF2;border-radius:4px;height:8px"><div style="background:' + col + ';width:' + pct + '%;height:100%;border-radius:4px;transition:width .3s"></div></div>';
+        if (req.mandatoryNote) h += '<div style="font-size:10px;color:#7A92B0;margin-top:4px">' + esc(req.mandatoryNote) + '</div>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+
+      // Distinction tracker
+      var distinctions = [
+        {label:'Summa Cum Laude',  req:4.0, wgpaReq:4.3, col:'#FAC600', icon:'🥇'},
+        {label:'Magna Cum Laude',  req:3.8, wgpaReq:4.0, col:'#C0C0C0', icon:'🥈'},
+        {label:'Cum Laude',        req:3.5, wgpaReq:3.7, col:'#CD7F32', icon:'🥉'},
+      ];
+      h += '<div class="card" style="padding:18px">';
+      h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">🏆 Graduation Distinctions</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
+      distinctions.forEach(function(d2){
+        var achieved = wgpa >= d2.wgpaReq;
+        h += '<div style="padding:14px;border-radius:10px;background:' + (achieved?d2.col+'20':'#F7F9FC') + ';border:2px solid ' + (achieved?d2.col:'#E4EAF2') + ';text-align:center">';
+        h += '<div style="font-size:24px;margin-bottom:6px">' + d2.icon + '</div>';
+        h += '<div style="font-size:11px;font-weight:800;color:' + (achieved?'#1A365E':'#7A92B0') + '">' + esc(d2.label) + '</div>';
+        h += '<div style="font-size:10px;color:#7A92B0;margin-top:3px">WGPA ≥ ' + d2.wgpaReq + '</div>';
+        h += '<div style="font-size:11px;font-weight:700;color:' + (achieved?SP_GREEN:'#D61F31') + ';margin-top:6px">' + (achieved?'✅ Achieved':'Current: ' + wgpa.toFixed(2)) + '</div>';
+        h += '</div>';
+      });
+      h += '</div></div>';
+
+      // DE / Associate Degree
+      var deCourses  = trans.filter(function(t){return t.type==='DE'||t.type==='EC';});
+      var deTotal    = courses.filter(function(c){return c.type==='DE';}).reduce(function(s,c){return s+(parseFloat(c.creditsEarned)||0);},0);
+      var deTransfer = deCourses.reduce(function(s,t){return s+(parseFloat(t.creditsAwarded)||0);},0);
+      var deCollege  = Math.round((deTotal + deTransfer) * 3 * 10) / 10;
+      if (deTotal > 0 || deTransfer > 0) {
+        h += '<div class="card" style="padding:18px;border-left:4px solid ' + SP_PURPLE + '">';
+        h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:10px">🎓 Associate Degree Track</div>';
+        h += '<div style="font-size:11px;color:#3D5475;margin-bottom:12px">Students completing 60 college credits earn an Associate Degree alongside the AWS Diploma.</div>';
+        var assocPct = Math.min(100, Math.round(deCollege/60*100));
+        h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:700;color:#1A365E">College Credits</span><span style="font-size:12px;font-weight:800;color:' + SP_PURPLE + '">' + deCollege + ' / 60</span></div>';
+        h += '<div style="background:#E4EAF2;border-radius:6px;height:10px"><div style="background:' + SP_PURPLE + ';width:' + assocPct + '%;height:100%;border-radius:6px"></div></div>';
+        h += '</div>';
+      }
+
+      // Print button
+      h += '<div style="display:flex;justify-content:flex-end"><button id="sp-print-grad" style="padding:10px 22px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">🖨 Print Graduation Audit</button></div>';
+
+    } else if (selTab === 'courses') {
+      // ── COURSE TABLE ──────────────────────────────────────────────────────
+      var courses2 = _SP.courses || [];
+      if (!courses2.length) {
+        h += '<div class="card" style="padding:30px;text-align:center;color:#7A92B0">No course records yet. Your teacher will add them.</div>';
+      } else {
+        var byYear = {};
+        courses2.forEach(function(c){ var y=c.year||'Unknown'; if(!byYear[y])byYear[y]=[]; byYear[y].push(c); });
+        Object.keys(byYear).sort().reverse().forEach(function(yr){
+          var yc = byYear[yr];
+          h += '<div class="card" style="padding:0;overflow:hidden">';
+          h += '<div style="background:#1A365E;padding:10px 16px;display:flex;justify-content:space-between"><span style="font-size:13px;font-weight:700;color:#fff">📅 ' + esc(yr) + '</span><span style="font-size:11px;color:rgba(255,255,255,.6)">GPA: ' + calcGPA(yc).toFixed(2) + ' · W: ' + calcWeightedGPA(yc).toFixed(2) + '</span></div>';
+          h += '<table class="tbl" style="border:none"><thead><tr><th>Course</th><th>Type</th><th>Area</th><th>Credits</th><th>Grade</th><th>Wtd GPA</th></tr></thead><tbody>';
+          yc.forEach(function(cr2){
+            var gpts = GRADE_PTS[cr2.grade]; var gcol=(gpts>=3.5)?SP_GREEN:(gpts>=2)?SP_GOLD:SP_RED;
+            var wp = getWeightedPts(cr2.grade, cr2.type);
+            var tcol = TYPE_COLOR[cr2.type]||SP_NAVY;
+            h += '<tr>';
+            h += '<td><div style="font-weight:700;font-size:12px">' + esc(cr2.title) + '</div>' + (cr2.code?'<div style="font-size:10px;color:#7A92B0">'+esc(cr2.code)+'</div>':'') + '</td>';
+            h += '<td><span style="background:'+tcol+'18;color:'+tcol+';border:1px solid '+tcol+'44;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:800">'+esc(cr2.type||'STD')+'</span></td>';
+            h += '<td style="font-size:11px;color:#7A92B0">'+esc(cr2.area||'')+'</td>';
+            h += '<td style="font-weight:700">'+esc(String(cr2.creditsEarned||0))+'</td>';
+            h += '<td><span style="font-size:15px;font-weight:800;color:'+gcol+'">'+esc(cr2.grade||'—')+'</span></td>';
+            h += '<td style="color:'+SP_PURPLE+';font-weight:700">'+(wp!==null?wp.toFixed(1):'—')+'</td>';
+            h += '</tr>';
+          });
+          h += '</tbody></table></div>';
+        });
+      }
+    } else {
+      // ── REPORT CARD REMARKS ───────────────────────────────────────────────
+      h += '<div style="display:flex;gap:8px;margin-bottom:6px">';
+      ['Term 1','Term 2','Term 3','Term 4'].forEach(function(t){
+        var act = t===selTerm;
+        h += '<button class="spgt-term" data-term="'+t+'" style="padding:6px 14px;border:1.5px solid '+(act?SP_RED:'#E4EAF2')+';background:'+(act?SP_RED:'#fff')+';color:'+(act?'#fff':'#3D5475')+';border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">'+t+'</button>';
+      });
+      h += '</div>';
+      var remark = _SP.remarks[selTerm] || '';
+      if (remark) {
+        h += '<div class="card" style="padding:18px;border-left:4px solid '+SP_TEAL+'">';
+        h += '<div style="font-size:11px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Teacher / Counselor Remarks — '+esc(selTerm)+'</div>';
+        h += '<div style="font-size:14px;color:#1A365E;line-height:1.7">'+esc(remark)+'</div>';
+        h += '</div>';
+      } else {
+        h += '<div class="card" style="padding:30px;text-align:center;color:#7A92B0">No remarks entered for '+esc(selTerm)+' yet.</div>';
+      }
     }
 
   } else if (isMS) {
-    // MS grades from localStorage
+    // ── MIDDLE SCHOOL ─────────────────────────────────────────────────────────
+    h += '<div style="display:flex;gap:8px;margin-bottom:6px">';
+    ['Term 1','Term 2','Term 3','Term 4'].forEach(function(t){
+      var act=t===selTerm;
+      h += '<button class="spgt-term" data-term="'+t+'" style="padding:6px 14px;border:1.5px solid '+(act?SP_RED:'#E4EAF2')+';background:'+(act?SP_RED:'#fff')+';color:'+(act?'#fff':'#3D5475')+';border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">'+t+'</button>';
+    });
+    h += '</div>';
     h += '<div class="card" style="padding:18px">';
-    h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📋 ' + esc(s.grade) + ' · ' + selTerm + '</div>';
-    var msData = {};
-    try { var d = JSON.parse(localStorage.getItem('aws_ms_records_v1')||'{}'); msData = d[s.id + '_' + selTerm] || {}; } catch(e) {}
-    if (Object.keys(msData).length) {
+    h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📋 '+esc(s.grade)+' · '+esc(selTerm)+'</div>';
+    var msData={};
+    try{var d2=JSON.parse(localStorage.getItem('aws_ms_records_v1')||'{}');msData=d2[s.id+'_'+selTerm]||{};}catch(e){}
+    if(Object.keys(msData).length){
       h += '<table class="tbl"><thead><tr><th>Subject</th><th>Grade</th><th>Effort</th></tr></thead><tbody>';
       LS_MS_SUBJ.forEach(function(subj){
-        var g = msData[subj+'_g'] || '—';
-        var ef = msData[subj+'_e'] || '—';
-        var gcol = g.startsWith('A')?SP_GREEN:g.startsWith('B')?'#0EA5E9':g.startsWith('C')?SP_GOLD:g!=='—'?SP_RED:'#7A92B0';
-        h += '<tr><td style="font-weight:700">' + esc(subj) + '</td><td style="font-size:14px;font-weight:800;color:' + gcol + '">' + esc(g) + '</td><td style="color:#7A92B0">' + esc(ef) + '</td></tr>';
+        var g=msData[subj+'_g']||'—'; var ef=msData[subj+'_e']||'—';
+        var gcol=g.startsWith('A')?SP_GREEN:g.startsWith('B')?'#0EA5E9':g.startsWith('C')?SP_GOLD:g!=='—'?SP_RED:'#7A92B0';
+        h += '<tr><td style="font-weight:700">'+esc(subj)+'</td><td style="font-size:14px;font-weight:800;color:'+gcol+'">'+esc(g)+'</td><td style="color:#7A92B0">'+esc(ef)+'</td></tr>';
       });
       h += '</tbody></table>';
     } else {
-      h += '<div style="text-align:center;padding:20px;color:#7A92B0;font-size:12px">Grades for ' + selTerm + ' have not been entered yet.</div>';
+      h += '<div style="text-align:center;padding:20px;color:#7A92B0;font-size:12px">Grades for '+esc(selTerm)+' have not been entered yet.</div>';
     }
     h += '</div>';
-
-    // Narrative
-    var narr = {};
-    try { var nd = JSON.parse(localStorage.getItem('aws_elem_narrative_v1')||'{}'); narr = nd[s.id + '_' + selTerm] || {}; } catch(e) {}
-    if (narr.general || narr.strengths) {
-      h += '<div class="card" style="padding:18px">';
-      h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📝 Teacher Narrative — ' + selTerm + '</div>';
-      if (narr.general) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:#7A92B0;text-transform:uppercase;margin-bottom:4px">General Comments</div><div style="font-size:12px;color:#1A365E;line-height:1.6">' + esc(narr.general) + '</div></div>';
-      if (narr.strengths) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:' + SP_GREEN + ';text-transform:uppercase;margin-bottom:4px">Strengths</div><div style="font-size:12px;color:#1A365E">' + esc(narr.strengths) + '</div></div>';
-      if (narr.growth) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:' + SP_GOLD + ';text-transform:uppercase;margin-bottom:4px">Areas for Growth</div><div style="font-size:12px;color:#1A365E">' + esc(narr.growth) + '</div></div>';
-      if (narr.goals) h += '<div><div style="font-size:10px;font-weight:700;color:' + SP_PURPLE + ';text-transform:uppercase;margin-bottom:4px">Goals for Next Term</div><div style="font-size:12px;color:#1A365E">' + esc(narr.goals) + '</div></div>';
+    var narr={};
+    try{var nd=JSON.parse(localStorage.getItem('aws_elem_narrative_v1')||'{}');narr=nd[s.id+'_'+selTerm]||{};}catch(e){}
+    if(narr.general||narr.strengths){
+      h += '<div class="card" style="padding:18px"><div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📝 Teacher Narrative — '+esc(selTerm)+'</div>';
+      if(narr.general) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:#7A92B0;text-transform:uppercase;margin-bottom:4px">General Comments</div><div style="font-size:12px;color:#1A365E;line-height:1.6">'+esc(narr.general)+'</div></div>';
+      if(narr.strengths) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:'+SP_GREEN+';text-transform:uppercase;margin-bottom:4px">Strengths</div><div style="font-size:12px;color:#1A365E">'+esc(narr.strengths)+'</div></div>';
+      if(narr.growth) h += '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:'+SP_GOLD+';text-transform:uppercase;margin-bottom:4px">Areas for Growth</div><div style="font-size:12px;color:#1A365E">'+esc(narr.growth)+'</div></div>';
+      if(narr.goals) h += '<div><div style="font-size:10px;font-weight:700;color:'+SP_PURPLE+';text-transform:uppercase;margin-bottom:4px">Goals for Next Term</div><div style="font-size:12px;color:#1A365E">'+esc(narr.goals)+'</div></div>';
       h += '</div>';
     }
   } else {
-    // Elementary — progress report
-    h += '<div class="card" style="padding:18px">';
-    h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📋 Progress Report — ' + esc(s.grade) + ' · ' + selTerm + '</div>';
-    var elem = {};
-    try { var ed = JSON.parse(localStorage.getItem('aws_elem_records_v1')||'{}'); elem = ed[s.id + '_' + selTerm] || {}; } catch(e) {}
-    var domains = s.grade === 'Pre-K' ? LS_PREK_DOMAINS : LS_ELEM_SUBJ;
-    if (Object.keys(elem).length) {
+    // ── ELEMENTARY ────────────────────────────────────────────────────────────
+    h += '<div style="display:flex;gap:8px;margin-bottom:6px">';
+    ['Term 1','Term 2','Term 3','Term 4'].forEach(function(t){
+      var act=t===selTerm;
+      h += '<button class="spgt-term" data-term="'+t+'" style="padding:6px 14px;border:1.5px solid '+(act?SP_RED:'#E4EAF2')+';background:'+(act?SP_RED:'#fff')+';color:'+(act?'#fff':'#3D5475')+';border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">'+t+'</button>';
+    });
+    h += '</div>';
+    h += '<div class="card" style="padding:18px"><div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:12px">📋 Progress Report — '+esc(s.grade)+' · '+esc(selTerm)+'</div>';
+    var elem={};
+    try{var ed=JSON.parse(localStorage.getItem('aws_elem_records_v1')||'{}');elem=ed[s.id+'_'+selTerm]||{};}catch(e){}
+    var domains=s.grade==='Pre-K'?LS_PREK_DOMAINS:LS_ELEM_SUBJ;
+    if(Object.keys(elem).length){
       h += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">';
       domains.forEach(function(d2){
-        var v = elem[d2] || '0';
-        var lv = LS_LEVELS[v] || LS_LEVELS['0'];
-        h += '<div style="padding:12px;border-radius:10px;background:' + lv.bg + ';border:1px solid ' + lv.col + '44">';
-        h += '<div style="font-size:11px;font-weight:700;color:' + lv.col + ';margin-bottom:4px">' + esc(d2) + '</div>';
-        h += '<div style="font-size:22px;font-weight:900;color:' + lv.col + '">' + v + '</div>';
-        h += '<div style="font-size:10px;color:' + lv.col + '">' + lv.label + '</div>';
-        h += '</div>';
+        var v=elem[d2]||'0'; var lv=LS_LEVELS[v]||LS_LEVELS['0'];
+        h += '<div style="padding:12px;border-radius:10px;background:'+lv.bg+';border:1px solid '+lv.col+'44"><div style="font-size:11px;font-weight:700;color:'+lv.col+';margin-bottom:4px">'+esc(d2)+'</div><div style="font-size:22px;font-weight:900;color:'+lv.col+'">'+v+'</div><div style="font-size:10px;color:'+lv.col+'">'+lv.label+'</div></div>';
       });
       h += '</div>';
     } else {
-      h += '<div style="text-align:center;padding:20px;color:#7A92B0;font-size:12px">Progress report for ' + selTerm + ' has not been entered yet.</div>';
+      h += '<div style="text-align:center;padding:20px;color:#7A92B0;font-size:12px">Progress report for '+esc(selTerm)+' has not been entered yet.</div>';
     }
     h += '</div>';
   }
@@ -8476,14 +8872,26 @@ function spRenderGrades(c) {
   h += '</div>';
   c.innerHTML = h;
 
-  c.querySelectorAll('.sp-term-btn').forEach(function(btn){
-    btn.addEventListener('click', function(){ window._spGradeTerm = btn.dataset.term; spRenderGrades(c); });
+  // Wire tab buttons
+  c.querySelectorAll('.spgt-tab').forEach(function(b){
+    b.addEventListener('click', function(){ window._spGradeTab = b.dataset.tab; spRenderGrades(c); });
   });
+  c.querySelectorAll('.spgt-term').forEach(function(b){
+    b.addEventListener('click', function(){ window._spGradeTerm = b.dataset.term; spRenderGrades(c); });
+  });
+
+  // Print graduation audit
+  var printBtn = document.getElementById('sp-print-grad');
+  if (printBtn) {
+    printBtn.addEventListener('click', function(){
+      var stu = _SP.student || {};
+      var stuObj = Object.assign({}, stu, {id: stu.id || stu.studentId});
+      printGraduationAudit(stuObj, _SP.courses||[], (_SP.transfer||[]).filter(function(t){return t.status==='Approved';}),
+        getGradCredits(_SP.courses||[], (_SP.transfer||[]).filter(function(t){return t.status==='Approved';})), {});
+    });
+  }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// TAB 3: ATTENDANCE
-// ══════════════════════════════════════════════════════════════════════════════
 function spRenderAttend(c) {
   var rate = spAttendRate();
   var attCol = rate >= 95 ? SP_GREEN : rate >= 85 ? SP_GOLD : SP_RED;
@@ -8582,8 +8990,9 @@ function spRenderAttend(c) {
 // TAB 4: ASSIGNMENTS
 // ══════════════════════════════════════════════════════════════════════════════
 function spRenderAssign(c) {
-  var sid = _currentUser && _currentUser.studentId || '';
-  var today = new Date().toISOString().slice(0,10);
+  var sid  = _currentUser && _currentUser.studentId || '';
+  var iid  = _SP.student && _SP.student.id ? String(_SP.student.id) : '';
+  var today= new Date().toISOString().slice(0,10);
   var filter = window._spAssignFilter || 'all';
 
   var assigns = _SP.atAssigns.map(function(a){
@@ -8591,124 +9000,242 @@ function spRenderAssign(c) {
     return Object.assign({}, a, { _sub: sub });
   });
 
+  var counts = {
+    all:       assigns.length,
+    pending:   assigns.filter(function(a){return !['Turned In','Late'].includes(a._sub.status||'')&&(!a.dueDate||a.dueDate>=today);}).length,
+    overdue:   assigns.filter(function(a){return !['Turned In','Late'].includes(a._sub.status||'')&&a.dueDate&&a.dueDate<today;}).length,
+    submitted: assigns.filter(function(a){return ['Turned In','Late'].includes(a._sub.status||'');}).length
+  };
+
   var filtered = assigns.filter(function(a){
-    if (filter === 'pending') return !['Turned In'].includes(a._sub.status) && (!a.dueDate || a.dueDate >= today);
-    if (filter === 'submitted') return ['Turned In','Late'].includes(a._sub.status);
-    if (filter === 'overdue') return !['Turned In'].includes(a._sub.status) && a.dueDate && a.dueDate < today;
+    var submitted = ['Turned In','Late'].includes(a._sub.status||'');
+    var isOverdue = !submitted && a.dueDate && a.dueDate < today;
+    if (filter === 'pending')   return !submitted && !isOverdue;
+    if (filter === 'overdue')   return isOverdue;
+    if (filter === 'submitted') return submitted;
     return true;
-  }).sort(function(a,b){ return (a.dueDate||'9').localeCompare(b.dueDate||'9'); });
+  }).sort(function(a,b){
+    // Overdue first, then by due date, then no due date last
+    var aOver = !['Turned In','Late'].includes(a._sub.status||'') && a.dueDate && a.dueDate < today;
+    var bOver = !['Turned In','Late'].includes(b._sub.status||'') && b.dueDate && b.dueDate < today;
+    if (aOver && !bOver) return -1;
+    if (!aOver && bOver) return 1;
+    return (a.dueDate||'9').localeCompare(b.dueDate||'9');
+  });
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
   h += '<div style="font-size:18px;font-weight:800;color:#1A365E">📝 My Assignments</div>';
-  h += '</div>';
 
   // Filter tabs
-  var filters = [
-    {k:'all', label:'All (' + assigns.length + ')'},
-    {k:'pending', label:'Pending (' + assigns.filter(function(a){return !['Turned In'].includes(a._sub.status)&&(!a.dueDate||a.dueDate>=today);}).length + ')'},
-    {k:'overdue', label:'Overdue (' + spOverdueAssigns().length + ')'},
-    {k:'submitted', label:'Submitted (' + assigns.filter(function(a){return ['Turned In','Late'].includes(a._sub.status);}).length + ')'},
-  ];
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-  filters.forEach(function(f){
+  [
+    {k:'all',       label:'All',        count:counts.all,       col:SP_NAVY},
+    {k:'pending',   label:'Pending',    count:counts.pending,   col:'#0EA5E9'},
+    {k:'overdue',   label:'Overdue',    count:counts.overdue,   col:SP_RED},
+    {k:'submitted', label:'Submitted',  count:counts.submitted, col:SP_GREEN},
+  ].forEach(function(f){
     var act = f.k === filter;
-    h += '<button class="sp-af-btn" data-f="' + f.k + '" style="padding:6px 14px;border:1.5px solid ' + (act?SP_RED:'#E4EAF2') + ';background:' + (act?SP_RED:'#fff') + ';color:' + (act?'#fff':'#3D5475') + ';border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">' + f.label + '</button>';
+    h += '<button class="sp-af-btn" data-f="'+f.k+'" style="padding:7px 16px;border:1.5px solid '+(act?f.col:'#E4EAF2')+';background:'+(act?f.col:'#fff')+';color:'+(act?'#fff':'#3D5475')+';border-radius:9px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">';
+    h += f.label + ' <span style="background:rgba(255,255,255,.25);padding:1px 7px;border-radius:10px;font-size:10px;margin-left:4px">'+f.count+'</span></button>';
   });
   h += '</div>';
 
   if (!filtered.length) {
-    h += '<div class="card" style="padding:30px;text-align:center;color:#7A92B0">No assignments in this category.</div>';
+    var emptyMsgs = {
+      all: '🎉 No assignments yet. Check back soon!',
+      pending: '✅ No pending assignments — you are all caught up!',
+      overdue: '🎉 No overdue assignments!',
+      submitted: '📝 No submitted assignments yet.'
+    };
+    h += '<div class="card" style="padding:40px;text-align:center"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px;font-weight:700;color:#1A365E">'+esc(emptyMsgs[filter]||'Nothing here.')+'</div></div>';
   } else {
     filtered.forEach(function(a){
       var sub = a._sub;
-      var status = sub.status || 'Assigned';
-      var isOverdue = !['Turned In','Late'].includes(status) && a.dueDate && a.dueDate < today;
-      var statusColors = {
-        'Turned In': {bg:'#DCFCE7', col:SP_GREEN, icon:'✅'},
-        'Late':      {bg:'#FEF3C7', col:SP_GOLD,  icon:'⚠️'},
-        'Missing':   {bg:'#FEE2E2', col:SP_RED,   icon:'❌'},
-        'Assigned':  {bg:'#DBEAFE', col:'#1E40AF', icon:'📋'},
-      };
-      var sc = statusColors[isOverdue?'Missing':status] || statusColors['Assigned'];
-      var score = sub.score !== undefined && sub.score !== '' ? sub.score : null;
+      var subStatus = sub.status || 'Assigned';
+      var isOver = !['Turned In','Late'].includes(subStatus) && a.dueDate && a.dueDate < today;
+      var displayStatus = isOver ? 'Overdue' : subStatus;
       var daysLeft = a.dueDate ? Math.ceil((new Date(a.dueDate) - new Date()) / 86400000) : null;
+      var score = sub.score !== undefined && sub.score !== '' ? sub.score : null;
 
-      h += '<div class="card" style="padding:16px;border-left:4px solid ' + sc.col + '">';
-      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">';
+      var sCols = {
+        'Turned In': {bg:'#DCFCE7', col:SP_GREEN,   icon:'✅', border:SP_GREEN},
+        'Late':      {bg:'#FEF3C7', col:SP_GOLD,    icon:'⏰', border:SP_GOLD},
+        'Overdue':   {bg:'#FEE2E2', col:SP_RED,     icon:'🚨', border:SP_RED},
+        'Missing':   {bg:'#FEE2E2', col:SP_RED,     icon:'❌', border:SP_RED},
+        'Assigned':  {bg:'#DBEAFE', col:'#1E40AF',  icon:'📋', border:'#3B82F6'},
+        'Resubmit':  {bg:'#FDF4FF', col:'#7C3AED',  icon:'🔄', border:'#A855F7'},
+      };
+      var sc = sCols[displayStatus] || sCols['Assigned'];
+
+      h += '<div class="card" style="padding:0;overflow:hidden;border-left:4px solid '+sc.border+'">';
+
+      // Header
+      h += '<div style="padding:14px 18px 10px;border-bottom:1px solid #F0F4FA">';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">';
       h += '<div style="flex:1">';
-      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-      h += '<span style="font-size:14px;font-weight:800;color:#1A365E">' + esc(a.title) + '</span>';
-      h += '<span style="background:' + sc.bg + ';color:' + sc.col + ';padding:2px 8px;border-radius:10px;font-size:9px;font-weight:800">' + sc.icon + ' ' + esc(isOverdue?'Overdue':status) + '</span>';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">';
+      h += '<span style="font-size:15px;font-weight:800;color:#1A365E">'+esc(a.title)+'</span>';
+      h += '<span style="background:'+sc.bg+';color:'+sc.col+';padding:2px 10px;border-radius:10px;font-size:10px;font-weight:800">'+sc.icon+' '+esc(displayStatus)+'</span>';
+      if (a.type) h += '<span style="background:#F7F9FC;color:#7A92B0;padding:2px 8px;border-radius:6px;font-size:9px;font-weight:700">'+esc(a.type)+'</span>';
       h += '</div>';
-      h += '<div style="font-size:11px;color:#7A92B0">' + esc(a.subject||'') + (a.type?' · '+a.type:'') + (a.maxScore?' · Max: '+a.maxScore+' pts':'') + '</div>';
+      h += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
+      if (a.subject) h += '<span style="font-size:11px;color:#7A92B0">📚 '+esc(a.subject)+'</span>';
+      if (a.division) h += '<span style="font-size:11px;color:#7A92B0">🏫 '+esc(a.division)+'</span>';
+      if (a.maxScore) h += '<span style="font-size:11px;color:#7A92B0">📊 '+esc(String(a.maxScore))+' pts max</span>';
       if (a.dueDate) {
-        var dayStr = daysLeft === null ? '' : daysLeft < 0 ? 'Overdue by ' + Math.abs(daysLeft) + 'd' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Due tomorrow' : 'Due in ' + daysLeft + 'd';
-        h += '<div style="font-size:11px;font-weight:700;color:' + (isOverdue?SP_RED:daysLeft<=1?SP_GOLD:SP_NAVY) + ';margin-top:3px">📅 ' + esc(a.dueDate) + (dayStr?' · '+dayStr:'') + '</div>';
+        var dayStr = daysLeft===null?'':daysLeft<0?'Overdue by '+Math.abs(daysLeft)+'d':daysLeft===0?'Due today!':daysLeft===1?'Due tomorrow':'Due in '+daysLeft+'d';
+        var dayCol = isOver?SP_RED:daysLeft<=1?SP_GOLD:SP_NAVY;
+        h += '<span style="font-size:11px;font-weight:700;color:'+dayCol+'">📅 '+esc(a.dueDate)+(dayStr?' ('+dayStr+')':'')+'</span>';
       }
-      if (a.instructions) h += '<div style="font-size:11px;color:#3D5475;margin-top:6px;line-height:1.5">' + esc(a.instructions.slice(0,200)) + (a.instructions.length>200?'...':'') + '</div>';
       h += '</div>';
+      if (a.instructions) {
+        h += '<div style="margin-top:8px;font-size:12px;color:#3D5475;line-height:1.6;background:#F7F9FC;padding:8px 12px;border-radius:7px">'+esc(a.instructions.slice(0,300))+(a.instructions.length>300?'…':'')+'</div>';
+      }
+      h += '</div>';
+
+      // Score (if graded)
       if (score !== null) {
-        var pct = a.maxScore ? Math.round(score/a.maxScore*100) : null;
-        h += '<div style="text-align:center;padding:10px 16px;background:' + (pct>=90?'#DCFCE7':pct>=70?'#FEF3C7':'#FEE2E2') + ';border-radius:10px;min-width:80px">';
-        h += '<div style="font-size:22px;font-weight:900;color:' + (pct>=90?SP_GREEN:pct>=70?SP_GOLD:SP_RED) + '">' + score + '</div>';
-        h += '<div style="font-size:10px;color:#7A92B0">' + (a.maxScore?('of '+a.maxScore):'pts') + '</div>';
-        if (pct!==null) h += '<div style="font-size:10px;font-weight:700;color:#1A365E">' + pct + '%</div>';
+        var pct = a.maxScore ? Math.round(parseFloat(score)/parseFloat(a.maxScore)*100) : null;
+        var sCol = pct>=90?SP_GREEN:pct>=70?SP_GOLD:SP_RED;
+        h += '<div style="text-align:center;padding:12px 18px;background:'+(pct>=90?'#DCFCE7':pct>=70?'#FEF3C7':'#FEE2E2')+';border-radius:10px;min-width:90px;flex-shrink:0">';
+        h += '<div style="font-size:26px;font-weight:900;color:'+sCol+'">'+score+'</div>';
+        h += '<div style="font-size:10px;color:#7A92B0;margin-top:2px">'+(a.maxScore?'of '+a.maxScore:'pts')+'</div>';
+        if (pct!==null) h += '<div style="font-size:12px;font-weight:800;color:'+sCol+'">'+pct+'%</div>';
         h += '</div>';
       }
-      h += '</div>';
+      h += '</div></div>';
 
+      // Teacher feedback
       if (sub.teacherNote) {
-        h += '<div style="background:#F0F9FF;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#0369A1"><strong>Teacher feedback:</strong> ' + esc(sub.teacherNote) + '</div>';
+        h += '<div style="padding:10px 18px;background:#F0F9FF;border-top:1px solid #BAE6FD">';
+        h += '<span style="font-size:10px;font-weight:700;color:#0369A1;text-transform:uppercase;letter-spacing:.5px">💬 Teacher Feedback: </span>';
+        h += '<span style="font-size:12px;color:#0C4A6E">'+esc(sub.teacherNote)+'</span>';
+        h += '</div>';
       }
 
-      // Submit form if not yet submitted
-      if (!['Turned In'].includes(status)) {
-        h += '<div style="border-top:1px solid #F0F4FA;padding-top:10px;margin-top:4px">';
-        h += '<div style="font-size:11px;font-weight:700;color:#1A365E;margin-bottom:8px">Submit Your Work:</div>';
-        h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">';
-        h += '<div style="flex:1;min-width:200px"><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">Link to Work (Google Doc, Drive, etc.)</label>';
-        h += '<input id="sp-link-' + a.id + '" class="fi" placeholder="https://..." value="' + esc(sub.linkUrl||'') + '" style="margin:0"/></div>';
-        h += '<div style="flex:1;min-width:200px"><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">Note to Teacher (optional)</label>';
-        h += '<input id="sp-note-' + a.id + '" class="fi" placeholder="Any notes..." style="margin:0"/></div>';
-        h += '<button class="sp-submit-btn" data-aid="' + a.id + '" style="padding:9px 18px;background:' + SP_GREEN + ';color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap">✅ Turn In</button>';
+      // Previously submitted file/link
+      if (sub.fileUrl || sub.linkUrl) {
+        h += '<div style="padding:8px 18px;background:#F0FDF4;border-top:1px solid #BBF7D0;display:flex;gap:10px;flex-wrap:wrap">';
+        h += '<span style="font-size:10px;font-weight:700;color:#0E6B3B">Your submission: </span>';
+        if (sub.fileUrl) h += '<a href="'+esc(sub.fileUrl)+'" target="_blank" style="font-size:11px;color:#0369A1;font-weight:700;text-decoration:none">📎 View uploaded file</a>';
+        if (sub.linkUrl) h += '<a href="'+esc(sub.linkUrl)+'" target="_blank" style="font-size:11px;color:#0369A1;font-weight:700;text-decoration:none">🔗 View work link</a>';
+        h += '</div>';
+      }
+
+      // Submit form — show for unsubmitted or resubmit
+      var canSubmit = !['Turned In'].includes(subStatus) || subStatus === 'Resubmit';
+      if (canSubmit) {
+        h += '<div style="padding:14px 18px;border-top:2px dashed #E4EAF2;background:#F7F9FC">';
+        h += '<div style="font-size:12px;font-weight:800;color:#1A365E;margin-bottom:10px">'+(subStatus==='Resubmit'?'🔄 Resubmit Your Work':'📤 Turn In Your Work')+'</div>';
+        h += '<div style="display:flex;flex-direction:column;gap:8px">';
+        // Link input
+        h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">🔗 Paste a Link (Google Doc, Slides, Drive folder, website…)</label>';
+        h += '<input id="sp-link-'+a.id+'" class="fi" placeholder="https://docs.google.com/..." value="'+esc(sub.linkUrl||'')+'" style="margin:0"/></div>';
+        // File upload
+        h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">📎 Or Upload a File (PDF, Word, image — max 10 MB)</label>';
+        h += '<div id="sp-file-drop-'+a.id+'" style="border:2px dashed #C4D4E8;border-radius:9px;padding:14px;text-align:center;cursor:pointer;background:#fff;transition:background .2s">';
+        h += '<div id="sp-file-label-'+a.id+'" style="font-size:12px;color:#7A92B0">📁 Click to choose file or drag & drop here</div>';
+        h += '<input type="file" id="sp-file-'+a.id+'" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp4,.zip" style="display:none"/>';
+        h += '</div></div>';
+        // Note
+        h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">📝 Note to Teacher (optional)</label>';
+        h += '<input id="sp-note-'+a.id+'" class="fi" placeholder="Any context or comments for your teacher..." style="margin:0"/></div>';
+        // Submit button
+        h += '<button class="sp-submit-btn" data-aid="'+a.id+'" style="padding:11px 24px;background:'+SP_GREEN+';color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;width:100%;font-family:Poppins,sans-serif;margin-top:4px">✅ Turn In Assignment</button>';
         h += '</div></div>';
       }
-      h += '</div>';
+
+      h += '</div>'; // end card
     });
   }
 
   h += '</div>';
   c.innerHTML = h;
 
+  // Wire filter buttons
   c.querySelectorAll('.sp-af-btn').forEach(function(btn){
     btn.addEventListener('click', function(){ window._spAssignFilter = btn.dataset.f; spRenderAssign(c); });
   });
 
+  // Wire file drop zones
+  c.querySelectorAll('[id^="sp-file-drop-"]').forEach(function(zone){
+    var aid = zone.id.replace('sp-file-drop-','');
+    var input = document.getElementById('sp-file-'+aid);
+    var label = document.getElementById('sp-file-label-'+aid);
+    if (!input) return;
+    zone.addEventListener('click', function(){ input.click(); });
+    zone.addEventListener('dragover', function(e){ e.preventDefault(); zone.style.background='#EEF3FF'; zone.style.borderColor='#1A365E'; });
+    zone.addEventListener('dragleave', function(){ zone.style.background='#fff'; zone.style.borderColor='#C4D4E8'; });
+    zone.addEventListener('drop', function(e){
+      e.preventDefault(); zone.style.background='#fff'; zone.style.borderColor='#C4D4E8';
+      if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; label.textContent = '📎 '+e.dataTransfer.files[0].name; }
+    });
+    input.addEventListener('change', function(){
+      if (input.files.length) { label.textContent = '📎 '+input.files[0].name+' ('+Math.round(input.files[0].size/1024)+' KB)'; }
+    });
+  });
+
+  // Wire submit buttons
   c.querySelectorAll('.sp-submit-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var aid = btn.dataset.aid;
-      var link = (document.getElementById('sp-link-' + aid)||{value:''}).value.trim();
-      var note = (document.getElementById('sp-note-' + aid)||{value:''}).value.trim();
-      btn.disabled = true; btn.textContent = 'Submitting...';
-      var sub2 = { assignId: aid, linkUrl: link, note: note };
-      // Save locally — use AWS format studentId as key
-      var subSid = _currentUser && _currentUser.studentId || sid;
-      var subKey = aid + '_' + subSid;
-      _SP.atSubs[subKey] = Object.assign(_SP.atSubs[subKey]||{}, { status:'Turned In', submittedDate: today, linkUrl: link, studentNote: note });
-      spSave('data', _SP);
-      // Sync to sheet
-      spRequest('studentSubmitAssign', sub2, function(){
-        toast('Assignment submitted ✓', 'ok');
-        spRenderAssign(c);
-      });
+      var link = (document.getElementById('sp-link-'+aid)||{value:''}).value.trim();
+      var note = (document.getElementById('sp-note-'+aid)||{value:''}).value.trim();
+      var fileInput = document.getElementById('sp-file-'+aid);
+      var file = fileInput && fileInput.files.length ? fileInput.files[0] : null;
+
+      if (!link && !file) { toast('Please provide a link or upload a file to turn in', 'err'); return; }
+      if (file && file.size > 10*1024*1024) { toast('File is too large — maximum 10 MB', 'err'); return; }
+
+      btn.disabled = true; btn.textContent = file ? '⏳ Uploading…' : '⏳ Submitting…';
+
+      function doSubmit(fileUrl) {
+        var payload = { assignId: aid, linkUrl: link, note: note, fileUrl: fileUrl||'' };
+        // Save locally immediately
+        var subSid = _currentUser && _currentUser.studentId || '';
+        var subKey = aid + '_' + subSid;
+        _SP.atSubs[subKey] = Object.assign(_SP.atSubs[subKey]||{}, {
+          status:'Turned In', submittedDate: today, linkUrl: link,
+          fileUrl: fileUrl||'', studentNote: note
+        });
+        spSave('data', _SP);
+        // Sync to Sheet
+        spRequest('studentSubmitAssign', payload, function(d){
+          toast('✅ Assignment turned in!', 'ok');
+          // Update local fileUrl if server returned one
+          if (d && d.fileUrl) { _SP.atSubs[subKey].fileUrl = d.fileUrl; spSave('data', _SP); }
+          spRenderAssign(c);
+        });
+      }
+
+      if (file) {
+        var reader = new FileReader();
+        reader.onload = function(e){
+          var b64 = e.target.result.split(',')[1];
+          doSubmit(''); // submit with base64 in payload
+          // Override payload with file data
+          var payload2 = { assignId: aid, linkUrl: link, note: note, fileUrl: '',
+                          base64: b64, mimeType: file.type, fileName: file.name };
+          spRequest('studentSubmitAssign', payload2, function(d){
+            if (d && d.fileUrl) {
+              var subSid2 = _currentUser && _currentUser.studentId || '';
+              var subKey2 = aid + '_' + subSid2;
+              _SP.atSubs[subKey2].fileUrl = d.fileUrl;
+              spSave('data', _SP);
+              toast('✅ File uploaded & assignment turned in!', 'ok');
+            }
+            spRenderAssign(c);
+          });
+        };
+        reader.onerror = function(){ toast('Could not read file — try pasting a link instead', 'err'); btn.disabled=false; btn.textContent='✅ Turn In Assignment'; };
+        reader.readAsDataURL(file);
+      } else {
+        doSubmit('');
+      }
     });
   });
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// TAB 5: MY PROJECT (AWSC-27)
-// ══════════════════════════════════════════════════════════════════════════════
 function spRenderProject(c) {
   var assigns = _SP.ptAssign;
   var evals   = _SP.ptEvals;
