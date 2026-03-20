@@ -179,12 +179,18 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 
 /* ── Student Portal ─────────────────────────────── */
 #app[data-role="student"] .ni:not(.sp-ni){ display:none!important; }
-#app[data-role="student"] #new-btn,
-#app[data-role="student"] #add-existing-btn,
+#app[data-role="student"] .sbsec { display:none!important; }
+#app[data-role="student"] .ni-parent { display:none!important; }
+#app[data-role="student"] .ni-child { display:none!important; }
 #app[data-role="student"] #sync-all-btn,
-#app[data-role="student"] #refresh-btn { display:none!important; }
+#app[data-role="student"] #refresh-btn,
+#app[data-role="student"] #new-btn,
+#app[data-role="student"] #add-existing-btn { display:none!important; }
+#app[data-role="student"] .sbyr { display:none!important; }
+#app[data-role="student"] #sb-yr { display:none!important; }
 #sp-login-btn{width:100%;padding:12px;background:#1A365E;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;margin-top:4px;}
 #sp-login-btn:hover{background:#0F2240;}
+@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
@@ -1200,6 +1206,10 @@ function sheetFetch(){
         if(d.pt){
           if(Array.isArray(d.pt.assignments)&&d.pt.assignments.length){pts("a",d.pt.assignments);}
           if(Array.isArray(d.pt.evaluations)&&d.pt.evaluations.length){pts("e",d.pt.evaluations);}
+        }
+        // Skill Graph — teacher scores for all students
+        if(Array.isArray(d.skillGraph)&&d.skillGraph.length){
+          localStorage.setItem("aws_skillgraph_v1",JSON.stringify(d.skillGraph));
         }
         // Staff
         if(Array.isArray(d.staff)){
@@ -2800,6 +2810,7 @@ function rGrades(c){
     {k:"courses",label:"📚 Course Records"},
     {k:"gpa",label:"🎯 GPA & Weighting"},
     {k:"graduation",label:"🎓 Graduation Audit"},
+    {k:"skillgraph",label:"🧠 Skill Graph"},
     {k:"transfer",label:"🏛️ Transfer & EC Credits"},
     {k:"transcript",label:"📄 Transcript"},
     {k:"catalog",label:"⚙️ Course Catalog"}
@@ -2818,6 +2829,7 @@ function rGrades(c){
   else if(sub==="courses")rGmsCourses(body,s);
   else if(sub==="gpa")rGmsGPA(body,s);
   else if(sub==="graduation")rGmsGraduation(body,s);
+  else if(sub==="skillgraph")rGmsSkillGraph(body,s);
   else if(sub==="transfer")rGmsTransfer(body,s);
   else if(sub==="transcript")rGmsTranscript(body,s);
   else if(sub==="catalog")rGmsCatalog(body);
@@ -3568,7 +3580,7 @@ function rGmsOverview(body,s,allStudents){
     body.querySelectorAll(".gms-pick").forEach(function(b){b.addEventListener("click",function(){window._gmsSelId=parseInt(b.dataset.id);render();});});
     return;
   }
-  var sc=courses.filter(function(c){return c.studentId===s.id;});
+  var sc=courses.filter(function(c){return String(c.studentId)===String(s.id);});
   var trans=loadTransfer().filter(function(t){return t.studentId===s.id;});
   var ugpa=calcGPA(sc),wgpa=calcWeightedGPA(sc),ucgpa=calcUCGPA(sc);
   var dist=getDistinction(wgpa,sc);
@@ -3742,8 +3754,8 @@ function rGmsGraduation(body,s){
     body.innerHTML='<div class="card" style="padding:30px;text-align:center;color:#7A92B0">Graduation audit is available for high school students (Grades 9\u201312) only.</div>';
     return;
   }
-  var courses=loadCourses().filter(function(c){return c.studentId===s.id;});
-  var trans=loadTransfer().filter(function(t){return t.studentId===s.id&&t.status==="Approved";});
+  var courses=loadCourses().filter(function(c){return String(c.studentId)===String(s.id);});
+  var trans=loadTransfer().filter(function(t){return String(t.studentId)===String(s.id)&&t.status==="Approved";});
   var credits=getGradCredits(courses,trans);
   var wgpa=calcWeightedGPA(courses);
   var ugpa=calcGPA(courses,false);
@@ -4343,6 +4355,268 @@ function printGraduationAudit(s,courses,trans,credits,d){
 }
 
 // ─── TRANSFER CREDITS ─────────────────────────────────────────────────────
+// ─── TEACHER SKILL GRAPH ──────────────────────────────────────────────────────
+function rGmsSkillGraph(body, s) {
+  if (!s) {
+    body.innerHTML = '<div class="card" style="padding:40px;text-align:center;color:#7A92B0">' +
+      '<div style="font-size:32px;margin-bottom:8px">🧠</div>' +
+      '<div style="font-weight:700;color:#1A365E;margin-bottom:6px">Select a student</div>' +
+      '<div style="font-size:12px">Choose a student from the dropdown above to view and edit their skill scores.</div>' +
+      '</div>';
+    return;
+  }
+
+  var sid = String(s.id);
+  var sidStr = String(s.studentId || '');
+
+  // Load existing teacher scores from SkillGraph sheet (via localStorage cache)
+  var allSkills = [];
+  try {
+    var raw = localStorage.getItem('aws_skillgraph_v1');
+    if (raw) allSkills = JSON.parse(raw);
+  } catch(e) {}
+
+  // Find teacher row for this student (not prefixed with self_)
+  var teacherRow = allSkills.find(function(r) {
+    return (String(r.studentId) === sid || String(r.studentId) === sidStr) &&
+           !String(r.term || '').startsWith('self_');
+  }) || {};
+
+  var catColors = {entrepreneurial: SP_GOLD, academic: SP_NAVY, leadership: SP_RED, global: SP_TEAL};
+  var catLabels = {entrepreneurial: 'Entrepreneurial', academic: 'Academic', leadership: 'Leadership', global: 'Global'};
+  var levelLabels = ['Not Assessed', 'Beginning', 'Developing', 'Proficient', 'Advanced', 'Expert'];
+  var levelColors = ['#CBD5E1', '#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#10B981'];
+
+  // Build radar SVG
+  var allComps = [];
+  Object.keys(SP_COMPETENCIES).forEach(function(cat) {
+    SP_COMPETENCIES[cat].forEach(function(c) { allComps.push({ key: c.key, label: c.label, cat: cat }); });
+  });
+  var n = allComps.length, cx = 180, cy = 180, maxR = 140;
+  function pol(angle, r) { return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) }; }
+
+  var svg = '<svg width="360" height="360" viewBox="0 0 360 360" style="overflow:visible">';
+  [1,2,3,4,5].forEach(function(lv) {
+    var r = maxR * lv / 5;
+    svg += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#E4EAF2" stroke-width="'+(lv===5?1.5:0.6)+'"/>';
+    if (lv === 5) svg += '<text x="'+(cx+r+3)+'" y="'+(cy+4)+'" font-size="8" fill="#7A92B0" font-family="Arial">5</text>';
+  });
+  allComps.forEach(function(comp, i) {
+    var angle = (2 * Math.PI * i / n) - Math.PI / 2;
+    var ep = pol(angle, maxR);
+    svg += '<line x1="'+cx+'" y1="'+cy+'" x2="'+ep.x.toFixed(1)+'" y2="'+ep.y.toFixed(1)+'" stroke="#E4EAF2" stroke-width="0.8"/>';
+    var lp = pol(angle, maxR + 18);
+    var anch = lp.x < cx - 5 ? 'end' : lp.x > cx + 5 ? 'start' : 'middle';
+    svg += '<text x="'+lp.x.toFixed(1)+'" y="'+(lp.y+3).toFixed(1)+'" font-size="7" fill="'+catColors[comp.cat]+'" text-anchor="'+anch+'" font-family="Arial" font-weight="700">'+comp.label.split(' ')[0]+'</text>';
+  });
+  // Teacher polygon
+  var pts = allComps.map(function(comp, i) {
+    var val = parseInt(teacherRow[comp.key]) || 0;
+    return pol((2*Math.PI*i/n)-Math.PI/2, maxR * val / 5);
+  });
+  if (Object.keys(teacherRow).length > 2) {
+    svg += '<polygon points="'+pts.map(function(p){return p.x.toFixed(1)+','+p.y.toFixed(1);}).join(' ')+'" fill="'+SP_NAVY+'20" stroke="'+SP_NAVY+'" stroke-width="2.5" stroke-linejoin="round"/>';
+    pts.forEach(function(p, i) {
+      var val = parseInt(teacherRow[allComps[i].key]) || 0;
+      if (val > 0) svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="3.5" fill="'+catColors[allComps[i].cat]+'" stroke="#fff" stroke-width="1.5"/>';
+    });
+  }
+  svg += '</svg>';
+
+  var h = '<div style="display:flex;flex-direction:column;gap:14px">';
+
+  // Header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  h += '<div>';
+  h += '<div style="font-size:15px;font-weight:800;color:#1A365E">🧠 Skill Graph — ' + esc(s.firstName + ' ' + s.lastName) + '</div>';
+  h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">Rate each of the 20 AWS Core Competencies from 1 (Beginning) to 5 (Expert). Scores appear in the student portal.</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button id="sg-reset" style="padding:8px 14px;background:#F0F4FA;color:#7A92B0;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">Reset All</button>';
+  h += '<button id="sg-save" style="padding:8px 20px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Skill Scores</button>';
+  h += '</div>';
+  h += '</div>';
+
+  // Term selector + last updated
+  var currentTerm = window._sgTerm || new Date().getFullYear().toString();
+  var terms = [
+    new Date().getFullYear().toString(),
+    (new Date().getFullYear() - 1).toString(),
+    'Term 1', 'Term 2', 'Term 3', 'Term 4'
+  ];
+  h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+  h += '<span style="font-size:11px;font-weight:700;color:#7A92B0">Assessment Period:</span>';
+  terms.forEach(function(t) {
+    var act = t === currentTerm;
+    h += '<button class="sg-term-btn" data-term="'+esc(t)+'" style="padding:5px 12px;border:1.5px solid '+(act?SP_NAVY:'#E4EAF2')+';background:'+(act?SP_NAVY:'#fff')+';color:'+(act?'#fff':'#3D5475')+';border-radius:7px;font-size:10px;font-weight:700;cursor:pointer">'+esc(t)+'</button>';
+  });
+  if (teacherRow.updatedAt) {
+    h += '<span style="font-size:10px;color:#7A92B0;margin-left:auto">Last updated: '+new Date(teacherRow.updatedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</span>';
+  }
+  h += '</div>';
+
+  // Main two-column layout: radar + sliders
+  h += '<div style="display:grid;grid-template-columns:360px 1fr;gap:14px;align-items:start">';
+
+  // Radar preview
+  h += '<div class="card" style="padding:16px;text-align:center;position:sticky;top:10px">';
+  h += '<div style="font-size:11px;font-weight:700;color:#7A92B0;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Score Preview</div>';
+  h += svg;
+  h += '<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px">';
+  Object.keys(catColors).forEach(function(cat) {
+    h += '<div style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:50%;background:'+catColors[cat]+'"></div><span style="font-size:8px;font-weight:700;color:#7A92B0;text-transform:uppercase">'+catLabels[cat]+'</span></div>';
+  });
+  h += '</div>';
+  h += '<div style="margin-top:10px;padding:8px;background:#F0FDF4;border-radius:8px;font-size:11px;color:#0E6B3B;font-weight:600" id="sg-progress">';
+  var rated = allComps.filter(function(c) { return parseInt(teacherRow[c.key]) > 0; }).length;
+  h += rated + ' / 20 competencies rated</div>';
+  h += '</div>';
+
+  // Competency selectors grouped by category
+  h += '<div style="display:flex;flex-direction:column;gap:12px">';
+
+  Object.keys(SP_COMPETENCIES).forEach(function(cat) {
+    var col = catColors[cat];
+    h += '<div class="card" style="padding:16px;border-left:4px solid '+col+'">';
+    h += '<div style="font-size:11px;font-weight:800;color:'+col+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">'+catLabels[cat]+'</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+
+    SP_COMPETENCIES[cat].forEach(function(comp) {
+      var val = parseInt(teacherRow[comp.key]) || 0;
+      var valColor = val ? levelColors[val] : '#CBD5E1';
+
+      h += '<div style="background:#F7F9FC;border-radius:8px;padding:10px 12px">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+      h += '<span style="font-size:10px;font-weight:700;color:#1A365E">'+esc(comp.label)+'</span>';
+      h += '<span id="sglbl-'+comp.key+'" style="font-size:9px;font-weight:700;color:'+valColor+';background:'+valColor+'15;padding:1px 6px;border-radius:4px">'+levelLabels[val]+'</span>';
+      h += '</div>';
+
+      // Score buttons 0–5
+      h += '<div style="display:flex;gap:4px">';
+      for (var sc = 0; sc <= 5; sc++) {
+        var isActive = sc === val;
+        var btnCol = sc === 0 ? '#CBD5E1' : levelColors[sc];
+        h += '<button class="sg-score-btn" data-key="'+comp.key+'" data-score="'+sc+'" ';
+        h += 'style="flex:1;padding:5px 0;border:2px solid '+(isActive?btnCol:'#E4EAF2')+';background:'+(isActive?btnCol:'#fff')+';color:'+(isActive?'#fff':'#7A92B0')+';border-radius:5px;font-size:10px;font-weight:800;cursor:pointer">';
+        h += (sc === 0 ? '—' : sc) + '</button>';
+      }
+      h += '</div>';
+      h += '</div>';
+    });
+
+    h += '</div>'; // end grid
+    h += '</div>'; // end card
+  });
+
+  h += '</div>'; // end sliders col
+  h += '</div>'; // end main grid
+
+  // Evidence note
+  h += '<div style="background:#EEF3FF;border-radius:10px;padding:12px 16px;font-size:11px;color:#1A365E">';
+  h += '<strong>📋 Scoring Guide</strong><br>';
+  h += '<strong style="color:#EF4444">1 — Beginning:</strong> Rarely demonstrates this skill · ';
+  h += '<strong style="color:#F59E0B">2 — Developing:</strong> Sometimes demonstrates with support · ';
+  h += '<strong style="color:#3B82F6">3 — Proficient:</strong> Consistently demonstrates independently · ';
+  h += '<strong style="color:#8B5CF6">4 — Advanced:</strong> Demonstrates at a high level with depth · ';
+  h += '<strong style="color:#10B981">5 — Expert:</strong> Consistently exceeds expectations, models for peers';
+  h += '</div>';
+
+  h += '</div>';
+  body.innerHTML = h;
+
+  // ── Wire score buttons ────────────────────────────────────────────────────
+  // Working copy
+  window._sgScores = JSON.parse(JSON.stringify(teacherRow));
+
+  body.querySelectorAll('.sg-score-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.dataset.key;
+      var score = parseInt(btn.dataset.score);
+      window._sgScores[key] = score;
+
+      // Update button states for this key
+      body.querySelectorAll('.sg-score-btn[data-key="'+key+'"]').forEach(function(b) {
+        var bsc = parseInt(b.dataset.score);
+        var isAct = bsc === score;
+        var bCol = bsc === 0 ? '#CBD5E1' : levelColors[bsc];
+        b.style.background = isAct ? bCol : '#fff';
+        b.style.borderColor = isAct ? bCol : '#E4EAF2';
+        b.style.color = isAct ? '#fff' : '#7A92B0';
+      });
+
+      // Update label
+      var lbl = document.getElementById('sglbl-'+key);
+      if (lbl) {
+        lbl.textContent = levelLabels[score];
+        var lc = score ? levelColors[score] : '#CBD5E1';
+        lbl.style.color = lc;
+        lbl.style.background = lc + '15';
+      }
+
+      // Update progress counter
+      var prog = document.getElementById('sg-progress');
+      if (prog) {
+        var ratedCount = allComps.filter(function(c) { return parseInt(window._sgScores[c.key]) > 0; }).length;
+        prog.textContent = ratedCount + ' / 20 competencies rated';
+        prog.style.background = ratedCount === 20 ? '#DCFCE7' : '#F0FDF4';
+        prog.style.color = ratedCount === 20 ? '#0E6B3B' : '#14532D';
+      }
+    });
+  });
+
+  // ── Term switching ────────────────────────────────────────────────────────
+  body.querySelectorAll('.sg-term-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      window._sgTerm = btn.dataset.term;
+      window._sgScores = null;
+      rGmsSkillGraph(body, s);
+    });
+  });
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  document.getElementById('sg-reset').addEventListener('click', function() {
+    if (!confirm('Reset all scores to 0 for ' + s.firstName + '?')) return;
+    window._sgScores = {};
+    rGmsSkillGraph(body, s);
+  });
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  document.getElementById('sg-save').addEventListener('click', function() {
+    var saveBtn = document.getElementById('sg-save');
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+
+    var scores = Object.assign({}, window._sgScores);
+    scores.studentId = sid;
+    scores.term = currentTerm;
+    scores.updatedAt = new Date().toISOString();
+
+    // Remove self_ rows from this student in cache, keep others
+    var others = allSkills.filter(function(r) {
+      return !(String(r.studentId) === sid || String(r.studentId) === sidStr) ||
+             String(r.term || '').startsWith('self_');
+    });
+    others.push(scores);
+    localStorage.setItem('aws_skillgraph_v1', JSON.stringify(others));
+
+    // Sync to Sheets
+    if (webUrl) {
+      gmsSheetRequest('saveSkillGraph', { scores: [scores] }, function(d) {
+        toast('Skill scores saved for ' + s.firstName + ' ✓', 'ok');
+        saveBtn.disabled = false; saveBtn.textContent = '💾 Save Skill Scores';
+        saveBtn.style.background = '#1DBD6A';
+        setTimeout(function() { saveBtn.style.background = '#1A365E'; }, 2000);
+        window._sgScores = scores;
+        rGmsSkillGraph(body, s);
+      });
+    } else {
+      toast('Saved locally (no Sheets URL configured)', 'ok');
+      saveBtn.disabled = false; saveBtn.textContent = '💾 Save Skill Scores';
+      window._sgScores = scores;
+      rGmsSkillGraph(body, s);
+    }
+  });
+}
+
 function rGmsTransfer(body,s){
   if(!s){body.innerHTML=noStudentMsg();return;}
   var all=loadTransfer().filter(function(t){return t.studentId===s.id;});
@@ -4580,8 +4854,8 @@ function openTransferModal(studentId,idx){
 // ─── TRANSCRIPT ───────────────────────────────────────────────────────────
 function rGmsTranscript(body,s){
   if(!s){body.innerHTML=noStudentMsg();return;}
-  var courses=loadCourses().filter(function(c){return c.studentId===s.id;});
-  var trans=loadTransfer().filter(function(t){return t.studentId===s.id&&t.status==="Approved";});
+  var courses=loadCourses().filter(function(c){return String(c.studentId)===String(s.id);});
+  var trans=loadTransfer().filter(function(t){return String(t.studentId)===String(s.id)&&t.status==="Approved";});
   var ugpa=calcGPA(courses),wgpa=calcWeightedGPA(courses),ucgpa=calcUCGPA(courses);
   var byYear={};courses.forEach(function(c){var y=c.year||"Unknown";if(!byYear[y])byYear[y]=[];byYear[y].push(c);});
   var dist=getDistinction(wgpa,courses);
@@ -8141,8 +8415,8 @@ window.syncAll = function(){
 var _SP = {
   student: null, attendance: [], courses: [], transfer: [], fees: [],
   comms: [], atAssigns: [], atSubs: {}, remarks: {}, ptAssign: [],
-  ptEvals: [], portfolio: [], goals: [], skills: null, wellness: [],
-  lab: null, badges: [], rwLog: [], loaded: false
+  ptEvals: [], portfolio: [], goals: [], skills: null, selfSkills: null,
+  wellness: [], lab: null, badges: [], rwLog: [], loaded: false
 };
 
 // ── Student portal localStorage helpers
@@ -8208,8 +8482,22 @@ function spFetchData(onDone) {
     signal: c.signal, mode: 'cors'
   }).then(function(r){ clearTimeout(t); return r.json(); })
   .then(function(d) {
-    if (d.status !== 'ok') { toast('Portal data error: ' + (d.message||''), 'err'); return; }
+    if (d.status !== 'ok') {
+      var msg = d.message || 'Unknown error';
+      toast('Portal data error: ' + msg, 'err');
+      // If no student ID in session, show proper recovery UI
+      if (msg.indexOf('No student ID') >= 0 || msg.indexOf('student ID') >= 0) {
+        spHandleFetchError(msg);
+      }
+      return;
+    }
     _SP.student    = d.student    || null;
+    // Enrich _currentUser with grade info for fallback rendering
+    if (_SP.student && _currentUser) {
+      _currentUser.grade  = _SP.student.grade  || _currentUser.grade;
+      _currentUser.campus = _SP.student.campus || _currentUser.campus;
+      try { localStorage.setItem('aws_user', JSON.stringify(_currentUser)); } catch(e) {}
+    }
     _SP.attendance = d.attendance || [];
     _SP.courses    = d.courses    || [];
     _SP.transfer   = d.transfer   || [];
@@ -8218,11 +8506,12 @@ function spFetchData(onDone) {
     _SP.atAssigns  = d.atAssigns  || [];
     _SP.atSubs     = d.atSubs     || {};
     _SP.remarks    = d.remarks    || {};
-    _SP.ptAssign   = d.ptAssign   || [];
-    _SP.ptEvals    = d.ptEvals    || [];
+    _SP.ptAssign   = (d.pt && d.pt.assignments) || d.ptAssign || [];
+    _SP.ptEvals    = (d.pt && d.pt.evaluations) || d.ptEvals  || [];
     _SP.portfolio  = d.portfolio  || [];
     _SP.goals      = d.goals      || [];
     _SP.skills     = d.skills     || null;
+    _SP.selfSkills = d.selfSkills  || null;
     _SP.wellness   = d.wellness   || [];
     _SP.lab        = d.lab        || null;
     _SP.badges     = d.badges     || [];
@@ -8239,6 +8528,18 @@ function spFetchData(onDone) {
     if (cached) { Object.assign(_SP, cached); _SP.loaded = true; }
     if (onDone) onDone();
   });
+}
+
+// ── Retry spFetchData if session expired (shows reload prompt) ──────────────
+function spHandleFetchError(msg) {
+  var c = document.getElementById('content');
+  if (!c) return;
+  c.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;text-align:center">'
+    + '<div style="font-size:36px">⚠️</div>'
+    + '<div style="font-size:15px;font-weight:700;color:#1A365E">' + esc(msg || 'Could not load portal data') + '</div>'
+    + '<div style="font-size:12px;color:#7A92B0;max-width:360px">This usually means your session needs to be refreshed. Please sign out and sign in again.</div>'
+    + '<button onclick="doLogout()" style="padding:10px 24px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">Sign Out & Try Again</button>'
+    + '</div>';
 }
 
 // ── Computed helpers
@@ -8363,20 +8664,27 @@ function spRequest(action, payload, onOk) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function spLaunch() {
-  // Switch to portal layout
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').classList.add('on');
-
-  // Override app to student portal mode
   var app = document.getElementById('app');
   app.setAttribute('data-role', 'student');
-
-  // Inject student portal sidebar
   spBuildShell();
 
-  // Load data then render
+  // Show spinner immediately
+  var c = document.getElementById('content');
+  c.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px">'
+    + '<div style="width:48px;height:48px;border:4px solid #E4EAF2;border-top-color:#1A365E;border-radius:50%;animation:spin 0.8s linear infinite"></div>'
+    + '<div style="font-size:14px;font-weight:600;color:#7A92B0">Loading your portal...</div>'
+    + '</div>';
+
+  // Try cache first for instant load
   var cached = spLoad('data', null);
-  if (cached) { Object.assign(_SP, cached); _SP.loaded = true; spRender(); }
+  var sid = _currentUser && _currentUser.studentId;
+  if (cached && cached.student) {
+    Object.assign(_SP, cached); _SP.loaded = true;
+    spRender();
+  }
+  // Always fetch fresh data
   spFetchData(function(){ spRender(); });
 }
 
@@ -8391,7 +8699,7 @@ function spBuildShell() {
     '<div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;text-transform:uppercase;letter-spacing:1px">Student Portal</div>',
     '</div>',
     '<div style="padding:10px 14px;background:rgba(255,255,255,.07);margin:8px;border-radius:10px">',
-    '<div id="sp-user-name" style="font-size:13px;font-weight:700;color:#fff">Loading...</div>',
+    '<div id="sp-user-name" style="font-size:13px;font-weight:700;color:#fff">' + (_currentUser ? (_currentUser.name || _currentUser.username || 'Student') : 'Loading...') + '</div>',
     '<div id="sp-user-grade" style="font-size:10px;color:rgba(255,255,255,.5)">Student</div>',
     '</div>',
     '<nav class="sbn" id="sp-nav">',
@@ -8433,7 +8741,7 @@ function spBuildShell() {
 }
 
 function spNavItem(tab, icon, label) {
-  return '<button class="sp-ni ni" data-tab="' + tab + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:2px 8px;border-radius:8px;border:none;background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;width:calc(100%-16px);text-align:left;font-family:Poppins,sans-serif">' + icon + ' ' + label + '</button>';
+  return '<button class="sp-ni ni" data-tab="' + tab + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin:2px 8px;border-radius:8px;border:none;background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer;width:100%;box-sizing:border-box;text-align:left;font-family:Poppins,sans-serif">' + icon + ' ' + label + '</button>';
 }
 
 function spSetActiveNav(tab) {
@@ -8446,15 +8754,20 @@ function spSetActiveNav(tab) {
 
 function spRender() {
   var tab = window._spTab || 'sp_dash';
+  // Ensure student shell is built (safe to call multiple times)
+  if (!document.getElementById('sp-nav')) spBuildShell();
   spSetActiveNav(tab);
   var c = document.getElementById('content');
 
-  // Update user info in sidebar
-  if (_SP.student) {
-    var nameEl = document.getElementById('sp-user-name');
-    var gradeEl = document.getElementById('sp-user-grade');
-    if (nameEl) nameEl.textContent = (_SP.student.firstName||'') + ' ' + (_SP.student.lastName||'');
-    if (gradeEl) gradeEl.textContent = (_SP.student.grade||'') + ' · ' + (_SP.student.campus||'');
+  // Update sidebar — use _SP.student if loaded, else _currentUser as fallback
+  var nameEl  = document.getElementById('sp-user-name');
+  var gradeEl = document.getElementById('sp-user-grade');
+  if (_SP.student && nameEl) {
+    nameEl.textContent  = (_SP.student.firstName||'') + ' ' + (_SP.student.lastName||'');
+    gradeEl.textContent = (_SP.student.grade||'') + ' · ' + (_SP.student.campus||'');
+  } else if (_currentUser && nameEl) {
+    nameEl.textContent  = _currentUser.name || _currentUser.username || 'Student';
+    gradeEl.textContent = 'Student · ' + (_currentUser.campus||'');
   }
 
   if      (tab === 'sp_dash')      spRenderDash(c);
@@ -8483,7 +8796,27 @@ function spCard(label, val, sub, col, icon) {
 // TAB 1: DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
 function spRenderDash(c) {
+  // If not loaded yet, show spinner
+  if (!_SP.loaded && !_SP.student) {
+    c.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px">'
+      + '<div style="width:48px;height:48px;border:4px solid #E4EAF2;border-top-color:#1A365E;border-radius:50%;animation:spin 0.8s linear infinite"></div>'
+      + '<div style="font-size:14px;font-weight:600;color:#7A92B0">Loading your dashboard...</div>'
+      + (webUrl ? '' : '<div style="font-size:11px;color:#D61F31;background:#FFF0F1;padding:8px 16px;border-radius:8px">⚠️ No API URL configured — open live site to see your data</div>')
+      + '</div>';
+    return;
+  }
   var s = _SP.student || {};
+  // Fill name from _currentUser immediately (available at login, before fetch)
+  if (!s.firstName && _currentUser && _currentUser.name) {
+    var nameParts = (_currentUser.name || '').trim().split(' ');
+    s = Object.assign({}, s, {
+      firstName: nameParts[0] || _currentUser.name,
+      lastName:  nameParts.slice(1).join(' ') || '',
+      grade:     s.grade || _currentUser.grade || '',
+      campus:    s.campus || _currentUser.campus || '',
+      studentId: s.studentId || _currentUser.studentId || ''
+    });
+  }
   var attRate = spAttendRate();
   var attCol  = attRate >= 95 ? SP_GREEN : attRate >= 85 ? SP_GOLD : SP_RED;
   var pending = spPendingAssigns();
@@ -8624,11 +8957,37 @@ function spRenderDash(c) {
 // TAB 2: MY GRADES
 // ══════════════════════════════════════════════════════════════════════════════
 function spRenderGrades(c) {
+  // Use _SP.student if loaded, else _currentUser as grade fallback
   var s = _SP.student || {};
+  // Fallback: try to find student from local students array by studentId
+  if (!s.grade && _currentUser && _currentUser.studentId) {
+    var localStu = (typeof students !== 'undefined' ? students : []).find(function(x){
+      return String(x.studentId) === String(_currentUser.studentId) || String(x.id) === String(_currentUser.studentId);
+    });
+    if (localStu) s = localStu;
+  }
+  if (!s.grade && _currentUser && _currentUser.grade) s.grade = _currentUser.grade;
   var isHS   = ['Grade 9','Grade 10','Grade 11','Grade 12'].includes(s.grade);
   var isMS   = ['Grade 6','Grade 7','Grade 8'].includes(s.grade);
   var selTab = window._spGradeTab || (isHS ? 'audit' : 'report');
   var selTerm= window._spGradeTerm || 'Term 1';
+  // If still loading, show spinner and retry
+  if (!s.grade && !_SP.loaded) {
+    c.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;gap:14px">'
+      + '<div style="width:36px;height:36px;border:3px solid #E4EAF2;border-top-color:#1A365E;border-radius:50%;animation:spin 0.8s linear infinite"></div>'
+      + '<div style="font-size:13px;color:#7A92B0">Loading your grades...</div></div>';
+    setTimeout(function(){ if(_SP.loaded) spRenderGrades(c); }, 1500);
+    return;
+  }
+  // If loaded but still no grade — show friendly message with refresh
+  if (!s.grade && _SP.loaded) {
+    c.innerHTML = '<div class="card" style="padding:30px;text-align:center">' +
+      '<div style="font-size:32px;margin-bottom:8px">📊</div>' +
+      '<div style="font-weight:700;color:#1A365E;margin-bottom:6px">Grade data not available</div>' +
+      '<div style="font-size:12px;color:#7A92B0">Your school admin may need to update your student record. Please contact them if this persists.</div>' +
+      '</div>';
+    return;
+  }
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
   h += '<div style="font-size:18px;font-weight:800;color:#1A365E">📊 My Grades</div>';
@@ -9237,86 +9596,238 @@ function spRenderAssign(c) {
 }
 
 function spRenderProject(c) {
-  var assigns = _SP.ptAssign;
-  var evals   = _SP.ptEvals;
+  var assigns = _SP.ptAssign || [];
+  var evals   = _SP.ptEvals  || [];
+  var sid     = _currentUser && _currentUser.studentId || '';
+  var today   = new Date().toISOString().slice(0,10);
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
-  h += '<div style="font-size:18px;font-weight:800;color:#1A365E">🚀 My AWSC-27 Project</div>';
+  h += '<div><div style="font-size:18px;font-weight:800;color:#1A365E">🚀 My AWSC-27 Projects</div>';
+  h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + assigns.length + ' project' + (assigns.length!==1?'s':'') + ' assigned</div></div>';
 
   if (!assigns.length) {
-    h += '<div class="card" style="padding:40px;text-align:center"><div style="font-size:36px;margin-bottom:8px">🚀</div><div style="font-weight:700;color:#1A365E">No project assigned yet</div><div style="font-size:12px;color:#7A92B0;margin-top:4px">Your teacher will assign your AWSC-27 project. Check back soon!</div></div>';
+    h += '<div class="card" style="padding:40px;text-align:center">';
+    h += '<div style="font-size:48px;margin-bottom:12px">🚀</div>';
+    h += '<div style="font-size:16px;font-weight:800;color:#1A365E;margin-bottom:8px">No projects assigned yet</div>';
+    h += '<div style="font-size:12px;color:#7A92B0">Your teacher will assign your AWSC-27 project. Check back soon!</div>';
+    h += '</div>';
   } else {
-    assigns.forEach(function(a){
-      var ev = evals.find(function(e){ return e.aid === a.id; });
-      var stColors = {'Not Assigned':'#7A92B0','Assigned':'#0EA5E9','In Progress':SP_GOLD,'Submitted':SP_PURPLE,'Evaluated':SP_GREEN};
-      var stCol = stColors[a.status] || '#7A92B0';
-      var pctMap = {'Not Assigned':0,'Assigned':15,'In Progress':50,'Submitted':80,'Evaluated':100};
-      var pct = pctMap[a.status] || 0;
+    assigns.forEach(function(a, ai) {
+      var ev  = evals.find(function(e){ return e.aid === a.id; });
+      var stColors = {
+        'Not Assigned':'#94A3B8','Assigned':'#0EA5E9','In Progress':SP_GOLD,
+        'Submitted':SP_PURPLE,'Evaluated':SP_GREEN,'Approved':SP_GREEN
+      };
+      var stCol = stColors[a.status] || '#94A3B8';
+      var pctMap = {'Not Assigned':0,'Assigned':15,'In Progress':50,'Submitted':80,'Evaluated':100,'Approved':100};
+      var pct   = pctMap[a.status] || 0;
+      var isOverdue = a.due && a.due < today && !['Submitted','Evaluated','Approved'].includes(a.status);
+      var canSubmit = ['Assigned','In Progress','Not Assigned'].includes(a.status);
 
-      h += '<div class="card" style="padding:0;overflow:hidden">';
-      // Header
+      h += '<div class="card" style="padding:0;overflow:hidden;border:' + (isOverdue?'2px solid '+SP_RED:'1px solid #E4EAF2') + '">';
+
+      // ── Header
       h += '<div style="background:linear-gradient(135deg,' + SP_NAVY + ',#0F2240);padding:16px 20px">';
-      h += '<div style="display:flex;align-items:center;justify-content:space-between">';
-      h += '<div><div style="font-size:15px;font-weight:800;color:#fff">' + esc(a.title||a.mname||'My Project') + '</div>';
-      h += '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">' + esc(a.mname||'') + ' · Quarter ' + esc(a.q||'') + ' · Due ' + esc(a.due||'—') + '</div></div>';
-      h += '<span style="padding:4px 12px;border-radius:20px;background:' + stCol + '25;color:' + stCol + ';font-size:10px;font-weight:800;border:1px solid ' + stCol + '44">' + esc(a.status) + '</span>';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">';
+      h += '<div style="flex:1">';
+      h += '<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">AWSC-27 · ' + esc(a.mname||'') + ' · Quarter ' + esc(a.q||'—') + '</div>';
+      h += '<div style="font-size:15px;font-weight:800;color:#fff">' + esc(a.title||a.mname||'My Project') + '</div>';
+      if (a.due) h += '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:3px">📅 Due ' + esc(a.due) + (isOverdue?' <span style="color:'+SP_RED+';font-weight:700">· OVERDUE</span>':'') + '</div>';
+      h += '</div>';
+      h += '<span style="flex-shrink:0;padding:4px 12px;border-radius:20px;background:' + stCol + '30;color:' + stCol + ';font-size:10px;font-weight:800;border:1px solid ' + stCol + '50">' + esc(a.status||'Not Assigned') + '</span>';
       h += '</div>';
       // Progress bar
       h += '<div style="margin-top:12px"><div style="background:rgba(255,255,255,.15);border-radius:4px;height:5px"><div style="background:' + stCol + ';width:' + pct + '%;height:100%;border-radius:4px;transition:width .5s"></div></div>';
-      h += '<div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:4px">' + pct + '% complete</div></div>';
-      h += '</div>';
+      h += '<div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:3px">' + pct + '% complete</div></div>';
+      h += '</div>'; // end header
 
-      // Details
       h += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">';
 
+      // Brief
       if (a.brief) {
         h += '<div style="font-size:12px;color:#3D5475;line-height:1.6;background:#F7F9FC;border-radius:8px;padding:10px 14px">' + esc(a.brief) + '</div>';
       }
 
-      var details = [
-        ['Type', a.ptype], ['Deliverable', a.deliv], ['Work URL', a.wurl]
-      ].filter(function(d2){ return d2[1]; });
-
-      if (details.length) {
-        h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
-        details.forEach(function(d2){
-          h += '<div style="background:#F7F9FC;border-radius:8px;padding:10px 12px"><div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase;margin-bottom:3px">' + esc(d2[0]) + '</div>';
-          if (d2[0] === 'Work URL' && d2[1]) {
-            h += '<a href="' + esc(d2[1]) + '" target="_blank" style="font-size:11px;color:#0EA5E9;font-weight:600">View Work →</a>';
-          } else {
-            h += '<div style="font-size:11px;font-weight:700;color:#1A365E">' + esc(d2[1]||'—') + '</div>';
-          }
-          h += '</div>';
+      // Detail chips
+      var chips = [];
+      if (a.ptype) chips.push({l:'Type', v:a.ptype});
+      if (a.deliv) chips.push({l:'Deliverable', v:a.deliv});
+      if (Array.isArray(a.team) && a.team.length) chips.push({l:'Team', v:a.team.length + ' members'});
+      if (chips.length) {
+        h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+        chips.forEach(function(ch){
+          h += '<div style="background:#EEF3FF;border-radius:8px;padding:6px 12px"><div style="font-size:8px;font-weight:700;color:#7A92B0;text-transform:uppercase;margin-bottom:2px">' + esc(ch.l) + '</div><div style="font-size:11px;font-weight:700;color:#1A365E">' + esc(ch.v) + '</div></div>';
         });
         h += '</div>';
       }
 
-      if (a.cnotes) {
-        h += '<div style="background:#EEF3FF;border-radius:8px;padding:10px 14px"><div style="font-size:10px;font-weight:700;color:#7A92B0;margin-bottom:3px">Coach Notes</div><div style="font-size:12px;color:#1A365E">' + esc(a.cnotes) + '</div></div>';
+      // Work URL
+      if (a.wurl) {
+        h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F0FDF4;border-radius:8px;border:1px solid #BBF7D0">';
+        h += '<span style="font-size:16px">🔗</span>';
+        h += '<a href="' + esc(a.wurl) + '" target="_blank" style="font-size:12px;color:#0E6B3B;font-weight:700;text-decoration:none">View My Submitted Work →</a>';
+        h += '</div>';
       }
 
-      // Evaluation scores
+      // Coach notes
+      if (a.cnotes) {
+        h += '<div style="background:#EEF3FF;border-radius:8px;padding:10px 14px">';
+        h += '<div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">💬 Coach Notes</div>';
+        h += '<div style="font-size:12px;color:#1A365E;line-height:1.5">' + esc(a.cnotes) + '</div>';
+        h += '</div>';
+      }
+
+      // Evaluation
       if (ev) {
         h += '<div style="background:#F0FDF4;border-radius:10px;padding:14px 16px;border:1px solid #BBF7D0">';
-        h += '<div style="font-size:12px;font-weight:800;color:#0E6B3B;margin-bottom:10px">📊 Evaluation Results</div>';
-        h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
-        [{l:'Content/Research', v:ev.ms},{l:'Communication', v:ev.cs},{l:'Overall', v:ev.ov}].forEach(function(sc){
-          var col2 = sc.v>=4?SP_GREEN:sc.v>=3?SP_GOLD:SP_RED;
-          h += '<div style="text-align:center;background:#fff;border-radius:8px;padding:10px"><div style="font-size:9px;color:#7A92B0;font-weight:700;margin-bottom:4px">' + esc(sc.l) + '</div><div style="font-size:24px;font-weight:900;color:' + col2 + '">' + (sc.v||'—') + '</div><div style="font-size:9px;color:#7A92B0">/ 5</div></div>';
+        h += '<div style="font-size:11px;font-weight:800;color:#0E6B3B;margin-bottom:10px">📊 Evaluation Results</div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">';
+        [{l:'Content/Research',v:ev.ms},{l:'Communication',v:ev.cs},{l:'Overall',v:ev.ov}].forEach(function(sc){
+          var col = sc.v>=4?SP_GREEN:sc.v>=3?SP_GOLD:SP_RED;
+          h += '<div style="text-align:center;background:#fff;border-radius:8px;padding:10px">';
+          h += '<div style="font-size:9px;color:#7A92B0;font-weight:700;margin-bottom:4px">' + esc(sc.l) + '</div>';
+          h += '<div style="font-size:26px;font-weight:900;color:' + col + '">' + (sc.v||'—') + '</div>';
+          h += '<div style="font-size:9px;color:#7A92B0">/ 5</div></div>';
         });
         h += '</div>';
-        if (ev.comment) h += '<div style="margin-top:10px;font-size:11px;color:#1A365E;line-height:1.5"><strong>Feedback:</strong> ' + esc(ev.comment) + '</div>';
+        if (ev.comment) h += '<div style="font-size:11px;color:#1A365E;line-height:1.5"><strong>Feedback:</strong> ' + esc(ev.comment) + '</div>';
         if (ev.mastery) h += '<div style="margin-top:8px;display:inline-block;background:linear-gradient(135deg,#FAC600,#F5A623);color:#fff;padding:4px 14px;border-radius:20px;font-size:11px;font-weight:800">⭐ Mastery Achieved</div>';
         h += '</div>';
       }
 
-      h += '</div></div>';
+      // ── SUBMIT SECTION ──────────────────────────────────────────────────
+      if (canSubmit) {
+        h += '<div style="border-top:2px solid #F0F4FA;padding-top:14px;margin-top:4px">';
+        h += '<div style="font-size:12px;font-weight:800;color:#1A365E;margin-bottom:10px">📤 Submit Your Work</div>';
+
+        h += '<div style="display:flex;flex-direction:column;gap:10px">';
+        // Status update
+        h += '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">';
+        h += '<div>';
+        h += '<label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Work Link (Google Drive, Slides, Doc, etc.) *</label>';
+        h += '<input id="pt-wurl-' + ai + '" class="fi" type="url" placeholder="https://drive.google.com/..." value="' + esc(a.wurl||'') + '" style="margin:0"/>';
+        h += '</div>';
+        h += '<button class="pt-status-btn" data-ai="' + ai + '" data-status="In Progress" ';
+        h += 'style="padding:8px 14px;background:#FEF3C7;color:#92400E;border:1.5px solid #FDE68A;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;white-space:nowrap;margin-top:18px">💾 Save Progress</button>';
+        h += '</div>';
+
+        h += '<div>';
+        h += '<label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Reflection Note (optional)</label>';
+        h += '<textarea id="pt-reflect-' + ai + '" class="fta" rows="2" placeholder="What did you learn? What challenges did you face?" style="margin:0">' + esc(a.reflect||'') + '</textarea>';
+        h += '</div>';
+
+        // File upload
+        h += '<div style="background:#F7F9FC;border-radius:8px;padding:10px 12px">';
+        h += '<label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">📎 Upload File (optional)</label>';
+        h += '<input type="file" id="pt-file-' + ai + '" style="font-size:11px;color:#3D5475" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.mp4,.zip"/>';
+        h += '<div style="font-size:9px;color:#94A3B8;margin-top:4px">Accepted: PDF, Word, PowerPoint, images, video, zip</div>';
+        h += '</div>';
+
+        // Submit button
+        h += '<button class="pt-submit-btn" data-ai="' + ai + '" data-aid="' + esc(a.id) + '" ';
+        h += 'style="width:100%;padding:12px;background:' + SP_NAVY + ';color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:Poppins,sans-serif">✅ Submit Project</button>';
+        h += '</div>'; // end flex column
+        h += '</div>'; // end submit section
+      } else if (a.status === 'Submitted' || a.status === 'Evaluated' || a.status === 'Approved') {
+        h += '<div style="background:#F0FDF4;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px">';
+        h += '<span style="font-size:18px">✅</span>';
+        h += '<div><div style="font-size:12px;font-weight:700;color:#0E6B3B">Project Submitted</div>';
+        h += '<div style="font-size:11px;color:#7A92B0">Your teacher is reviewing your work.</div></div>';
+        h += '</div>';
+      }
+
+      h += '</div>'; // end body
+      h += '</div>'; // end card
     });
   }
 
   h += '</div>';
   c.innerHTML = h;
+
+  // ── Wire save + submit buttons ───────────────────────────────────────────
+  c.querySelectorAll('.pt-status-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var ai   = parseInt(btn.dataset.ai);
+      var a    = assigns[ai];
+      var wurl = (document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim();
+      if (!wurl) { toast('Please enter a work link first', 'err'); return; }
+      btn.disabled = true; btn.textContent = 'Saving...';
+      a.wurl    = wurl;
+      a.status  = 'In Progress';
+      a.reflect = (document.getElementById('pt-reflect-' + ai)||{value:''}).value.trim();
+      _SP.ptAssign[ai] = a;
+      spSave('data', _SP);
+      spRequest('studentUpdatePT', { assignment: a }, function(){
+        toast('Progress saved ✓', 'ok');
+        spRenderProject(c);
+      });
+    });
+  });
+
+  c.querySelectorAll('.pt-submit-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var ai   = parseInt(btn.dataset.ai);
+      var a    = assigns[ai];
+      var wurl = (document.getElementById('pt-wurl-' + ai)||{value:''}).value.trim();
+      if (!wurl) { toast('A work link is required to submit', 'err'); return; }
+      var fileInp = document.getElementById('pt-file-' + ai);
+      btn.disabled = true; btn.textContent = 'Submitting...';
+
+      function doSubmit(fileUrl) {
+        a.wurl    = fileUrl || wurl;
+        a.status  = 'Submitted';
+        a.reflect = (document.getElementById('pt-reflect-' + ai)||{value:''}).value.trim();
+        a.submittedAt = new Date().toISOString();
+        _SP.ptAssign[ai] = a;
+        spSave('data', _SP);
+        spRequest('studentUpdatePT', { assignment: a }, function(){
+          toast('🎉 Project submitted! Your teacher will review it.', 'ok');
+          // Award portfolio item
+          var portfolioItem = {
+            id: 'pt' + Date.now(),
+            studentId: _currentUser && _currentUser.studentId || '',
+            title: a.title || a.mname || 'AWSC-27 Project',
+            type: 'Project', subject: 'AWSC-27',
+            description: a.reflect || a.brief || '',
+            tags: 'AWSC-27,Entrepreneurship',
+            linkUrl: a.wurl,
+            term: (SETT&&SETT.academicYear)||'',
+            visibility: 'School',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          if (!_SP.portfolio.some(function(p){ return p.linkUrl === a.wurl; })) {
+            _SP.portfolio.push(portfolioItem);
+            spRequest('studentSavePortfolio', { item: portfolioItem }, null);
+          }
+          spCheckBadges();
+          spRenderProject(c);
+        });
+      }
+
+      // Upload file if selected
+      if (fileInp && fileInp.files && fileInp.files[0]) {
+        var file = fileInp.files[0];
+        var reader = new FileReader();
+        reader.onload = function(ev){
+          var b64 = ev.target.result.split(',')[1];
+          spRequest('studentUploadProjectFile', {
+            assignId: a.id,
+            fileName: file.name,
+            mimeType: file.type,
+            base64:   b64
+          }, function(d){
+            doSubmit(d.url || wurl);
+          });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        doSubmit(null);
+      }
+    });
+  });
 }
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 6: PORTFOLIO
@@ -9619,87 +10130,200 @@ function spOpenCheckinModal(parentC, goalIdx) {
 // TAB 8: SKILL GRAPH
 // ══════════════════════════════════════════════════════════════════════════════
 function spRenderSkills(c) {
-  var skills = _SP.skills || {};
-  var allCats = Object.keys(SP_COMPETENCIES);
+  var teacherSkills = _SP.skills    || {};  // teacher-assigned scores
+  var selfSkills    = _SP.selfSkills || {};  // student self-assessment
+  // Working copy for editing (clone of selfSkills)
+  if (!window._spSkillDraft) {
+    window._spSkillDraft = JSON.parse(JSON.stringify(selfSkills));
+  }
+  var draft = window._spSkillDraft;
+
+  var allCats   = Object.keys(SP_COMPETENCIES);
   var catColors = {entrepreneurial:SP_GOLD, academic:SP_NAVY, leadership:SP_RED, global:SP_TEAL};
   var catLabels = {entrepreneurial:'Entrepreneurial', academic:'Academic', leadership:'Leadership', global:'Global'};
 
-  // Build radar SVG
+  // ── Build dual radar SVG ─────────────────────────────────────────────────
   var allComps = [];
-  allCats.forEach(function(cat){ SP_COMPETENCIES[cat].forEach(function(c2){ allComps.push({key:c2.key, label:c2.label, cat:cat}); }); });
-  var n = allComps.length; var cx = 200; var cy = 200; var maxR = 160;
+  allCats.forEach(function(cat){
+    SP_COMPETENCIES[cat].forEach(function(c2){ allComps.push({key:c2.key, label:c2.label, cat:cat}); });
+  });
+  var n = allComps.length, cx = 200, cy = 200, maxR = 155;
 
   function polarToXY(angle, r) {
     return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
   }
 
-  var radarSVG = '<svg width="400" height="400" viewBox="0 0 400 400">';
-  // Grid circles
-  [1,2,3,4,5].forEach(function(level){
-    var r = maxR * level / 5;
-    radarSVG += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#E4EAF2" stroke-width="1"/>';
-    radarSVG += '<text x="' + (cx+r+3) + '" y="' + (cy+4) + '" font-size="8" fill="#7A92B0" font-family="Arial">' + level + '</text>';
+  var svg = '<svg width="400" height="400" viewBox="0 0 400 400" style="overflow:visible">';
+  // Background grid
+  [1,2,3,4,5].forEach(function(lv){
+    var r = maxR * lv / 5;
+    svg += '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#E4EAF2" stroke-width="'+(lv===5?1.5:0.8)+'"/>';
+    if (lv < 5) svg += '<text x="'+(cx+r+3)+'" y="'+(cy+4)+'" font-size="8" fill="#B0BECF" font-family="Arial">'+lv+'</text>';
   });
-  // Axes
+  // Axes + labels
   allComps.forEach(function(comp, i){
-    var angle = (2 * Math.PI * i / n) - Math.PI/2;
-    var endP = polarToXY(angle, maxR);
-    radarSVG += '<line x1="' + cx + '" y1="' + cy + '" x2="' + endP.x.toFixed(1) + '" y2="' + endP.y.toFixed(1) + '" stroke="#E4EAF2" stroke-width="1"/>';
-    var labP = polarToXY(angle, maxR + 18);
+    var angle = (2*Math.PI*i/n) - Math.PI/2;
+    var endP  = polarToXY(angle, maxR);
+    svg += '<line x1="'+cx+'" y1="'+cy+'" x2="'+endP.x.toFixed(1)+'" y2="'+endP.y.toFixed(1)+'" stroke="#DDE6F0" stroke-width="0.8"/>';
+    var labP   = polarToXY(angle, maxR + 20);
     var anchor = labP.x < cx-5 ? 'end' : labP.x > cx+5 ? 'start' : 'middle';
-    radarSVG += '<text x="' + labP.x.toFixed(1) + '" y="' + (labP.y+4).toFixed(1) + '" font-size="8" fill="' + catColors[comp.cat] + '" text-anchor="' + anchor + '" font-family="Arial" font-weight="700">' + comp.label.split(' ')[0] + '</text>';
+    var words  = comp.label.split(' ');
+    svg += '<text x="'+labP.x.toFixed(1)+'" y="'+labP.y.toFixed(1)+'" font-size="7.5" fill="'+catColors[comp.cat]+'" text-anchor="'+anchor+'" font-family="Arial" font-weight="700">'+words[0]+'</text>';
+    if (words[1]) svg += '<text x="'+labP.x.toFixed(1)+'" y="'+(labP.y+9).toFixed(1)+'" font-size="7.5" fill="'+catColors[comp.cat]+'" text-anchor="'+anchor+'" font-family="Arial">'+words[1]+'</text>';
   });
-  // Data polygon
-  var points = allComps.map(function(comp, i){
-    var val = parseFloat(skills[comp.key]) || 1;
-    var r = maxR * val / 5;
-    var angle = (2 * Math.PI * i / n) - Math.PI/2;
-    return polarToXY(angle, r);
+  // Self-assessment polygon (student)
+  var selfPts = allComps.map(function(comp, i){
+    var val = parseFloat(draft[comp.key]) || 1;
+    return polarToXY((2*Math.PI*i/n)-Math.PI/2, maxR*val/5);
   });
-  var polyStr = points.map(function(p){ return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
-  radarSVG += '<polygon points="' + polyStr + '" fill="' + SP_NAVY + '25" stroke="' + SP_NAVY + '" stroke-width="2" stroke-linejoin="round"/>';
-  // Dots
-  points.forEach(function(p, i){
-    var val = parseFloat(skills[allComps[i].key]) || 1;
-    if (val > 1) {
-      radarSVG += '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="4" fill="' + catColors[allComps[i].cat] + '" stroke="#fff" stroke-width="1.5"/>';
-    }
+  svg += '<polygon points="'+selfPts.map(function(p){return p.x.toFixed(1)+','+p.y.toFixed(1);}).join(' ')+'" fill="'+SP_TEAL+'30" stroke="'+SP_TEAL+'" stroke-width="2" stroke-linejoin="round" stroke-dasharray="5,3"/>';
+  // Teacher polygon
+  var tPts = allComps.map(function(comp, i){
+    var val = parseFloat(teacherSkills[comp.key]) || 0;
+    if (!val) return polarToXY((2*Math.PI*i/n)-Math.PI/2, 0);
+    return polarToXY((2*Math.PI*i/n)-Math.PI/2, maxR*val/5);
   });
-  radarSVG += '</svg>';
+  if (Object.keys(teacherSkills).length) {
+    svg += '<polygon points="'+tPts.map(function(p){return p.x.toFixed(1)+','+p.y.toFixed(1);}).join(' ')+'" fill="'+SP_NAVY+'20" stroke="'+SP_NAVY+'" stroke-width="2.5" stroke-linejoin="round"/>';
+  }
+  // Dots — self
+  selfPts.forEach(function(p, i){
+    var val = parseFloat(draft[allComps[i].key]) || 1;
+    svg += '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="4" fill="'+SP_TEAL+'" stroke="#fff" stroke-width="1.5" opacity="0.9"/>';
+  });
+  svg += '</svg>';
+
+  // ── Build HTML ───────────────────────────────────────────────────────────
+  var hasTeacher = Object.keys(teacherSkills).filter(function(k){ return k !== 'studentId' && k !== 'term' && k !== 'updatedAt'; }).length > 0;
+  var anyDraft   = Object.keys(draft).filter(function(k){ return k !== 'studentId' && k !== 'term' && k !== 'updatedAt' && parseFloat(draft[k]) > 0; }).length > 0;
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
-  h += '<div><div style="font-size:18px;font-weight:800;color:#1A365E">🧠 My Skill Graph</div><div style="font-size:11px;color:#7A92B0;margin-top:2px">Your 20 AWS Core Competencies — your intellectual fingerprint</div></div>';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">';
+  h += '<div><div style="font-size:18px;font-weight:800;color:#1A365E">🧠 My Skill Graph</div>';
+  h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">Rate yourself on 20 AWS Core Competencies · See how your coach sees you</div></div>';
+  h += '<button id="sp-skills-save" style="padding:9px 20px;background:'+SP_GREEN+';color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">💾 Save Self-Assessment</button>';
+  h += '</div>';
+
+  // Legend
+  h += '<div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 14px;background:#F7F9FC;border-radius:8px">';
+  h += '<div style="display:flex;align-items:center;gap:6px"><div style="width:24px;height:3px;background:'+SP_TEAL+';border-radius:2px;border-bottom:2px dashed '+SP_TEAL+'"></div><span style="font-size:11px;font-weight:600;color:#3D5475">My Self-Assessment</span></div>';
+  if (hasTeacher) {
+    h += '<div style="display:flex;align-items:center;gap:6px"><div style="width:24px;height:3px;background:'+SP_NAVY+';border-radius:2px"></div><span style="font-size:11px;font-weight:600;color:#3D5475">Teacher / Coach Score</span></div>';
+  } else {
+    h += '<div style="font-size:11px;color:#7A92B0;font-style:italic">Teacher scores will appear here once your coach rates you</div>';
+  }
+  h += '</div>';
+
+  // Two-column: radar + category sliders
+  h += '<div style="display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:14px;align-items:start">';
 
   // Radar chart
-  h += '<div style="display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start">';
-  h += '<div class="card" style="padding:16px;text-align:center">' + radarSVG;
-  h += '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px">';
+  h += '<div class="card" style="padding:16px;text-align:center">';
+  h += svg;
+  h += '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">';
   Object.keys(catColors).forEach(function(cat){
-    h += '<div style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:50%;background:' + catColors[cat] + '"></div><span style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">' + catLabels[cat] + '</span></div>';
+    h += '<div style="display:flex;align-items:center;gap:4px">';
+    h += '<div style="width:8px;height:8px;border-radius:50%;background:'+catColors[cat]+'"></div>';
+    h += '<span style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">'+catLabels[cat]+'</span>';
+    h += '</div>';
   });
   h += '</div></div>';
 
-  // Score cards by category
-  h += '<div style="display:flex;flex-direction:column;gap:10px">';
+  // Competency sliders by category
+  h += '<div style="display:flex;flex-direction:column;gap:10px" id="sp-skills-sliders">';
+
+  var levelLabels = ['', 'Beginning', 'Developing', 'Proficient', 'Advanced', 'Expert'];
+  var levelColors = ['', '#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#10B981'];
+
   allCats.forEach(function(cat){
-    h += '<div class="card" style="padding:14px;border-left:3px solid ' + catColors[cat] + '">';
-    h += '<div style="font-size:11px;font-weight:800;color:' + catColors[cat] + ';text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">' + catLabels[cat] + '</div>';
+    var col = catColors[cat];
+    h += '<div class="card" style="padding:14px;border-left:3px solid '+col+'">';
+    h += '<div style="font-size:10px;font-weight:800;color:'+col+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">'+catLabels[cat]+'</div>';
+
     SP_COMPETENCIES[cat].forEach(function(comp){
-      var val = parseFloat(skills[comp.key]) || 0;
-      var pct = val/5*100;
-      h += '<div style="margin-bottom:6px">';
-      h += '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:#1A365E;font-weight:600">' + esc(comp.label) + '</span><span style="font-size:10px;font-weight:800;color:' + catColors[cat] + '">' + (val||'—') + '/5</span></div>';
-      h += '<div style="background:#E4EAF2;border-radius:3px;height:5px"><div style="background:' + catColors[cat] + ';width:' + pct + '%;height:100%;border-radius:3px"></div></div>';
+      var selfVal    = parseInt(draft[comp.key]) || 0;
+      var teacherVal = parseInt(teacherSkills[comp.key]) || 0;
+      var selfCol    = selfVal ? levelColors[selfVal] : '#E4EAF2';
+      var selfLbl    = selfVal ? levelLabels[selfVal] : 'Not rated';
+
+      h += '<div style="margin-bottom:12px">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">';
+      h += '<span style="font-size:10px;font-weight:700;color:#1A365E">'+esc(comp.label)+'</span>';
+      h += '<div style="display:flex;align-items:center;gap:8px">';
+      if (teacherVal) {
+        h += '<span style="font-size:9px;background:'+SP_NAVY+'15;color:'+SP_NAVY+';padding:1px 6px;border-radius:4px;font-weight:700">👨‍🏫 '+teacherVal+'/5</span>';
+      }
+      h += '<span id="lbl-'+comp.key+'" style="font-size:9px;background:'+selfCol+'20;color:'+selfCol+';padding:1px 7px;border-radius:4px;font-weight:700">'+esc(selfLbl)+'</span>';
+      h += '</div></div>';
+
+      // Slider 0–5
+      h += '<input type="range" class="sp-skill-slider" data-key="'+comp.key+'" min="0" max="5" value="'+selfVal+'" ';
+      h += 'style="width:100%;accent-color:'+col+';cursor:pointer;height:4px"/>';
+      h += '<div style="display:flex;justify-content:space-between;margin-top:2px">';
+      ['—','1','2','3','4','5'].forEach(function(lv){ h += '<span style="font-size:8px;color:#B0BECF">'+lv+'</span>'; });
+      h += '</div>';
       h += '</div>';
     });
     h += '</div>';
   });
-  h += '</div></div>'; // end grid
+  h += '</div>'; // end sliders col
+  h += '</div>'; // end grid
 
-  h += '<div style="background:#EEF3FF;border-radius:10px;padding:12px 16px;font-size:11px;color:#1A365E"><strong>ℹ️ How scores are assigned:</strong> Your teachers and coaches update your skill scores based on evidence from assignments, projects, and observed behaviours. Scores range from 1 (Beginning) to 5 (Expert). Ask your teacher for feedback on how to improve specific competencies.</div>';
+  // Info note
+  h += '<div style="background:#EEF3FF;border-radius:10px;padding:12px 16px;font-size:11px;color:#1A365E">';
+  h += '<strong>ℹ️ About the Skill Graph</strong><br>';
+  h += '<strong>Self-Assessment</strong> (dashed blue) — Rate yourself honestly from 1 (Beginning) to 5 (Expert). ';
+  h += 'This reflects <em>your own view</em> of your growth.<br>';
+  h += '<strong>Teacher Score</strong> (solid navy) — Your coach rates you based on evidence from your work. ';
+  h += 'Where the two lines differ most is where the best conversations with your teacher happen.';
+  h += '</div>';
+
   h += '</div>';
   c.innerHTML = h;
+
+  // ── Wire sliders ─────────────────────────────────────────────────────────
+  c.querySelectorAll('.sp-skill-slider').forEach(function(slider){
+    slider.addEventListener('input', function(){
+      var key = slider.dataset.key;
+      var val = parseInt(slider.value);
+      window._spSkillDraft[key] = val;
+      // Update label
+      var lbl = document.getElementById('lbl-'+key);
+      if (lbl) {
+        lbl.textContent = val ? levelLabels[val] : 'Not rated';
+        lbl.style.color = val ? levelColors[val] : '#E4EAF2';
+        lbl.style.background = val ? levelColors[val]+'20' : '#E4EAF220';
+      }
+      // Live-update radar (re-render after short debounce)
+      clearTimeout(window._skillRedrawTimer);
+      window._skillRedrawTimer = setTimeout(function(){ spRenderSkills(c); }, 400);
+    });
+  });
+
+  // ── Save button ───────────────────────────────────────────────────────────
+  var saveBtn = document.getElementById('sp-skills-save');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function(){
+      var scores = {};
+      Object.keys(window._spSkillDraft).forEach(function(k){
+        if (k !== 'studentId' && k !== 'term' && k !== 'updatedAt') scores[k] = window._spSkillDraft[k];
+      });
+      saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
+      var term = new Date().getFullYear().toString();
+      // Save to _SP.selfSkills
+      _SP.selfSkills = Object.assign({}, scores, { studentId: _currentUser&&_currentUser.studentId, term: 'self_'+term });
+      spSave('data', _SP);
+      // Sync to sheet
+      spRequest('studentSaveSkills', { scores: scores, term: term }, function(){
+        toast('Skill self-assessment saved ✓', 'ok');
+        saveBtn.disabled = false; saveBtn.textContent = '💾 Save Self-Assessment';
+        saveBtn.style.background = SP_GREEN;
+        setTimeout(function(){ window._spSkillDraft = null; spRenderSkills(c); }, 1500);
+      });
+    });
+  }
 }
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 9: WELLNESS
@@ -10810,7 +11434,7 @@ function rReportCards(c){
 
   // Pull course data for this student from aws_courses_v5 (primary store)
   var allCourses=loadCourses();
-  var stuCourses=allCourses.filter(function(c){return c.studentId===s.id||String(c.studentId)===String(s.id);});
+  var stuCourses=allCourses.filter(function(c){return String(c.studentId)===String(s.id)||String(c.studentId)===String(s.studentId||"");});
   // Normalise field names: old GMS used .credits, new store uses .creditsEarned
   stuCourses=stuCourses.map(function(c){return Object.assign({},c,{credits:c.creditsEarned||c.credits||0,name:c.name||c.title||c.course||""});});
 
@@ -12765,7 +13389,7 @@ function rAlumni(c){
 // ═══════════════════════════════════════════════════════════════════════════
 function rGmsGPA(body,s){
   if(!s){body.innerHTML=noStudentMsg();return;}
-  var allCourses=loadCourses().filter(function(c){return c.studentId===s.id;});
+  var allCourses=loadCourses().filter(function(c){return String(c.studentId)===String(s.id);});
   var trans=loadTransfer().filter(function(t){return t.studentId===s.id;});
   var approved=trans.filter(function(t){return t.status==="Approved";});
 
