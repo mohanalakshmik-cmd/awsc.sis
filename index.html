@@ -496,6 +496,11 @@ document.addEventListener("DOMContentLoaded",function(){
   <div id="main">
     <div id="topbar">
       <div id="pg-title">Dashboard</div>
+      <div style="position:relative;flex:1;max-width:320px;margin:0 18px">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:#94A3B8;pointer-events:none">🔍</span>
+        <input id="global-search" placeholder="Search students by name or ID…" autocomplete="off" style="width:100%;padding:7px 12px 7px 32px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;color:#1A365E;outline:none;font-family:Poppins,sans-serif;box-sizing:border-box"/>
+        <div id="global-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid #E4EAF2;border-radius:10px;box-shadow:0 8px 24px rgba(26,54,94,.12);z-index:9999;max-height:320px;overflow-y:auto"></div>
+      </div>
       <div id="tb-acts">
         <button class="tbb sec" id="refresh-btn" style="display:none">↻ Sync</button><button class="tbb sec" id="gms-sync-btn" style="display:none;background:#E6FDFB;color:#0A6B64;border-color:#1FD6C4" onclick="syncAll()">↑ Sync All to Sheets</button>
         <div id="top-btn-group" style="display:inline-flex;border-radius:9px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.15)">
@@ -1418,6 +1423,74 @@ function syncTPMS() {
     pd:      pd
   }, null);
 }
+
+// ── Global Student Search ────────────────────────────────────────────────────
+(function(){
+  var _gsTimer=null;
+  function gsRender(q){
+    var box=document.getElementById('global-search-results');
+    if(!box)return;
+    if(!q||q.length<2){box.style.display='none';return;}
+    var src=typeof students!=='undefined'?students:[];
+    var matches=src.filter(function(s){
+      return (s.firstName+' '+s.lastName).toLowerCase().includes(q)
+        ||(s.studentId||'').toLowerCase().includes(q)
+        ||(s.email||'').toLowerCase().includes(q);
+    }).slice(0,8);
+    if(!matches.length){
+      box.innerHTML='<div style="padding:14px;font-size:12px;color:#94A3B8;text-align:center">No students found</div>';
+    } else {
+      var statCols={Enrolled:'#059669',Applied:'#0369A1',Accepted:'#7C3AED',Waitlisted:'#D97706',Alumni:'#6B7280'};
+      box.innerHTML=matches.map(function(s){
+        var sc=statCols[s.status]||'#94A3B8';
+        return '<div class="gs-result" data-id="'+s.id+'" style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid #F0F4FA;background:#fff" '          +'onmouseover="this.style.background=&quot;#F7F9FC&quot;" onmouseout="this.style.background=&quot;#fff&quot;">'          +'<div style="width:30px;height:30px;border-radius:8px;background:#EEF3FF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#1A365E;flex-shrink:0">'+((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</div>'          +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:#1A365E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.firstName+' '+s.lastName)+'</div>'          +'<div style="font-size:10px;color:#7A92B0">'+esc(s.studentId||'No ID')+' · '+esc(s.grade||'&#8212;')+'</div></div>'          +'<span style="font-size:9px;font-weight:700;color:'+sc+';background:'+sc+'15;padding:2px 7px;border-radius:5px;flex-shrink:0">'+esc(s.status)+'</span>'          +'</div>';
+      }).join('');
+    }
+    box.style.display='block';
+  }
+  document.addEventListener('input',function(e){
+    if(!e.target||e.target.id!=='global-search')return;
+    clearTimeout(_gsTimer);
+    var q=e.target.value.trim().toLowerCase();
+    _gsTimer=setTimeout(function(){gsRender(q);},200);
+  });
+  document.addEventListener('click',function(e){
+    var res=e.target.closest('.gs-result');
+    var box=document.getElementById('global-search-results');
+    var inp=document.getElementById('global-search');
+    if(res){
+      var sid=parseInt(res.dataset.id);
+      var src=typeof students!=='undefined'?students:[];
+      var s=src.find(function(x){return x.id===sid;});
+      if(s){
+        var v=s.status==='Enrolled'?'enrolled':'applications';
+        nav(v);
+        setTimeout(function(){
+          var row=document.querySelector('[data-sid="'+sid+'"]')||document.querySelector('[data-id="'+sid+'"]');
+          if(row)row.click();
+        },400);
+      }
+      if(box)box.style.display='none';
+      if(inp)inp.value='';
+      return;
+    }
+    if(box&&inp&&!inp.contains(e.target)&&!box.contains(e.target))box.style.display='none';
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){
+      var box=document.getElementById('global-search-results');
+      var inp=document.getElementById('global-search');
+      if(box)box.style.display='none';
+      if(inp)inp.value='';
+    }
+    // Ctrl/Cmd+K focuses search
+    if((e.ctrlKey||e.metaKey)&&e.key==='k'){
+      e.preventDefault();
+      var inp=document.getElementById('global-search');
+      if(inp)inp.focus();
+    }
+  });
+})();
 
 function nav(v){
   view=v;
@@ -8568,6 +8641,7 @@ function spFetchData(onDone) {
     _SP.atReports  = d.atReports     || [];
     _SP.atAssessments = d.atAssessments || [];
     _SP.atEP       = d.atEP          || [];
+    _SP.blocks     = d.blocks         || [];
     _SP.portfolio  = d.portfolio  || [];
     _SP.goals      = d.goals      || [];
     _SP.skills     = d.skills     || null;
@@ -8989,6 +9063,48 @@ function spRenderDash(c) {
   else h += spCard('Term', SETT.academicYear||'2025-26', 'Active', SP_NAVY, '📚');
   h += spCard('Fees Due', fees > 0 ? '$' + fees.toLocaleString() : 'Clear', fees > 0 ? 'outstanding' : 'No outstanding fees', fees > 0 ? SP_RED : SP_GREEN, '💳');
   h += '</div>';
+
+  // ── Today&#39;s Schedule ────────────────────────────────────────────────────
+  var todayBlocks = [];
+  try {
+    var allBlocks = (_SP.blocks && _SP.blocks.length) ? _SP.blocks
+      : (typeof SETT !== 'undefined' && Array.isArray(SETT.blocks)) ? SETT.blocks : [];
+    var sCohort = s.cohort || '';
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var todayDay = days[new Date().getDay()];
+    todayBlocks = allBlocks.filter(function(b){
+      return b.day === todayDay && (!b.cohort || !sCohort || b.cohort === sCohort);
+    }).sort(function(a,b){ return (a.startTime||'').localeCompare(b.startTime||''); });
+  } catch(e) {}
+  if (todayBlocks.length) {
+    h += '<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:14px 18px">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+    h += '<div style="font-size:13px;font-weight:800;color:#1A365E">📅 Today&#39;s Schedule</div>';
+    h += '<div style="font-size:10px;color:#7A92B0">' + new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'}) + '</div>';
+    h += '</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px">';
+    var nowMins = new Date().getHours()*60 + new Date().getMinutes();
+    todayBlocks.forEach(function(b){
+      var start = b.startTime||'';
+      var end   = b.endTime||'';
+      var startMins = start ? (parseInt(start.split(':')[0])*60 + parseInt(start.split(':')[1]||0)) : 0;
+      var endMins   = end   ? (parseInt(end.split(':')[0])*60   + parseInt(end.split(':')[1]||0))   : 0;
+      var isNow  = nowMins >= startMins && nowMins < endMins;
+      var isPast = nowMins >= endMins && endMins > 0;
+      var blockCol = b.color || '#1A365E';
+      var rowBg  = isNow ? '#F0FDF4' : isPast ? '#F9FAFB' : '#fff';
+      var rowBrd = isNow ? '#059669' : '#E4EAF2';
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:'+rowBg+';border:1px solid '+rowBrd+';border-radius:8px;border-left:4px solid '+(isNow?'#059669':blockCol)+'">';
+      h += '<div style="font-size:10px;font-weight:700;color:#7A92B0;min-width:80px;flex-shrink:0">'+esc(start)+(end?' – '+esc(end):'')+'</div>';
+      h += '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">'+esc(b.subject||b.name||'Class')+'</div>';
+      if (b.room) h += '<div style="font-size:10px;color:#7A92B0">📍 '+esc(b.room)+'</div>';
+      h += '</div>';
+      if (isNow) h += '<span style="font-size:9px;font-weight:800;background:#DCFCE7;color:#059669;padding:2px 8px;border-radius:5px">NOW</span>';
+      if (isPast) h += '<span style="font-size:9px;color:#94A3B8">Done</span>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
 
   // Overdue alert
   if (overdue.length) {
@@ -10387,7 +10503,8 @@ function spRenderGoals(c) {
       h += '<div style="display:flex;gap:6px">';
       h += '<button class="sp-checkin-btn" data-goalidx="' + idx + '" style="padding:6px 12px;background:#EEF3FF;color:' + SP_NAVY + ';border:1px solid #C4D4E8;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">📓 Check-in</button>';
       h += '<button class="sp-goal-progress" data-goalidx="' + idx + '" style="padding:6px 12px;background:#F0FDF4;color:#0E6B3B;border:1px solid #BBF7D0;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">📈 Update Progress</button>';
-      if (g.status !== 'Achieved') h += '<button class="sp-goal-achieve" data-goalidx="' + idx + '" style="padding:6px 12px;background:#DCFCE7;color:#0E6B3B;border:1px solid #BBF7D0;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif">🏆 Mark Achieved</button>';
+      // "Mark Achieved" is teacher-driven (auto when AT score >= 80%) — not student-driven
+      if (g.status === 'Achieved') h += '<span style="font-size:10px;font-weight:700;color:#059669;background:#DCFCE7;padding:4px 10px;border-radius:6px">🏆 Achieved</span>';
       h += '</div>';
       h += '</div></div>';
     });
@@ -10415,18 +10532,7 @@ function spRenderGoals(c) {
       spRenderGoals(c);
     });
   });
-  c.querySelectorAll('.sp-goal-achieve').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var idx = parseInt(btn.dataset.goalidx);
-      _SP.goals[idx].status = 'Achieved';
-      _SP.goals[idx].progress = 100;
-      _SP.goals[idx].updatedAt = new Date().toISOString();
-      spSave('data', _SP);
-      spRequest('studentSaveGoal', {goal: _SP.goals[idx]}, null);
-      toast('🏆 Goal achieved! Congratulations!', 'ok');
-      spRenderGoals(c);
-    });
-  });
+  // sp-goal-achieve removed — goal achievement is teacher-driven (AT score >= 80%)
 }
 
 function spOpenGoalModal(parentC, term) {
@@ -10603,6 +10709,12 @@ function spRenderSkills(c) {
     h += '<span style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">'+catLabels[cat]+'</span>';
     h += '</div>';
   });
+  // Last updated timestamp
+  if (hasTeacher && teacherSkills.updatedAt) {
+    var tsDate = new Date(teacherSkills.updatedAt);
+    var tsStr = tsDate.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'});
+    h += '<div style="font-size:10px;color:#7A92B0;text-align:center;margin-top:6px;font-style:italic">Teacher scores last updated: ' + tsStr + '</div>';
+  }
   h += '</div></div>';
 
   // Competency sliders by category
@@ -12779,6 +12891,7 @@ function rTpmsLessons(body){
       h+='<button class="lp-edit" data-idx="'+realIdx+'" style="padding:5px 12px;background:#EEF3FF;color:#1A365E;border:none;border-radius:7px;font-size:11px;cursor:pointer;font-weight:700">✏️ Edit</button>';
       if(l.status==="Draft")h+='<button class="lp-publish" data-idx="'+realIdx+'" style="padding:5px 12px;background:#E8FBF0;color:#0E6B3B;border:1px solid #C6F6D5;border-radius:7px;font-size:10px;cursor:pointer;font-weight:700">✓ Publish</button>';
       if(l.status==="Ready for Review")h+='<button class="lp-approve" data-idx="'+realIdx+'" style="padding:5px 12px;background:#FFF7E0;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:10px;cursor:pointer;font-weight:700">✓ Approve</button>';
+      h+='<button class="lp-push-at" data-idx="'+realIdx+'" title="Create an assignment in Assignment Tracker from this lesson" style="padding:5px 12px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:10px;cursor:pointer;font-weight:700">📋 Push to AT</button>';
       h+='<button class="lp-del" data-idx="'+realIdx+'" style="padding:5px 12px;background:#FFF0F1;color:#D61F31;border:1px solid #F5C2C7;border-radius:7px;font-size:10px;cursor:pointer">🗑</button>';
       h+='</div>';
       h+='</div>';
@@ -12809,6 +12922,44 @@ function rTpmsLessons(body){
   });});
   body.querySelectorAll(".lp-approve").forEach(function(b){b.addEventListener("click",function(){
     var all=loadLessons();all[parseInt(b.dataset.idx)].status="Published";saveLessons(all);rTpmsLessons(body);toast("Lesson approved & published ✓","ok");
+  });});
+  body.querySelectorAll(".lp-push-at").forEach(function(b){b.addEventListener("click",function(){
+    var all=loadLessons();
+    var l=all[parseInt(b.dataset.idx)];
+    if(!l){toast("Lesson not found","err");return;}
+    // Pre-fill an AT assignment from lesson data
+    var atAssigns=getATAssignments();
+    // Check if already pushed (same title + subject)
+    var already=atAssigns.find(function(a){return a.title===l.title&&a.subject===l.subject;});
+    if(already){
+      if(!confirm("An assignment for \""+l.title+"\" already exists in AT. Push again?"))return;
+    }
+    var newAssign={
+      id: atId(),
+      title: l.title,
+      type: "Classwork",
+      subject: l.subject||"",
+      division: l.grade||"",
+      maxScore: 100,
+      dateAssigned: l.date||new Date().toISOString().slice(0,10),
+      dueDate: l.date||new Date().toISOString().slice(0,10),
+      dueTime: "18:30",
+      instructions: (l.objectives||"")+(l.formative?"\n\nFormative: "+l.formative:"")+(l.successCriteria?"\n\nSuccess Criteria: "+l.successCriteria:""),
+      rubric: l.successCriteria||"",
+      gradingScale: "Percentage",
+      status: "Active",
+      cohort: "",
+      teacherId: "",
+      createdAt: new Date().toISOString(),
+      lessonId: l.id   // link back to lesson
+    };
+    atAssigns.push(newAssign);
+    saveATAssignments(atAssigns);
+    toast("✅ \""+l.title+"\" pushed to Assignment Tracker","ok");
+    // Offer to navigate
+    setTimeout(function(){
+      if(confirm("Assignment created! Go to Assignment Tracker to edit details?"))nav("at_assignments");
+    },300);
   });});
 }
 
@@ -14796,6 +14947,35 @@ function rATAssignments(c){
         allSubs[key].score=scoreVal;
         allSubs[key].teacherNote=noteEl?noteEl.value:"";
         allSubs[key].submittedDate=allSubs[key].submittedDate||new Date().toISOString().slice(0,10);
+      });
+      // Auto-achieve goals when score >= 80%
+      c.querySelectorAll(".at-sub-status[data-aid='"+aid+"']").forEach(function(sel2){
+        var gsid = sel2.dataset.sid;
+        var gScoreEl = c.querySelector(".at-sub-score[data-aid='"+aid+"'][data-sid='"+gsid+"']");
+        var gScore = gScoreEl && gScoreEl.value !== "" ? parseFloat(gScoreEl.value) : null;
+        var gAssign = getATAssignments().find(function(x){return x.id===aid;});
+        var gMax = gAssign && gAssign.maxScore ? parseFloat(gAssign.maxScore) : null;
+        if (gScore !== null && gMax && (gScore/gMax*100) >= 80) {
+          // Find this student in the students array to get their _SP-style goals
+          // Goals are stored per-student in the sheet — we trigger a background save
+          // to mark any active goal for this subject as Achieved
+          var gStu = students.find(function(s){
+            return String(s.studentId||s.id) === String(gsid) || String(s.id) === String(gsid);
+          });
+          if (gStu && gAssign && gAssign.subject) {
+            // Signal to Apps Script to award the goal badge for this student+subject
+            if (webUrl) gmsSheetRequest("awardGoalBadge", {
+              studentId: String(gStu.studentId || gStu.id),
+              subject: gAssign.subject,
+              assignTitle: gAssign.title,
+              score: gScore,
+              maxScore: gMax,
+              token: _sessionToken
+            }, function(d){
+              if (d && d.badgeAwarded) toast("🏆 Goal achieved badge awarded to "+esc(gStu.firstName)+"!", "ok");
+            });
+          }
+        }
       });
       saveATSubmissions(allSubs);atSync();
       toast("Grades saved ✓","ok");
