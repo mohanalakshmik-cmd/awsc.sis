@@ -17248,6 +17248,14 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:6px">🎯 Mastery Test Questions</div>'
     + '<div id="lms-mquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
     + '<button id="lms-mquiz-add" style="padding:6px 14px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Add Mastery Question</button>'
+    + '<div style="margin-top:12px;padding:10px;background:#EEF3FF;border-radius:8px;border:1px solid #C7D9FF">'
+    + '<div style="font-size:10px;font-weight:800;color:#1A365E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚖️ Grade Weighting</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+    + '<div class="fl"><label class="flb">Mastery Weight (%)</label><input class="fi" id="lms-l-mweight" type="number" min="0" max="100" value="' + (item.masteryWeight || 60) + '"/></div>'
+    + '<div class="fl"><label class="flb">Assignment Weight (%)</label><input class="fi" id="lms-l-aweight" type="number" min="0" max="100" value="' + (item.assignWeight || 40) + '"/></div>'
+    + '</div>'
+    + '<div style="font-size:10px;color:#5A7290;margin-top:6px">Composite Grade = (Mastery × weight) + (Assignment × weight). Weights must total 100%.</div>'
+    + '</div>'
     + '</div>'
     + '<div id="lms-assign-opts" style="display:' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'block' : 'none') + ';margin-top:8px">'
     + '<div class="fl"><label class="flb">Link to AT Assignment</label><select class="fsel2" id="lms-l-assignid">' + atOpts + '</select></div>'
@@ -17475,6 +17483,8 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       masteryPassMark: hasMastery ? (parseInt(document.getElementById('lms-l-mpass').value) || 80) : '',
       masteryRetakes: hasMastery ? (parseInt(document.getElementById('lms-l-retakes').value) || 3) : '',
       masteryQuizJson: hasMastery ? JSON.stringify(_mQuestions) : '',
+      masteryWeight: hasMastery ? (parseInt(document.getElementById('lms-l-mweight') && document.getElementById('lms-l-mweight').value) || 60) : 60,
+      assignWeight:  hasMastery ? (parseInt(document.getElementById('lms-l-aweight') && document.getElementById('lms-l-aweight').value) || 40) : 40,
       hasAssignment: hasAssign ? 'TRUE' : 'FALSE',
       assignmentId: hasAssign ? document.getElementById('lms-l-assignid').value : '',
       createdAt: item.createdAt || new Date().toISOString(),
@@ -18036,6 +18046,9 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
     h += '</div>';
   }
 
+  // ── Assignment panel (shown after mastery or always if no mastery) ──────
+  h += spRenderAssignmentPanel(item, prog, courseId, c, allItems);
+
   // Navigation
   var prevItem = allItems[itemIdx - 1];
   var nextItem = allItems[itemIdx + 1];
@@ -18111,6 +18124,8 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   // Prev / Next nav
   var prevBtn = document.getElementById('sp-lms-prev');
   if (prevBtn) prevBtn.addEventListener('click', function() { window._spLMSLesson = prevBtn.dataset.lid; spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId); });
+  lmsWireAssignSubmit(); // wire assignment submit button
+
   var nextBtn = document.getElementById('sp-lms-next');
   if (nextBtn) nextBtn.addEventListener('click', function() {
     var nLid = nextBtn.dataset.lid;
@@ -18456,295 +18471,6 @@ function rLMSManage(c) {
 // ════════════════════════════════════════════════════════════════════════════
 // ENHANCED GRADEBOOK — with time on task + credits per student
 // ════════════════════════════════════════════════════════════════════════════
-
-// Override rLMSGradebook with enhanced version
-function rLMSGradebook(c) {
-  var courses = (_LMS.courses || []).filter(function(co){ return co.status === 'Published' || co.status === 'Draft'; });
-  if (!_lmsGBCourseId && courses.length) _lmsGBCourseId = courses[0].id;
-  var course = courses.find(function(co){ return co.id === _lmsGBCourseId; }) || courses[0];
-  var h = '<div style="display:flex;flex-direction:column;gap:12px">';
-
-  // ── Header ──────────────────────────────────────────────────────────────
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
-  h += '<div><div style="font-size:16px;font-weight:900;color:#1A365E">📊 Gradebook</div>';
-  if (course) h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + esc(course.title||'') + ' · ' + esc(course.subject||'') + (course.gradeLevel ? ' · '+esc(course.gradeLevel) : '') + '</div>';
-  h += '</div>';
-  h += '<div style="display:flex;gap:8px;align-items:center">';
-  if (courses.length > 1) {
-    h += '<select id="lms-gb-course-sel" style="padding:7px 12px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;color:#1A365E;font-weight:600">';
-    courses.forEach(function(co) { h += '<option value="' + esc(co.id) + '" ' + (co.id === _lmsGBCourseId ? 'selected' : '') + '>' + esc(co.title) + '</option>'; });
-    h += '</select>';
-  }
-  h += '<button onclick="nav(\'lms_manage\')" style="padding:7px 14px;background:#F0F4FA;color:#1A365E;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">← Manage Courses</button>';
-  h += '</div></div>';
-  h += lmsNAV('lms_gradebook');
-
-  if (!course) {
-    h += '<div style="text-align:center;padding:60px;color:#94A3B8">No courses available.</div></div>';
-    c.innerHTML = h; return;
-  }
-
-  var content = (_LMS.content || []).filter(function(x){ return x.courseId === course.id; })
-    .sort(function(a,b){ return (parseInt(a.unitOrder)||0) - (parseInt(b.unitOrder)||0) || (parseInt(a.order)||0) - (parseInt(b.order)||0); });
-
-  // Get enrolled students
-  var enrolments = (_LMS.enrolments || []).filter(function(en){ return en.courseId === course.id && (en.active === 'TRUE' || en.active === true); });
-  var enrolledStudentIds = {};
-  enrolments.forEach(function(en) {
-    if (en.targetType === 'student') { enrolledStudentIds[en.targetValue] = true; }
-    else if (en.targetType === 'cohort') {
-      students.forEach(function(s) { if (s.cohort === en.targetValue && s.status === 'Enrolled') enrolledStudentIds[String(s.studentId||s.id)] = true; });
-    }
-  });
-  var enrolledStudents = students.filter(function(s){ return enrolledStudentIds[String(s.studentId||s.id)]; })
-    .sort(function(a,b){ return (a.lastName||'').localeCompare(b.lastName||''); });
-
-  var allProgress = _LMS.progress || [];
-  var passMark = parseFloat(course.passMark||80);
-  var creditHours = parseFloat(course.creditHours||1);
-  var courseEnrol = enrolments[0] || {};
-
-  // ── Stats bar ──────────────────────────────────────────────────────────
-  var total = enrolledStudents.length;
-  var ahead = 0, onP = 0, off = 0, done = 0;
-  enrolledStudents.forEach(function(s) {
-    var sid = String(s.studentId||s.id);
-    var myProg = allProgress.filter(function(p){ return p.courseId === course.id && String(p.studentId) === sid; });
-    var comp = myProg.filter(function(p){ return p.status === 'completed'; }).length;
-    var pct = content.length ? Math.round(comp/content.length*100) : 0;
-    if (pct === 100) { done++; return; }
-    if (courseEnrol.assignedAt && courseEnrol.dueDate) {
-      var now = Date.now(), start = new Date(courseEnrol.assignedAt).getTime(), end = new Date(courseEnrol.dueDate).getTime();
-      var expPct = Math.min(100, Math.round((now-start)/(end-start)*100));
-      var diff = pct - expPct;
-      if (diff >= 10) ahead++;
-      else if (diff >= -10) onP++;
-      else off++;
-    }
-  });
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  [{icon:'👥',label:'All Students',val:total,col:'#1A365E',bg:'#EEF3FF'},
-   {icon:'✅',label:'Complete',val:done,col:'#059669',bg:'#DCFCE7'},
-   {icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},
-   {icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},
-   {icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'}
-  ].forEach(function(st) {
-    h += '<div style="padding:10px 14px;background:'+st.bg+';border-radius:10px;text-align:center;min-width:80px">';
-    h += '<div style="font-size:16px">'+st.icon+'</div>';
-    h += '<div style="font-size:18px;font-weight:900;color:'+st.col+';line-height:1.1">'+st.val+'</div>';
-    h += '<div style="font-size:9px;font-weight:700;color:'+st.col+';text-transform:uppercase;letter-spacing:.5px;margin-top:2px">'+st.label+'</div>';
-    h += '</div>';
-  });
-  h += '</div>';
-
-  if (!content.length || !enrolledStudents.length) {
-    h += '<div style="text-align:center;padding:30px;background:#fff;border-radius:12px;border:1px solid #E4EAF2;color:#94A3B8">' + (!content.length ? 'No lessons added yet.' : 'No students enrolled.') + '</div>';
-    h += '</div>'; c.innerHTML = h; return;
-  }
-
-  // ── Table ─────────────────────────────────────────────────────────────
-  var sL = 'position:sticky;left:0;z-index:2;background:#fff';
-  var sLH = 'position:sticky;left:0;z-index:3;background:#F0F4FA';
-
-  // Unit groups
-  var unitGroups = [], unitMap = {};
-  content.forEach(function(item) {
-    var ut = item.unitTitle||'Lessons';
-    if (!unitMap[ut]) { unitMap[ut]=[]; unitGroups.push(ut); }
-    unitMap[ut].push(item);
-  });
-
-  h += '<div style="overflow-x:auto;border:1px solid #E4EAF2;border-radius:13px;background:#fff;box-shadow:0 2px 8px rgba(26,54,94,.06)">';
-  h += '<table style="border-collapse:collapse;min-width:100%;font-size:11px">';
-  h += '<thead>';
-  // Row 1 — frozen cols + unit headers
-  h += '<tr style="background:#F0F4FA">';
-  var frozenCols = ['Student','On-Target','Current Grade','Course Grade','Time on Task','Credits'];
-  frozenCols.forEach(function(col,i) {
-    h += '<th rowspan="2" style="'+sLH+';padding:8px '+(i===0?'14':'8')+'px;text-align:'+(i===0?'left':'center')+';font-size:10px;font-weight:800;color:#1A365E;border-bottom:2px solid #E4EAF2;border-right:'+(i===frozenCols.length-1?'2':'1')+'px solid #E4EAF2;white-space:nowrap;min-width:'+(i===0?'200':'70')+'px">'+col+'</th>';
-  });
-  unitGroups.forEach(function(ut) {
-    var cols = unitMap[ut].length;
-    h += '<th colspan="'+cols+'" style="padding:6px 8px;text-align:center;font-size:10px;font-weight:800;color:#1A365E;border-bottom:1px solid #E4EAF2;border-left:2px solid #D0D7E4;background:#F7F9FC;white-space:nowrap">';
-    h += '📂 '+esc(ut.substring(0,28))+(ut.length>28?'…':'')+'</th>';
-  });
-  h += '</tr>';
-  // Row 2 — lesson columns
-  h += '<tr style="background:#F7F9FC">';
-  content.forEach(function(item,ci) {
-    var icons = {video:'🎬',article:'📝',link:'🔗',file:'📎',quiz:'❓',presentation:'🖥️'};
-    var hm = item.hasMastery==='TRUE'||item.hasMastery===true;
-    var borderL = (ci>0 && content[ci-1] && content[ci-1].unitTitle !== item.unitTitle) ? '2px solid #D0D7E4' : '1px solid #E4EAF2';
-    h += '<th style="padding:4px 3px;text-align:center;border-bottom:2px solid #E4EAF2;border-left:'+borderL+';width:54px;vertical-align:bottom">';
-    h += '<div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;font-weight:600;color:#3D5475;max-height:100px;overflow:hidden;padding:3px 1px;line-height:1.3" title="'+esc(item.title)+'">'+esc(item.title.substring(0,35))+'</div>';
-    h += '<div style="font-size:11px;margin-top:3px">'+(icons[item.type]||'📄')+'</div>';
-    if (hm) h += '<div style="font-size:8px;color:#059669;font-weight:800">🎯</div>';
-    h += '</th>';
-  });
-  h += '</tr></thead>';
-
-  // Data rows
-  h += '<tbody>';
-  enrolledStudents.forEach(function(s, rowIdx) {
-    var sid = String(s.studentId||s.id);
-    var myProg = allProgress.filter(function(p){ return p.courseId===course.id && String(p.studentId)===sid; });
-    var comp = myProg.filter(function(p){ return p.status==='completed'; }).length;
-    var pct = content.length ? Math.round(comp/content.length*100) : 0;
-    var masteryRows = myProg.filter(function(p){ return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore); });
-    var avgMastery = masteryRows.length ? Math.round(masteryRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/masteryRows.length) : null;
-    // Time on task — sum timeSpentMins, fallback to estimatedMins for completed
-    var realTime = myProg.reduce(function(s,p){ return s+(parseFloat(p.timeSpentMins)||0); }, 0);
-    var estTime = myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){
-      var item = content.find(function(x){return x.id===p.contentId;});
-      return s + (item&&item.estimatedMins ? parseFloat(item.estimatedMins)||0 : 0);
-    }, 0);
-    var timeMins = realTime > 0 ? realTime : estTime;
-    // Credits
-    var credEarned = (pct>=100 && avgMastery!==null && avgMastery>=passMark) ? creditHours : 0;
-    // Pace
-    var paceLabel='—'; var paceCol='#94A3B8';
-    if (pct===100) { paceLabel='✅ Done'; paceCol='#059669'; }
-    else if (courseEnrol.assignedAt && courseEnrol.dueDate) {
-      var now=Date.now(), start=new Date(courseEnrol.assignedAt).getTime(), end=new Date(courseEnrol.dueDate).getTime();
-      var expPct=Math.min(100,Math.round((now-start)/(end-start)*100));
-      var diff=pct-expPct;
-      if (diff>=10){paceLabel='🏃 Ahead';paceCol='#059669';}
-      else if(diff>=-10){paceLabel='🚶 On Pace';paceCol='#D97706';}
-      else{paceLabel='⚠️ Behind';paceCol='#D61F31';}
-    }
-    function gl(v){if(v===null)return'—';if(v>=90)return'A';if(v>=80)return'B';if(v>=70)return'C';if(v>=60)return'D';return'F';}
-    var rowBg = rowIdx%2===0?'#fff':'#FAFBFF';
-    h += '<tr style="background:'+rowBg+'">';
-    // Student
-    h += '<td style="'+sL+';background:'+rowBg+';padding:9px 14px;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;white-space:nowrap">';
-    h += '<div style="display:flex;align-items:center;gap:8px">';
-    h += '<div class="ava" style="width:28px;height:28px;font-size:10px;flex-shrink:0">'+esc((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</div>';
-    h += '<div><button class="lms-gb-stu-btn" data-sid="'+esc(sid)+'" data-cid="'+esc(course.id)+'" style="background:none;border:none;cursor:pointer;padding:0;text-align:left"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.lastName+', '+s.firstName)+'</div></button>';
-    h += '<div style="font-size:9px;color:#7A92B0">'+esc(s.grade||'')+(s.cohort?' · '+esc(s.cohort):'')+'</div></div></div></td>';
-    // On-target
-    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:10px;font-weight:700;color:'+paceCol+'">'+paceLabel+'</td>';
-    // Current grade
-    var cgCol = avgMastery!==null ? (avgMastery>=passMark?'#059669':'#D61F31') : '#94A3B8';
-    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
-    if (avgMastery!==null){h+='<div style="font-size:13px;font-weight:900;color:'+cgCol+'">'+avgMastery+'%</div><div style="font-size:9px;font-weight:700;color:'+cgCol+'">'+gl(avgMastery)+'</div>';}
-    else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
-    h += '</td>';
-    // Course grade
-    var pctCol = pct>=passMark?'#059669':pct>0?'#D97706':'#94A3B8';
-    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
-    h += '<div style="font-size:13px;font-weight:900;color:'+pctCol+'">'+pct+'%</div>';
-    h += '<div style="font-size:9px;font-weight:700;color:'+pctCol+'">'+gl(pct)+'</div>';
-    h += '<div style="height:4px;background:#F0F4FA;border-radius:2px;margin-top:3px;width:44px;margin-inline:auto"><div style="height:100%;width:'+pct+'%;background:'+pctCol+';border-radius:2px"></div></div>';
-    h += '</td>';
-    // Time on task
-    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(timeMins)+'</td>';
-    // Credits
-    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:2px solid #D0D7E4;font-size:14px;font-weight:900;color:'+(credEarned>0?'#059669':'#94A3B8')+'">'+credEarned+'</td>';
-
-    // Per-lesson cells
-    content.forEach(function(item,ci) {
-      var prog = myProg.find(function(p){return p.contentId===item.id;});
-      var status = prog ? prog.status : 'not_started';
-      var hm = item.hasMastery==='TRUE'||item.hasMastery===true;
-      var mp = prog && (prog.masteryPassed==='TRUE'||prog.masteryPassed===true);
-      var ms = prog && prog.masteryScore!==''&&prog.masteryScore!==undefined ? Number(prog.masteryScore) : null;
-      var lessonTimeMins = prog ? (parseFloat(prog.timeSpentMins)||0)||(status==='completed'&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0) : 0;
-      var borderL = (ci>0 && content[ci-1] && content[ci-1].unitTitle!==item.unitTitle) ? '2px solid #D0D7E4' : '1px solid #F0F4FA';
-      h += '<td style="padding:5px 3px;text-align:center;border-bottom:1px solid #F0F4FA;border-left:'+borderL+';width:54px">';
-      if (status==='not_started') {
-        h += '<span style="color:#D0D7E4;font-size:13px">—</span>';
-      } else if (status==='in_progress') {
-        h += '<div style="background:#FEF3C7;border-radius:5px;padding:3px 4px;display:inline-block"><div style="font-size:10px;font-weight:700;color:#D97706">⏳</div>';
-        if (lessonTimeMins>0) h += '<div style="font-size:8px;color:#D97706">'+fmtTime(lessonTimeMins)+'</div>';
-        h += '</div>';
-      } else if (status==='completed') {
-        if (hm && ms!==null) {
-          var mCol = mp?'#059669':'#D61F31';
-          h += '<div style="background:'+(mp?'#DCFCE7':'#FEE2E2')+';border-radius:5px;padding:3px 4px;display:inline-block">';
-          h += '<div style="font-size:12px;font-weight:900;color:'+mCol+'">'+ms+'</div>';
-          h += '<div style="font-size:8px;font-weight:700;color:'+mCol+'">'+(mp?'✓':'✗')+'</div>';
-          if (lessonTimeMins>0) h += '<div style="font-size:8px;color:'+mCol+';opacity:.7">'+fmtTime(lessonTimeMins)+'</div>';
-          h += '</div>';
-        } else {
-          h += '<div style="background:#DCFCE7;border-radius:5px;padding:4px 5px;display:inline-block">';
-          h += '<div style="font-size:13px;color:#059669">✓</div>';
-          if (lessonTimeMins>0) h += '<div style="font-size:8px;color:#059669;opacity:.7">'+fmtTime(lessonTimeMins)+'</div>';
-          h += '</div>';
-        }
-      }
-      h += '</td>';
-    });
-    h += '</tr>';
-  });
-  h += '</tbody>';
-
-  // Class averages footer
-  h += '<tfoot><tr style="background:#F0F4FA">';
-  h += '<td colspan="3" style="'+sLH+';padding:8px 14px;font-size:10px;font-weight:800;color:#1A365E;border-top:2px solid #E4EAF2">CLASS AVERAGES</td>';
-  // Avg course grade
-  var avgPct = enrolledStudents.length ? Math.round(enrolledStudents.reduce(function(s,stu){
-    var sid=String(stu.studentId||stu.id);
-    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
-    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
-    return s+(content.length?Math.round(comp/content.length*100):0);
-  },0)/enrolledStudents.length) : 0;
-  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:12px;font-weight:900;color:'+(avgPct>=passMark?'#059669':'#D97706')+'">' + avgPct + '%</td>';
-  // Avg total time
-  var totalTimeMins = enrolledStudents.reduce(function(s,stu){
-    var sid=String(stu.studentId||stu.id);
-    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
-    var real=myProg.reduce(function(t,p){return t+(parseFloat(p.timeSpentMins)||0);},0);
-    var est=myProg.filter(function(p){return p.status==='completed';}).reduce(function(t,p){
-      var item=content.find(function(x){return x.id===p.contentId;});
-      return t+(item&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0);
-    },0);
-    return s+(real>0?real:est);
-  },0);
-  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(totalTimeMins/Math.max(1,enrolledStudents.length))+'</td>';
-  // Total credits earned
-  var totalCred = enrolledStudents.reduce(function(s,stu){
-    var sid=String(stu.studentId||stu.id);
-    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
-    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
-    var pct2=content.length?Math.round(comp/content.length*100):0;
-    var mastRows=myProg.filter(function(p){return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
-    var avgM=mastRows.length?Math.round(mastRows.reduce(function(t,p){return t+Number(p.masteryScore);},0)/mastRows.length):null;
-    return s+((pct2>=100&&avgM!==null&&avgM>=passMark)?creditHours:0);
-  },0);
-  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:13px;font-weight:900;color:'+(totalCred>0?'#059669':'#94A3B8')+'">'+totalCred+'</td>';
-  // Lesson avg footers
-  content.forEach(function(item,ci){
-    var lessonProgs=allProgress.filter(function(p){return p.courseId===course.id&&p.contentId===item.id&&p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
-    var avg=lessonProgs.length?Math.round(lessonProgs.reduce(function(s,p){return s+Number(p.masteryScore);},0)/lessonProgs.length):null;
-    var hm=item.hasMastery==='TRUE'||item.hasMastery===true;
-    h += '<td style="padding:6px 3px;text-align:center;border-top:2px solid #E4EAF2;border-left:1px solid #E4EAF2">';
-    if (hm&&avg!==null){var ac=avg>=(parseFloat(item.masteryPassMark)||passMark)?'#059669':'#D61F31';h+='<div style="font-size:11px;font-weight:900;color:'+ac+'">'+avg+'</div>';}
-    else h+='<span style="color:#94A3B8;font-size:10px">—</span>';
-    h+='</td>';
-  });
-  h += '</tr></tfoot></table></div>';
-
-  // Legend
-  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:#F7F9FC;border-radius:10px">';
-  h += '<span style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.5px;align-self:center">Legend:</span>';
-  [{bg:'#DCFCE7',col:'#059669',l:'Mastery Passed'},{bg:'#FEE2E2',col:'#D61F31',l:'Mastery Failed'},{bg:'#FEF3C7',col:'#D97706',l:'In Progress'},{bg:'#F0F4FA',col:'#94A3B8',l:'Not Started'}].forEach(function(lg){
-    h+='<div style="display:flex;align-items:center;gap:5px"><div style="width:13px;height:13px;border-radius:3px;background:'+lg.bg+'"></div><span style="font-size:10px;color:#3D5475">'+lg.l+'</span></div>';
-  });
-  h += '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px">🎯</span><span style="font-size:10px;color:#3D5475">Mastery test</span></div>';
-  h += '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:#7A92B0">⏱ Time shown below score</span></div>';
-  h += '</div></div>';
-  c.innerHTML = h;
-
-  var sel = document.getElementById('lms-gb-course-sel');
-  if (sel) sel.addEventListener('change', function() { _lmsGBCourseId = this.value; rLMSGradebook(c); });
-  c.querySelectorAll('.lms-gb-stu-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      _lmsStudentId = btn.dataset.sid;
-      _lmsStudentCourseId = btn.dataset.cid;
-      nav('lms_student');
-    });
-  });
-}
 
 // ── Time tracking: start timer when student opens a lesson ─────────────────
 var _lmsLessonTimer = null;
@@ -19356,6 +19082,455 @@ function rLMSStudent(c) {
       var ut=row.dataset.ut;
       _lmsStudentExpanded[ut]=!(_lmsStudentExpanded[ut]!==false);
       rLMSStudent(c);
+    });
+  });
+}
+
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// LMS ASSIGNMENT SCORING SYSTEM
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Helper: compute composite score for a student+content ──────────────────
+function lmsCompositeScore(prog, contentItem, passMark) {
+  if (!prog || !contentItem) return null;
+  var mScore = prog.masteryScore !== '' && prog.masteryScore !== undefined ? parseFloat(prog.masteryScore) : null;
+  var aScore = prog.assignScore  !== '' && prog.assignScore  !== undefined ? parseFloat(prog.assignScore)  : null;
+  if (mScore === null && aScore === null) return null;
+  if (!contentItem.hasMastery || contentItem.hasMastery === 'FALSE') {
+    return aScore; // no mastery → assignment only
+  }
+  var mW = contentItem.masteryWeight !== '' && contentItem.masteryWeight !== undefined ? parseFloat(contentItem.masteryWeight)/100 : 0.6;
+  var aW = contentItem.assignWeight  !== '' && contentItem.assignWeight  !== undefined ? parseFloat(contentItem.assignWeight)/100  : 0.4;
+  if (aScore !== null && mScore !== null) {
+    return Math.round(mScore * mW + aScore * aW);
+  }
+  if (mScore !== null) return mScore; // pending assignment
+  return aScore;
+}
+
+// ── Helper: overall composite average for a student in a course ────────────
+function lmsCourseComposite(myProg, contentArr, passMark) {
+  var scored = [];
+  contentArr.forEach(function(item) {
+    var prog = myProg.find(function(p){ return p.contentId === item.id; });
+    if (!prog) return;
+    var cs = lmsCompositeScore(prog, item, passMark);
+    if (cs !== null) scored.push(cs);
+  });
+  return scored.length ? Math.round(scored.reduce(function(s,v){return s+v;},0)/scored.length) : null;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// STUDENT PORTAL: Assignment submission panel
+// Shown in spRenderLMSLesson when mastery is passed AND hasAssignment=TRUE
+// ════════════════════════════════════════════════════════════════════════════
+function spRenderAssignmentPanel(item, prog, courseId, c, allItems) {
+  var hasAssign  = item.hasAssignment === 'TRUE' || item.hasAssignment === true;
+  var hasMastery = item.hasMastery    === 'TRUE' || item.hasMastery    === true;
+  if (!hasAssign) return '';
+
+  var masteryPassed = prog && (prog.masteryPassed === 'TRUE' || prog.masteryPassed === true);
+  var assignStatus  = prog ? (prog.assignStatus || '') : '';
+  var assignScore   = prog && prog.assignScore !== '' && prog.assignScore !== undefined ? Number(prog.assignScore) : null;
+  var composite     = lmsCompositeScore(prog, item, parseFloat(item.masteryPassMark||80));
+
+  // If mastery gate exists but not yet passed → show locked message
+  if (hasMastery && !masteryPassed) {
+    return '<div style="margin-top:16px;padding:14px 16px;background:#F7F9FC;border-radius:10px;border:1px solid #E4EAF2;display:flex;align-items:center;gap:10px">'
+      + '<span style="font-size:24px">🔒</span>'
+      + '<div><div style="font-size:12px;font-weight:700;color:#7A92B0">Assignment Locked</div>'
+      + '<div style="font-size:11px;color:#94A3B8;margin-top:2px">Pass the mastery test first to unlock this assignment.</div></div>'
+      + '</div>';
+  }
+
+  var h = '<div id="lms-assign-panel" style="margin-top:16px;background:#fff;border:1.5px solid #1A365E22;border-radius:12px;overflow:hidden">';
+  h += '<div style="background:linear-gradient(135deg,#1A365E,#0F2240);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">';
+  h += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">📋</span><span style="font-size:13px;font-weight:800;color:#fff">Assignment</span></div>';
+  // Score badge if scored
+  if (assignScore !== null) {
+    var sBg = assignScore >= (item.masteryPassMark||80) ? '#059669' : '#D61F31';
+    h += '<span style="background:'+sBg+';color:#fff;font-size:12px;font-weight:900;padding:4px 12px;border-radius:20px">'+assignScore+'%</span>';
+  } else if (assignStatus === 'submitted') {
+    h += '<span style="background:#D97706;color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px">⏳ Awaiting Score</span>';
+  }
+  h += '</div>';
+  h += '<div style="padding:14px 16px">';
+
+  if (composite !== null) {
+    var mW = item.masteryWeight !== '' && item.masteryWeight !== undefined ? parseFloat(item.masteryWeight) : 60;
+    var aW = item.assignWeight  !== '' && item.assignWeight  !== undefined ? parseFloat(item.assignWeight)  : 40;
+    h += '<div style="background:#F0F4FA;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap">';
+    h += '<div style="text-align:center;flex:1"><div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">Mastery ('+mW+'%)</div>';
+    var mScore = prog && prog.masteryScore !== '' ? Number(prog.masteryScore) : null;
+    h += '<div style="font-size:18px;font-weight:900;color:'+(mScore!==null&&mScore>=(item.masteryPassMark||80)?'#059669':'#D61F31')+'">'+( mScore!==null?mScore+'%':'—')+'</div></div>';
+    h += '<div style="text-align:center;flex:1"><div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">Assignment ('+aW+'%)</div>';
+    h += '<div style="font-size:18px;font-weight:900;color:'+(assignScore!==null?'#1A365E':'#94A3B8')+'">'+( assignScore!==null?assignScore+'%':'Pending')+'</div></div>';
+    h += '<div style="text-align:center;flex:1;border-left:1px solid #E4EAF2;padding-left:12px"><div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase">Final Grade</div>';
+    var cCol = composite >= (item.masteryPassMark||80) ? '#059669' : '#D61F31';
+    h += '<div style="font-size:20px;font-weight:900;color:'+cCol+'">'+composite+'%</div></div>';
+    h += '</div>';
+  }
+
+  if (assignStatus === 'scored' || assignScore !== null) {
+    // Already scored — show score + teacher note
+    h += '<div style="padding:10px 12px;background:#DCFCE7;border-radius:8px;font-size:11px;color:#059669;font-weight:700">✅ Assignment scored by teacher: '+assignScore+'%</div>';
+  } else if (assignStatus === 'submitted') {
+    h += '<div style="padding:10px 12px;background:#FEF3C7;border-radius:8px;font-size:11px;color:#D97706;font-weight:700">⏳ Your assignment has been submitted and is awaiting teacher scoring.</div>';
+  } else {
+    // Show submission form
+    h += '<div style="font-size:11px;color:#3D5475;margin-bottom:10px">Submit your work for this lesson. Your teacher will review and score it.</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Submission Notes</label>';
+    h += '<textarea id="lms-assign-note" rows="3" placeholder="Describe what you submitted or add notes for your teacher..." style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;font-family:Poppins,sans-serif;resize:vertical;box-sizing:border-box"></textarea></div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+    h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Link (Google Doc, Drive...)</label>';
+    h += '<input id="lms-assign-link" type="url" placeholder="https://docs.google.com/..." style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;font-family:Poppins,sans-serif;box-sizing:border-box"/></div>';
+    h += '<div style="display:flex;align-items:flex-end"><button id="lms-assign-submit-btn" data-cid="'+esc(item.id)+'" data-courseid="'+esc(courseId)+'" style="width:100%;padding:9px 16px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Submit Assignment</button></div>';
+    h += '</div></div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+// ── Wire the submit button (called after lesson renders) ───────────────────
+function lmsWireAssignSubmit() {
+  var btn = document.getElementById('lms-assign-submit-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function() {
+    var contentId = btn.dataset.cid;
+    var courseId  = btn.dataset.courseid;
+    var note = (document.getElementById('lms-assign-note') || {}).value || '';
+    var link = (document.getElementById('lms-assign-link') || {}).value || '';
+    btn.disabled = true; btn.textContent = '⏳ Submitting...';
+    spRequest('submitLMSAssignment', {
+      submission: { contentId: contentId, courseId: courseId, note: note, linkUrl: link }
+    }, function() {
+      // Update local progress record
+      var sid = String((_SP.student && (_SP.student.studentId||_SP.student.id))||'');
+      var key = sid + '_' + contentId;
+      var existing = (_SP.lmsProgress||[]).find(function(p){return p.id===key;});
+      if (existing) { existing.assignStatus = 'submitted'; }
+      spSave('data', _SP);
+      toast('✅ Assignment submitted! Your teacher will score it soon.', 'ok');
+      // Re-render
+      spFetchData(function() {
+        var c = document.getElementById('content');
+        if (c) {
+          var courseId2 = courseId;
+          var sid2 = sid;
+          spRenderLMSCourse(c, courseId2, _SP.lmsContent||[], _SP.lmsProgress||[], sid2);
+        }
+      });
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN: Score Assignment inline in Gradebook / Section / Student views
+// ════════════════════════════════════════════════════════════════════════════
+function lmsShowScoreModal(studentId, contentId, courseId, currentScore, lessonTitle, callback) {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:500;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
+    + '<div style="font-size:16px;font-weight:900;color:#1A365E;margin-bottom:4px">📋 Score Assignment</div>'
+    + '<div style="font-size:11px;color:#7A92B0;margin-bottom:18px">'+esc(lessonTitle)+'</div>'
+    + '<div class="fl"><label class="flb">Assignment Score (0–100)</label>'
+    + '<input class="fi" id="lms-score-input" type="number" min="0" max="100" value="'+(currentScore||'')+'" placeholder="Enter score..."/></div>'
+    + '<div class="fl" style="margin-top:10px"><label class="flb">Teacher Note (optional)</label>'
+    + '<textarea class="fta" id="lms-score-note" rows="2" placeholder="Feedback for student..."></textarea></div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+    + '<button id="lms-score-cancel" style="padding:9px 20px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>'
+    + '<button id="lms-score-save" style="padding:9px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Score</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('lms-score-cancel').addEventListener('click', function(){ ov.remove(); });
+  document.getElementById('lms-score-save').addEventListener('click', function() {
+    var score = parseInt(document.getElementById('lms-score-input').value);
+    if (isNaN(score) || score < 0 || score > 100) { toast('Enter a score between 0–100', 'err'); return; }
+    var note  = document.getElementById('lms-score-note').value;
+    gmsSheetRequest('saveLMSAssignScore', {
+      submission: { studentId: studentId, contentId: contentId, courseId: courseId, assignScore: score, assignStatus: 'scored', teacherNote: note }
+    }, function(d) {
+      ov.remove();
+      // Update local _LMS.progress
+      var key = studentId + '_' + contentId;
+      var pr = (_LMS.progress||[]).find(function(p){return p.id===key;});
+      if (pr) { pr.assignScore = score; pr.assignStatus = 'scored'; pr.compositeScore = d.compositeScore||score; }
+      toast('✅ Assignment scored: '+score+'%', 'ok');
+      callback && callback(score, d.compositeScore);
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN: Enhanced rLMSGradebook with Assignment + Composite columns
+// ════════════════════════════════════════════════════════════════════════════
+function rLMSGradebook(c) {
+  var courses = (_LMS.courses||[]).filter(function(co){ return co.status==='Published'||co.status==='Draft'; });
+  if (!_lmsGBCourseId && courses.length) _lmsGBCourseId = courses[0].id;
+  var course = courses.find(function(co){ return co.id===_lmsGBCourseId; }) || courses[0];
+  var h = '<div style="display:flex;flex-direction:column;gap:12px">';
+
+  // Header
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  h += '<div><div style="font-size:16px;font-weight:900;color:#1A365E">📊 Gradebook</div>';
+  if (course) h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">'+esc(course.title||'')+' · '+esc(course.subject||'')+(course.gradeLevel?' · '+esc(course.gradeLevel):'')+' · Pass: '+(course.passMark||80)+'%</div>';
+  h += '</div><div style="display:flex;gap:8px;align-items:center">';
+  if (courses.length>1){
+    h += '<select id="lms-gb-course-sel" style="padding:7px 12px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;color:#1A365E;font-weight:600">';
+    courses.forEach(function(co){ h+='<option value="'+esc(co.id)+'" '+(co.id===_lmsGBCourseId?'selected':'')+'>'+esc(co.title)+'</option>'; });
+    h += '</select>';
+  }
+  h += '<button onclick="nav(\'lms_section\')" style="padding:7px 14px;background:#F0F4FA;color:#1A365E;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📋 Section View</button>';
+  h += '</div></div>';
+  h += lmsNAV('lms_gradebook');
+
+  if (!course){ h+='<div style="text-align:center;padding:60px;color:#94A3B8">No courses.</div></div>'; c.innerHTML=h; return; }
+
+  var content = (_LMS.content||[]).filter(function(x){return x.courseId===course.id;})
+    .sort(function(a,b){return (parseInt(a.unitOrder)||0)-(parseInt(b.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(b.order)||0);});
+  var enrolments = (_LMS.enrolments||[]).filter(function(en){return en.courseId===course.id&&(en.active==='TRUE'||en.active===true);});
+  var enrolledIds = {};
+  enrolments.forEach(function(en){
+    if(en.targetType==='student'){enrolledIds[en.targetValue]=true;}
+    else if(en.targetType==='cohort'){students.forEach(function(s){if(s.cohort===en.targetValue&&s.status==='Enrolled')enrolledIds[String(s.studentId||s.id)]=true;});}
+  });
+  var enrolled = students.filter(function(s){return enrolledIds[String(s.studentId||s.id)];})
+    .sort(function(a,b){return (a.lastName||'').localeCompare(b.lastName||'');});
+  var allProg  = _LMS.progress||[];
+  var passMark = parseFloat(course.passMark||80);
+  var creditHours = parseFloat(course.creditHours||1);
+  var enrol0 = enrolments[0]||{};
+
+  // Stats bar
+  var total=enrolled.length, ahead=0,onP=0,off=0,done=0;
+  enrolled.forEach(function(s){
+    var sid=String(s.studentId||s.id);
+    var myProg=allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
+    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
+    var pct=content.length?Math.round(comp/content.length*100):0;
+    if(pct===100){done++;return;}
+    if(enrol0.assignedAt&&enrol0.dueDate){
+      var now=Date.now(),s0=new Date(enrol0.assignedAt).getTime(),e0=new Date(enrol0.dueDate).getTime();
+      var expPct=Math.min(100,Math.round((now-s0)/(e0-s0)*100));
+      var diff=pct-expPct;
+      if(diff>=10)ahead++;else if(diff>=-10)onP++;else off++;
+    }
+  });
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  [{icon:'👥',label:'All',val:total,col:'#1A365E',bg:'#EEF3FF'},{icon:'✅',label:'Done',val:done,col:'#059669',bg:'#DCFCE7'},{icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},{icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},{icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'}].forEach(function(st){
+    h+='<div style="padding:10px 14px;background:'+st.bg+';border-radius:10px;text-align:center;min-width:76px"><div style="font-size:16px">'+st.icon+'</div><div style="font-size:18px;font-weight:900;color:'+st.col+'">'+st.val+'</div><div style="font-size:9px;font-weight:700;color:'+st.col+';text-transform:uppercase">'+st.label+'</div></div>';
+  });
+  h+='</div>';
+
+  if(!content.length||!enrolled.length){ h+='<div style="text-align:center;padding:30px;background:#fff;border-radius:12px;border:1px solid #E4EAF2;color:#94A3B8">'+(!content.length?'No lessons yet.':'No students enrolled.')+'</div></div>'; c.innerHTML=h; return; }
+
+  // Unit groups
+  var unitGroups=[],unitMap={};
+  content.forEach(function(item){var ut=item.unitTitle||'Lessons';if(!unitMap[ut]){unitMap[ut]=[];unitGroups.push(ut);}unitMap[ut].push(item);});
+
+  var sL='position:sticky;left:0;z-index:2;background:#fff';
+  var sLH='position:sticky;left:0;z-index:3;background:#F0F4FA';
+
+  h+='<div style="overflow-x:auto;border:1px solid #E4EAF2;border-radius:13px;background:#fff;box-shadow:0 2px 8px rgba(26,54,94,.06)">';
+  h+='<table style="border-collapse:collapse;min-width:100%;font-size:11px"><thead>';
+  // Row 1
+  h+='<tr style="background:#F0F4FA">';
+  var frozenHdrs=[{l:'Student',w:'200px'},{l:'On-Target',w:'80px'},{l:'Mastery Grade',w:'90px'},{l:'Assign Grade',w:'90px'},{l:'⭐ Composite',w:'90px'},{l:'Course %',w:'80px'},{l:'Time',w:'76px'},{l:'Credits',w:'66px'}];
+  frozenHdrs.forEach(function(fh,i){
+    h+='<th rowspan="2" style="'+sLH+';padding:8px '+(i===0?'14':'8')+'px;text-align:'+(i===0?'left':'center')+';font-size:10px;font-weight:800;color:#1A365E;border-bottom:2px solid #E4EAF2;border-right:'+(i===frozenHdrs.length-1?'2':'1')+'px solid #E4EAF2;white-space:nowrap;min-width:'+fh.w+'">'+fh.l+'</th>';
+  });
+  unitGroups.forEach(function(ut){
+    var cols=unitMap[ut].length;
+    h+='<th colspan="'+cols+'" style="padding:6px 8px;text-align:center;font-size:10px;font-weight:800;color:#1A365E;border-bottom:1px solid #E4EAF2;border-left:2px solid #D0D7E4;background:#F7F9FC;white-space:nowrap">📂 '+esc(ut.substring(0,28))+(ut.length>28?'…':'')+'</th>';
+  });
+  h+='</tr>';
+  // Row 2 — lesson columns
+  h+='<tr style="background:#F7F9FC">';
+  content.forEach(function(item,ci){
+    var icons={video:'🎬',article:'📝',link:'🔗',file:'📎',quiz:'❓',presentation:'🖥️'};
+    var hm=item.hasMastery==='TRUE'||item.hasMastery===true;
+    var ha=item.hasAssignment==='TRUE'||item.hasAssignment===true;
+    var borderL=(ci>0&&content[ci-1]&&content[ci-1].unitTitle!==item.unitTitle)?'2px solid #D0D7E4':'1px solid #E4EAF2';
+    h+='<th style="padding:4px 3px;text-align:center;border-bottom:2px solid #E4EAF2;border-left:'+borderL+';width:56px;vertical-align:bottom">';
+    h+='<div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;font-weight:600;color:#3D5475;max-height:100px;overflow:hidden;padding:3px 1px;line-height:1.3" title="'+esc(item.title)+'">'+esc(item.title.substring(0,35))+'</div>';
+    h+='<div style="font-size:11px;margin-top:3px">'+(icons[item.type]||'📄')+'</div>';
+    if(hm) h+='<div style="font-size:8px;color:#059669;font-weight:800;line-height:1">🎯</div>';
+    if(ha) h+='<div style="font-size:8px;color:#1A365E;font-weight:800;line-height:1">📋</div>';
+    h+='</th>';
+  });
+  h+='</tr></thead><tbody>';
+
+  enrolled.forEach(function(s,rowIdx){
+    var sid=String(s.studentId||s.id);
+    var myProg=allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
+    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
+    var pct=content.length?Math.round(comp/content.length*100):0;
+    // Mastery avg
+    var mastRows=myProg.filter(function(p){return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
+    var avgMastery=mastRows.length?Math.round(mastRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mastRows.length):null;
+    // Assignment avg
+    var assignRows=myProg.filter(function(p){return p.assignScore!==''&&p.assignScore!==undefined&&!isNaN(p.assignScore);});
+    var avgAssign=assignRows.length?Math.round(assignRows.reduce(function(s,p){return s+Number(p.assignScore);},0)/assignRows.length):null;
+    // Composite (weighted average)
+    var composite=lmsCourseComposite(myProg,content,passMark);
+    // Time
+    var realTime=myProg.reduce(function(s,p){return s+(parseFloat(p.timeSpentMins)||0);},0);
+    var estTime=myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){var it=content.find(function(x){return x.id===p.contentId;});return s+(it&&it.estimatedMins?parseFloat(it.estimatedMins)||0:0);},0);
+    var timeMins=realTime>0?realTime:estTime;
+    // Credits
+    var credEarned=(pct>=100&&composite!==null&&composite>=passMark)?creditHours:0;
+    // Pace
+    var paceLabel='—'; var paceCol='#94A3B8';
+    if(pct===100){paceLabel='✅ Done';paceCol='#059669';}
+    else if(enrol0.assignedAt&&enrol0.dueDate){
+      var now=Date.now(),s0=new Date(enrol0.assignedAt).getTime(),e0=new Date(enrol0.dueDate).getTime();
+      var expPct=Math.min(100,Math.round((now-s0)/(e0-s0)*100)); var diff=pct-expPct;
+      if(diff>=10){paceLabel='🏃 Ahead';paceCol='#059669';}else if(diff>=-10){paceLabel='🚶 On Pace';paceCol='#D97706';}else{paceLabel='⚠️ Behind';paceCol='#D61F31';}
+    }
+    function gl(v){if(v===null)return'—';if(v>=90)return'A';if(v>=80)return'B';if(v>=70)return'C';if(v>=60)return'D';return'F';}
+    var rowBg=rowIdx%2===0?'#fff':'#FAFBFF';
+
+    h+='<tr style="background:'+rowBg+'">';
+    // Student (clickable)
+    h+='<td style="'+sL+';background:'+rowBg+';padding:9px 14px;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;white-space:nowrap">';
+    h+='<div style="display:flex;align-items:center;gap:8px"><div class="ava" style="width:28px;height:28px;font-size:10px;flex-shrink:0">'+esc((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</div>';
+    h+='<div><button class="lms-gb-stu-btn" data-sid="'+esc(sid)+'" data-cid="'+esc(course.id)+'" style="background:none;border:none;cursor:pointer;padding:0;text-align:left"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.lastName+', '+s.firstName)+'</div></button>';
+    h+='<div style="font-size:9px;color:#7A92B0">'+esc(s.grade||'')+(s.cohort?' · '+esc(s.cohort):'')+'</div></div></div></td>';
+    // On-target
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:10px;font-weight:700;color:'+paceCol+'">'+paceLabel+'</td>';
+    // Mastery grade
+    var mCol=avgMastery!==null?(avgMastery>=passMark?'#059669':'#D61F31'):'#94A3B8';
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
+    if(avgMastery!==null){h+='<div style="font-size:13px;font-weight:900;color:'+mCol+'">'+avgMastery+'%</div><div style="font-size:9px;font-weight:700;color:'+mCol+'">'+gl(avgMastery)+'</div>';}
+    else h+='<span style="color:#94A3B8">—</span>';
+    h+='</td>';
+    // Assignment grade
+    var aCol=avgAssign!==null?(avgAssign>=passMark?'#059669':'#D61F31'):'#94A3B8';
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
+    if(avgAssign!==null){h+='<div style="font-size:13px;font-weight:900;color:'+aCol+'">'+avgAssign+'%</div><div style="font-size:9px;font-weight:700;color:'+aCol+'">'+gl(avgAssign)+'</div>';}
+    else h+='<span style="color:#94A3B8">—</span>';
+    h+='</td>';
+    // ⭐ Composite (highlighted)
+    var ccCol=composite!==null?(composite>=passMark?'#059669':'#D61F31'):'#94A3B8';
+    h+='<td style="'+sL+';background:'+(composite!==null?(composite>=passMark?'#F0FDF4':'#FFF9F9'):(rowBg))+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:2px solid #D0D7E4">';
+    if(composite!==null){h+='<div style="font-size:14px;font-weight:900;color:'+ccCol+'">'+composite+'%</div><div style="font-size:9px;font-weight:800;color:'+ccCol+'">'+gl(composite)+'</div>';}
+    else h+='<span style="color:#94A3B8">—</span>';
+    h+='</td>';
+    // Course %
+    var crsCol=pct>=passMark?'#059669':pct>0?'#D97706':'#94A3B8';
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
+    h+='<div style="font-size:13px;font-weight:900;color:'+crsCol+'">'+pct+'%</div>';
+    h+='<div style="height:4px;background:#F0F4FA;border-radius:2px;margin-top:3px;width:44px;margin-inline:auto"><div style="height:100%;width:'+pct+'%;background:'+crsCol+';border-radius:2px"></div></div>';
+    h+='</td>';
+    // Time
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(timeMins)+'</td>';
+    // Credits
+    h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:2px solid #D0D7E4;font-size:14px;font-weight:900;color:'+(credEarned>0?'#059669':'#94A3B8')+'">'+credEarned+'</td>';
+
+    // Per-lesson cells
+    content.forEach(function(item,ci){
+      var prog=myProg.find(function(p){return p.contentId===item.id;});
+      var status=prog?prog.status:'not_started';
+      var hm=item.hasMastery==='TRUE'||item.hasMastery===true;
+      var ha=item.hasAssignment==='TRUE'||item.hasAssignment===true;
+      var mp=prog&&(prog.masteryPassed==='TRUE'||prog.masteryPassed===true);
+      var ms=prog&&prog.masteryScore!==''&&prog.masteryScore!==undefined&&!isNaN(prog.masteryScore)?Number(prog.masteryScore):null;
+      var as_=prog&&prog.assignScore!==''&&prog.assignScore!==undefined&&!isNaN(prog.assignScore)?Number(prog.assignScore):null;
+      var cs=lmsCompositeScore(prog,item,passMark);
+      var assignSt=prog?(prog.assignStatus||''):'';
+      var lessonTimeMins=prog?(parseFloat(prog.timeSpentMins)||0)||(status==='completed'&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0):0;
+      var borderL=(ci>0&&content[ci-1]&&content[ci-1].unitTitle!==item.unitTitle)?'2px solid #D0D7E4':'1px solid #F0F4FA';
+      h+='<td style="padding:5px 3px;text-align:center;border-bottom:1px solid #F0F4FA;border-left:'+borderL+';width:56px">';
+      if(status==='not_started'){
+        h+='<span style="color:#D0D7E4;font-size:13px">—</span>';
+      } else if(status==='in_progress'){
+        h+='<div style="background:#FEF3C7;border-radius:5px;padding:3px 4px;display:inline-block"><div style="font-size:10px;font-weight:700;color:#D97706">⏳</div></div>';
+      } else if(status==='completed'){
+        if(ha && cs!==null){
+          // Show composite score
+          var csCol_=cs>=passMark?'#059669':'#D61F31';
+          var csBg_=cs>=passMark?'#DCFCE7':'#FEE2E2';
+          h+='<div style="background:'+csBg_+';border-radius:5px;padding:3px 4px;display:inline-block;cursor:pointer" class="lms-gb-score-cell" data-sid="'+esc(sid)+'" data-cid="'+esc(item.id)+'" data-courseid="'+esc(course.id)+'" data-title="'+esc(item.title)+'" data-ascore="'+(as_!==null?as_:'')+'" title="Mastery:'+(ms!==null?ms:'—')+'% / Assign:'+(as_!==null?as_:'—')+'% / Composite:'+cs+'%">';
+          h+='<div style="font-size:11px;font-weight:900;color:'+csCol_+'">'+cs+'</div>';
+          if(ms!==null) h+='<div style="font-size:8px;color:'+csCol_+';opacity:.8">M:'+ms+'</div>';
+          if(as_!==null) h+='<div style="font-size:8px;color:'+csCol_+';opacity:.8">A:'+as_+'</div>';
+          else if(assignSt==='submitted') h+='<div style="font-size:8px;color:#D97706">⏳sub</div>';
+          else h+='<div style="font-size:8px;color:#94A3B8">📝?</div>';
+          h+='</div>';
+        } else if(hm&&ms!==null){
+          var mColL=mp?'#059669':'#D61F31';
+          h+='<div style="background:'+(mp?'#DCFCE7':'#FEE2E2')+';border-radius:5px;padding:3px 4px;display:inline-block">';
+          h+='<div style="font-size:12px;font-weight:900;color:'+mColL+'">'+ms+'</div>';
+          if(ha) h+='<div style="font-size:8px;color:#94A3B8" class="lms-gb-score-cell" data-sid="'+esc(sid)+'" data-cid="'+esc(item.id)+'" data-courseid="'+esc(course.id)+'" data-title="'+esc(item.title)+'" data-ascore="" style="cursor:pointer">📝?</div>';
+          h+='</div>';
+        } else {
+          h+='<div style="background:#DCFCE7;border-radius:5px;padding:4px 5px;display:inline-block">';
+          h+='<div style="font-size:13px;color:#059669">✓</div>';
+          h+='</div>';
+        }
+      }
+      h+='</td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody>';
+
+  // Footer averages
+  h+='<tfoot><tr style="background:#F0F4FA">';
+  h+='<td colspan="2" style="'+sLH+';padding:8px 14px;font-size:10px;font-weight:800;color:#1A365E;border-top:2px solid #E4EAF2">CLASS AVERAGES</td>';
+  // Avg mastery
+  var totM=0,cntM=0; enrolled.forEach(function(s){var sid=String(s.studentId||s.id);var mr=allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid&&p.masteryScore!==''&&!isNaN(p.masteryScore);});if(mr.length){totM+=Math.round(mr.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mr.length);cntM++;}});
+  h+='<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:12px;font-weight:900;color:#1A365E">'+(cntM?Math.round(totM/cntM)+'%':'—')+'</td>';
+  // Avg assign
+  var totA=0,cntA=0; enrolled.forEach(function(s){var sid=String(s.studentId||s.id);var ar=allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid&&p.assignScore!==''&&!isNaN(p.assignScore);});if(ar.length){totA+=Math.round(ar.reduce(function(s,p){return s+Number(p.assignScore);},0)/ar.length);cntA++;}});
+  h+='<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:12px;font-weight:900;color:#1A365E">'+(cntA?Math.round(totA/cntA)+'%':'—')+'</td>';
+  // Avg composite
+  var totC=0,cntC=0; enrolled.forEach(function(s){var sid=String(s.studentId||s.id);var myP=allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});var cv=lmsCourseComposite(myP,content,passMark);if(cv!==null){totC+=cv;cntC++;}});
+  var avgComp=cntC?Math.round(totC/cntC):null;
+  h+='<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:13px;font-weight:900;color:'+(avgComp!==null&&avgComp>=passMark?'#059669':'#94A3B8')+'">'+(avgComp!==null?avgComp+'%':'—')+'</td>';
+  h+='<td colspan="4" style="'+sLH+';border-top:2px solid #E4EAF2"></td>';
+  // Per-lesson composites
+  content.forEach(function(item,ci){
+    var lessonProgs=allProg.filter(function(p){return p.courseId===course.id&&p.contentId===item.id;});
+    var csArr=lessonProgs.map(function(p){return lmsCompositeScore(p,item,passMark);}).filter(function(v){return v!==null;});
+    var avgCS=csArr.length?Math.round(csArr.reduce(function(s,v){return s+v;},0)/csArr.length):null;
+    h+='<td style="padding:6px 3px;text-align:center;border-top:2px solid #E4EAF2;border-left:1px solid #E4EAF2">';
+    if(avgCS!==null){var ac2=avgCS>=passMark?'#059669':'#D61F31';h+='<div style="font-size:11px;font-weight:900;color:'+ac2+'">'+avgCS+'</div>';}
+    else h+='<span style="color:#94A3B8;font-size:10px">—</span>';
+    h+='</td>';
+  });
+  h+='</tr></tfoot></table></div>';
+
+  // Legend
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;padding:10px 14px;background:#F7F9FC;border-radius:10px">';
+  h+='<span style="font-size:10px;font-weight:800;color:#7A92B0;align-self:center">LEGEND:</span>';
+  [{bg:'#DCFCE7',col:'#059669',l:'Pass (≥'+passMark+'%)'},{bg:'#FEE2E2',col:'#D61F31',l:'Fail (<'+passMark+'%)'},{bg:'#FEF3C7',col:'#D97706',l:'In Progress'},{bg:'#F0F4FA',col:'#94A3B8',l:'Not Started'}].forEach(function(lg){
+    h+='<div style="display:flex;align-items:center;gap:5px"><div style="width:13px;height:13px;border-radius:3px;background:'+lg.bg+'"></div><span style="font-size:10px;color:#3D5475">'+lg.l+'</span></div>';
+  });
+  h+='<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px">🎯 Mastery</span><span style="font-size:10px">📋 Assignment</span><span style="font-size:10px;font-weight:700">⭐=Composite</span></div>';
+  h+='<div style="font-size:10px;color:#7A92B0">Click any composite cell to score an assignment</div>';
+  h+='</div></div>';
+  c.innerHTML=h;
+
+  // Wire course selector
+  var sel=document.getElementById('lms-gb-course-sel');
+  if(sel) sel.addEventListener('change',function(){ _lmsGBCourseId=this.value; rLMSGradebook(c); });
+  // Wire student name
+  c.querySelectorAll('.lms-gb-stu-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){ _lmsStudentId=btn.dataset.sid; _lmsStudentCourseId=btn.dataset.cid; nav('lms_student'); });
+  });
+  // Wire score cells — click to open score modal
+  c.querySelectorAll('.lms-gb-score-cell').forEach(function(cell){
+    cell.style.cursor='pointer';
+    cell.addEventListener('click',function(e){
+      e.stopPropagation();
+      lmsShowScoreModal(cell.dataset.sid, cell.dataset.cid, cell.dataset.courseid, cell.dataset.ascore||'', cell.dataset.title, function(){
+        rLMSGradebook(c);
+      });
     });
   });
 }
