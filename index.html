@@ -181,6 +181,7 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 #app[data-role="student"] .ni:not(.sp-ni){ display:none!important; }
 #app[data-role="student"] .sbsec { display:none!important; }
 #app[data-role="student"] .ni-parent { display:none!important; }
+#app[data-role="student"] #global-search-wrapper { display:none!important; }
 #app[data-role="student"] .ni-child { display:none!important; }
 #app[data-role="student"] #sync-all-btn,
 #app[data-role="student"] #refresh-btn,
@@ -505,7 +506,7 @@ document.addEventListener("DOMContentLoaded",function(){
   <div id="main">
     <div id="topbar">
       <div id="pg-title">Dashboard</div>
-      <div style="position:relative;flex:1;max-width:320px;margin:0 18px">
+      <div id="global-search-wrapper" style="position:relative;flex:1;max-width:320px;margin:0 18px">
         <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:#94A3B8;pointer-events:none">🔍</span>
         <input id="global-search" placeholder="Search students by name or ID…" autocomplete="off" style="width:100%;padding:7px 12px 7px 32px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;color:#1A365E;outline:none;font-family:Poppins,sans-serif;box-sizing:border-box"/>
         <div id="global-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid #E4EAF2;border-radius:10px;box-shadow:0 8px 24px rgba(26,54,94,.12);z-index:9999;max-height:320px;overflow-y:auto"></div>
@@ -17212,9 +17213,11 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '</select></div>'
     + '</div>'
     + '<div class="fl"><label class="flb">Content (URL / body)</label><textarea class="fta" id="lms-l-url" rows="3" placeholder="YouTube URL, article text, Google Drive link...">' + esc(item.url || item.body || '') + '</textarea></div>'
-    + '<div class="fl" id="lms-l-quiz-wrap" style="display:none"><label class="flb">Quiz Questions (JSON)</label>'
-    + '<div style="font-size:10px;color:#7A92B0;margin-bottom:4px">Format: [{"q":"Question?","opts":["A","B","C","D"],"ans":0,"type":"mcq"}]</div>'
-    + '<textarea class="fta" id="lms-l-quiz" rows="5" placeholder=\'[{"q":"What is 2+2?","opts":["3","4","5","6"],"ans":1,"type":"mcq"}]\'>' + esc(item.quizJson || '') + '</textarea></div>'
+    + '<div id="lms-l-quiz-wrap" style="display:none">'
+    + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:8px">📝 Content Quiz Questions (Practice)</div>'
+    + '<div id="lms-cquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
+    + '<button id="lms-cquiz-add" style="padding:6px 14px;background:#EEF3FF;color:#1A365E;border:1px solid #DDE6F0;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Add Question</button>'
+    + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div class="fl"><label class="flb">Est. Minutes</label><input class="fi" id="lms-l-mins" type="number" min="1" value="' + (item.estimatedMins || '') + '" placeholder="15"/></div>'
     + '<div class="fl"><label class="flb">Lesson Order</label><input class="fi" id="lms-l-order" type="number" min="1" value="' + (item.order || '') + '" placeholder="1"/></div>'
@@ -17225,9 +17228,14 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#3D5475;cursor:pointer"><input type="checkbox" id="lms-l-hasmastery" ' + ((item.hasMastery === 'TRUE' || item.hasMastery === true) ? 'checked' : '') + '/> Enable Mastery Test</label>'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#3D5475;cursor:pointer"><input type="checkbox" id="lms-l-hasassign" ' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'checked' : '') + '/> Has Assignment in AT</label>'
     + '</div>'
-    + '<div id="lms-mastery-opts" style="display:' + ((item.hasMastery === 'TRUE' || item.hasMastery === true) ? 'grid' : 'none') + ';grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div id="lms-mastery-opts" style="display:' + ((item.hasMastery === 'TRUE' || item.hasMastery === true) ? 'flex' : 'none') + ';flex-direction:column;gap:10px">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div class="fl"><label class="flb">Pass Mark (%)</label><input class="fi" id="lms-l-mpass" type="number" min="1" max="100" value="' + (item.masteryPassMark || 80) + '"/></div>'
     + '<div class="fl"><label class="flb">Max Retakes</label><input class="fi" id="lms-l-retakes" type="number" min="1" max="10" value="' + (item.masteryRetakes || 3) + '"/></div>'
+    + '</div>'
+    + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:6px">🎯 Mastery Test Questions</div>'
+    + '<div id="lms-mquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
+    + '<button id="lms-mquiz-add" style="padding:6px 14px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Add Mastery Question</button>'
     + '</div>'
     + '<div id="lms-assign-opts" style="display:' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'block' : 'none') + ';margin-top:8px">'
     + '<div class="fl"><label class="flb">Link to AT Assignment</label><select class="fsel2" id="lms-l-assignid">' + atOpts + '</select></div>'
@@ -17245,6 +17253,111 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
   }
   typeEl.addEventListener('change', toggleType);
   toggleType();
+
+  // ── Visual Quiz Builder ────────────────────────────────────────────────
+  // State: arrays of question objects {q, opts, ans, type}
+  var _cQuestions = []; var _mQuestions = [];
+  try { _cQuestions = JSON.parse(item.quizJson || '[]'); } catch(e) {}
+  try { _mQuestions = JSON.parse(item.masteryQuizJson || '[]'); } catch(e) {}
+
+  function renderQuizBuilder(questions, listId) {
+    var list = document.getElementById(listId);
+    if (!list) return;
+    list.innerHTML = '';
+    if (!questions.length) {
+      list.innerHTML = '<div style="font-size:11px;color:#94A3B8;padding:6px 0">No questions yet. Click the button below to add one.</div>';
+      return;
+    }
+    questions.forEach(function(q, qi) {
+      var qDiv = document.createElement('div');
+      qDiv.style.cssText = 'background:#F7F9FC;border:1px solid #E4EAF2;border-radius:8px;padding:10px 12px;position:relative';
+      var optsHtml = '';
+      if (q.type !== 'short') {
+        (q.opts || ['','','','']).forEach(function(opt, oi) {
+          var letter = ['A','B','C','D'][oi];
+          optsHtml += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+            + '<input type="radio" name="qb_ans_' + listId + '_' + qi + '" value="' + oi + '" ' + (q.ans === oi ? 'checked' : '') + ' title="Mark as correct answer" style="flex-shrink:0"/>'
+            + '<span style="font-size:10px;font-weight:700;color:#7A92B0;width:14px">' + letter + '</span>'
+            + '<input type="text" value="' + esc(opt) + '" placeholder="Option ' + letter + '..." data-opt="' + oi + '" data-qi="' + qi + '" data-list="' + listId + '" class="qb-opt-inp" style="flex:1;padding:4px 8px;border:1px solid #E4EAF2;border-radius:5px;font-size:11px;font-family:Poppins,sans-serif"/>'
+            + '</div>';
+        });
+      } else {
+        optsHtml = '<div style="font-size:10px;color:#7A92B0;font-style:italic">Short answer — student types their response</div>';
+      }
+      qDiv.innerHTML = '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">'
+        + '<span style="font-size:11px;font-weight:800;color:#1A365E;flex-shrink:0">' + (qi+1) + '.</span>'
+        + '<input type="text" value="' + esc(q.q || '') + '" placeholder="Question text..." data-qi="' + qi + '" data-list="' + listId + '" class="qb-q-inp" style="flex:1;padding:5px 8px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:11px;font-family:Poppins,sans-serif"/>'
+        + '<select data-qi="' + qi + '" data-list="' + listId + '" class="qb-type-sel" style="padding:4px 6px;border:1px solid #E4EAF2;border-radius:5px;font-size:10px">'
+        + '<option value="mcq" ' + (q.type !== 'short' ? 'selected' : '') + '>MCQ</option>'
+        + '<option value="short" ' + (q.type === 'short' ? 'selected' : '') + '>Short</option>'
+        + '</select>'
+        + '<button data-qi="' + qi + '" data-list="' + listId + '" class="qb-del" style="padding:3px 7px;background:#FFF0F1;color:#D61F31;border:1px solid #F5C2C7;border-radius:5px;font-size:11px;cursor:pointer">×</button>'
+        + '</div>'
+        + '<div class="qb-opts-wrap">' + optsHtml + '</div>'
+        + '<div style="font-size:9px;color:#94A3B8;margin-top:4px">' + (q.type !== 'short' ? 'Click the radio button to mark the correct answer' : '') + '</div>';
+      list.appendChild(qDiv);
+    });
+    // Wire delete buttons
+    list.querySelectorAll('.qb-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var qi = parseInt(btn.dataset.qi);
+        var arr = btn.dataset.list === 'lms-cquiz-list' ? _cQuestions : _mQuestions;
+        arr.splice(qi, 1);
+        renderQuizBuilder(arr, btn.dataset.list);
+      });
+    });
+    // Wire question text inputs
+    list.querySelectorAll('.qb-q-inp').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var qi = parseInt(inp.dataset.qi);
+        var arr = inp.dataset.list === 'lms-cquiz-list' ? _cQuestions : _mQuestions;
+        arr[qi].q = inp.value;
+      });
+    });
+    // Wire option inputs
+    list.querySelectorAll('.qb-opt-inp').forEach(function(inp) {
+      inp.addEventListener('input', function() {
+        var qi = parseInt(inp.dataset.qi); var oi = parseInt(inp.dataset.opt);
+        var arr = inp.dataset.list === 'lms-cquiz-list' ? _cQuestions : _mQuestions;
+        if (!arr[qi].opts) arr[qi].opts = ['','','',''];
+        arr[qi].opts[oi] = inp.value;
+      });
+    });
+    // Wire correct answer radios
+    list.querySelectorAll('[name^="qb_ans_"]').forEach(function(r) {
+      r.addEventListener('change', function() {
+        var parts = r.name.split('_'); // qb_ans_listId_qi
+        var qi = parseInt(parts[parts.length - 1]);
+        var listId2 = parts.slice(2, parts.length - 1).join('_');
+        var arr = listId2 === 'lms-cquiz-list' ? _cQuestions : _mQuestions;
+        arr[qi].ans = parseInt(r.value);
+      });
+    });
+    // Wire type selects
+    list.querySelectorAll('.qb-type-sel').forEach(function(sel) {
+      sel.addEventListener('change', function() {
+        var qi = parseInt(sel.dataset.qi);
+        var arr = sel.dataset.list === 'lms-cquiz-list' ? _cQuestions : _mQuestions;
+        arr[qi].type = sel.value;
+        if (sel.value !== 'short' && !arr[qi].opts) arr[qi].opts = ['','','',''];
+        renderQuizBuilder(arr, sel.dataset.list);
+      });
+    });
+  }
+
+  function addQuestion(arr, listId) {
+    arr.push({ q: '', type: 'mcq', opts: ['','','',''], ans: 0 });
+    renderQuizBuilder(arr, listId);
+  }
+
+  // Initial render
+  renderQuizBuilder(_cQuestions, 'lms-cquiz-list');
+  renderQuizBuilder(_mQuestions, 'lms-mquiz-list');
+
+  var cAddBtn = document.getElementById('lms-cquiz-add');
+  if (cAddBtn) cAddBtn.addEventListener('click', function() { addQuestion(_cQuestions, 'lms-cquiz-list'); });
+  var mAddBtn = document.getElementById('lms-mquiz-add');
+  if (mAddBtn) mAddBtn.addEventListener('click', function() { addQuestion(_mQuestions, 'lms-mquiz-list'); });
 
   var hasMasteryEl = document.getElementById('lms-l-hasmastery');
   var masteryOpts = document.getElementById('lms-mastery-opts');
@@ -17285,12 +17398,12 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       title: title,
       body: typeEl.value === 'article' ? document.getElementById('lms-l-url').value : '',
       url: typeEl.value !== 'article' ? document.getElementById('lms-l-url').value.trim() : '',
-      quizJson: typeEl.value === 'quiz' ? document.getElementById('lms-l-quiz').value.trim() : (item.quizJson || ''),
+      quizJson: JSON.stringify(_cQuestions),
       estimatedMins: parseInt(document.getElementById('lms-l-mins').value) || '',
       hasMastery: hasMastery ? 'TRUE' : 'FALSE',
       masteryPassMark: hasMastery ? (parseInt(document.getElementById('lms-l-mpass').value) || 80) : '',
       masteryRetakes: hasMastery ? (parseInt(document.getElementById('lms-l-retakes').value) || 3) : '',
-      masteryQuizJson: hasMastery ? (item.masteryQuizJson || '') : '',
+      masteryQuizJson: hasMastery ? JSON.stringify(_mQuestions) : '',
       hasAssignment: hasAssign ? 'TRUE' : 'FALSE',
       assignmentId: hasAssign ? document.getElementById('lms-l-assignid').value : '',
       createdAt: item.createdAt || new Date().toISOString(),
@@ -17533,6 +17646,27 @@ function spRenderLMS(c) {
       var en = myCourseIds[course.id];
       var subjectCol = {Mathematics:'#3B82F6','English Language Arts':'#8B5CF6',Science:'#059669','Social Studies':'#D97706',Entrepreneurship:'#D61F31',Other:'#6B7280'}[course.subject] || '#1A365E';
 
+      // Pace calculation
+      var paceLabel = ''; var paceIcon = ''; var paceColor = '#94A3B8'; var paceBg = '#F1F5F9';
+      if (en && en.dueDate && en.assignedAt) {
+        var now = Date.now();
+        var start = new Date(en.assignedAt).getTime();
+        var end = new Date(en.dueDate).getTime();
+        var totalDays = (end - start) / 86400000;
+        var daysPassed = (now - start) / 86400000;
+        var expectedPct = totalDays > 0 ? Math.min(100, Math.round(daysPassed / totalDays * 100)) : 0;
+        var paceDiff = pct - expectedPct;
+        if (pct === 100) { paceLabel = 'Complete'; paceIcon = '✅'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
+        else if (daysPassed < 0) { paceLabel = 'Not Started'; paceIcon = '○'; paceColor = '#94A3B8'; paceBg = '#F1F5F9'; }
+        else if (paceDiff >= 10) { paceLabel = 'Ahead of Pace'; paceIcon = '🏃'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
+        else if (paceDiff >= -10) { paceLabel = 'On Pace'; paceIcon = '🚶'; paceColor = '#D97706'; paceBg = '#FEF3C7'; }
+        else { paceLabel = 'Off Pace'; paceIcon = '⚠️'; paceColor = '#D61F31'; paceBg = '#FEE2E2'; }
+      } else if (courseContent.length > 0) {
+        if (pct === 100) { paceLabel = 'Complete'; paceIcon = '✅'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
+        else if (pct === 0) { paceLabel = 'Not Started'; paceIcon = '○'; paceColor = '#94A3B8'; paceBg = '#F1F5F9'; }
+        else { paceLabel = 'In Progress'; paceIcon = '⏳'; paceColor = '#0891B2'; paceBg = '#E0F2FE'; }
+      }
+
       h += '<div class="card sp-lms-course-card" data-courseid="' + esc(course.id) + '" style="padding:0;overflow:hidden;cursor:pointer;border:1px solid #E4EAF2;transition:box-shadow .2s" onmouseover="this.style.boxShadow=\'0 4px 16px rgba(26,54,94,.12)\'" onmouseout="this.style.boxShadow=\'\'">';
       h += '<div style="height:6px;background:' + subjectCol + '"></div>';
       h += '<div style="padding:14px 16px">';
@@ -17543,12 +17677,14 @@ function spRenderLMS(c) {
       h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;color:#7A92B0">' + completed + '/' + courseContent.length + ' lessons</span><span style="font-size:10px;font-weight:700;color:' + pCol + '">' + pct + '%</span></div>';
       h += '<div style="height:6px;background:#F0F4FA;border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + pCol + ';border-radius:3px;transition:width .5s"></div></div>';
       h += '</div>';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
       h += '<div style="display:flex;gap:8px;font-size:10px;color:#7A92B0">';
       h += '<span>📄 ' + courseContent.length + ' lessons</span>';
       if (en && en.dueDate) h += '<span>📅 Due: ' + esc(en.dueDate) + '</span>';
-      if (pct === 100) h += '<span style="color:#059669;font-weight:700">✅ Complete</span>';
       h += '</div>';
-      h += '<div style="margin-top:10px;padding:8px 12px;background:' + subjectCol + ';color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-align:center">' + (pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue') + '</div>';
+      if (paceLabel) h += '<span style="font-size:9px;font-weight:800;color:' + paceColor + ';background:' + paceBg + ';padding:3px 8px;border-radius:20px;white-space:nowrap">' + paceIcon + ' ' + paceLabel + '</span>';
+      h += '</div>';
+      h += '<div style="margin-top:8px;padding:8px 12px;background:' + subjectCol + ';color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-align:center">' + (pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue') + '</div>';
       h += '</div></div>';
     });
     h += '</div>';
@@ -17706,18 +17842,41 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
     h += '<div style="padding:20px;line-height:1.7;font-size:13px;color:#1A365E;white-space:pre-wrap">' + esc(item.body || item.url || '') + '</div>';
   } else if (item.type === 'presentation' && item.url) {
     var psrc = item.url;
-    // Support Google Slides embeds
+    // Force Google Slides embed — strip any /pub or /edit suffixes, add /embed?start=false&loop=false&rm=minimal
     if (psrc.includes('docs.google.com/presentation')) {
-      psrc = psrc.replace(/\/pub\b/, '/embed').replace(/\/edit.*/, '/embed');
+      psrc = psrc.replace(/\/pub(\?.*)?$/, '').replace(/\/edit(\?.*)?$/, '').replace(/\/embed(\?.*)?$/, '');
+      psrc = psrc + '/embed?start=false&loop=false&rm=minimal';
     }
-    h += '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden">';
+    // Also handle Google Drive presentation files
+    var drivePresentMatch = item.url.match(/\/file\/d\/([^\/]+)/);
+    if (drivePresentMatch) {
+      psrc = 'https://drive.google.com/file/d/' + drivePresentMatch[1] + '/preview';
+    }
+    h += '<div style="position:relative;padding-bottom:60%;height:0;overflow:hidden;border-radius:8px;overflow:hidden">';
     h += '<iframe src="' + esc(psrc) + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allowfullscreen loading="lazy"></iframe>';
     h += '</div>';
-  } else if ((item.type === 'link' || item.type === 'file') && item.url) {
-    h += '<div style="padding:20px;text-align:center">';
-    h += '<div style="font-size:32px;margin-bottom:10px">' + (item.type === 'file' ? '📎' : '🔗') + '</div>';
-    h += '<a href="' + esc(item.url) + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#1A365E;color:#fff;border-radius:9px;font-weight:700;font-size:13px;text-decoration:none">' + (item.type === 'file' ? '📎 Open File' : '🔗 Open Link') + '</a>';
+    h += '<div style="padding:8px 16px;text-align:right"><a href="' + esc(item.url) + '" target="_blank" rel="noopener" style="font-size:11px;color:#1A365E;font-weight:700">↗ Open Presentation</a></div>';
+  } else if (item.type === 'file' && item.url) {
+    // Convert Google Drive share URL to preview/embed URL
+    var fileUrl = item.url;
+    var drivePreview = fileUrl;
+    var driveMatch = fileUrl.match(/\/file\/d\/([^\/]+)/);
+    if (driveMatch) {
+      drivePreview = 'https://drive.google.com/file/d/' + driveMatch[1] + '/preview';
+    }
+    h += '<div style="position:relative;padding-bottom:75%;height:0;overflow:hidden">';
+    h += '<iframe src="' + esc(drivePreview) + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allowfullscreen loading="lazy"></iframe>';
     h += '</div>';
+    h += '<div style="padding:8px 16px;text-align:right"><a href="' + esc(fileUrl) + '" target="_blank" rel="noopener" style="font-size:11px;color:#1A365E;font-weight:700">↗ Open in Drive</a></div>';
+  } else if (item.type === 'link' && item.url) {
+    // Try to embed the link; fallback button if blocked
+    h += '<div style="padding:16px">';
+    h += '<div style="font-size:11px;color:#7A92B0;margin-bottom:8px">Loading external content inline...</div>';
+    h += '<iframe src="' + esc(item.url) + '" style="width:100%;height:500px;border:1.5px solid #E4EAF2;border-radius:10px" sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy" onerror="this.style.display=&quot;none&quot;;document.getElementById(&quot;sp-lms-link-fallback&quot;).style.display=&quot;block&quot;"></iframe>';
+    h += '<div id="sp-lms-link-fallback" style="display:none;text-align:center;padding:20px">';
+    h += '<div style="font-size:11px;color:#7A92B0;margin-bottom:10px">This site cannot be displayed inline.</div>';
+    h += '<a href="' + esc(item.url) + '" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:#1A365E;color:#fff;border-radius:9px;font-weight:700;font-size:13px;text-decoration:none">🔗 Open Link</a>';
+    h += '</div></div>';
   } else if (item.type === 'quiz') {
     h += '<div id="sp-lms-quiz-area" style="padding:20px">';
     h += '<div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:10px">📝 Practice Quiz</div>';
@@ -17776,8 +17935,12 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   // Submit mastery
   var mastBtn = document.getElementById('sp-lms-submit-mastery');
   if (mastBtn) mastBtn.addEventListener('click', function() {
+    var currentItemCheck = (_SP.lmsContent || []).find(function(x){ return x.id === window._spLMSLesson; });
+    var mqCheck = currentItemCheck ? (currentItemCheck.masteryQuizJson || currentItemCheck.quizJson || '') : '';
+    var mqParsed = []; try { mqParsed = JSON.parse(mqCheck); } catch(e) {}
+    if (!mqParsed.length) { toast('No mastery questions configured for this lesson. Ask your teacher to add questions.', 'err'); return; }
     var result = spGradeLMSQuiz('sp-lms-mastery');
-    if (result === null) { toast('Please answer all questions', 'err'); return; }
+    if (result === null) { toast('Please answer all questions before submitting', 'err'); return; }
     var passed = result >= passMark;
     var newAttempts = attempts + 1;
     spSaveLMSProgress({
@@ -17854,7 +18017,7 @@ function spGradeLMSQuiz(prefix) {
   var currentItem = (_SP.lmsContent || []).find(function(x){ return x.id === window._spLMSLesson; });
   if (!currentItem) return null;
   try { questions = JSON.parse(currentItem.masteryQuizJson || currentItem.quizJson || '[]'); } catch(e) { return 0; }
-  if (!questions.length) return 100; // No questions = full marks
+  if (!questions.length) return null; // No questions = cannot grade, show warning
 
   var correct = 0;
   var allAnswered = true;
