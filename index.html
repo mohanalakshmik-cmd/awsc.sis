@@ -17156,7 +17156,12 @@ function rLMSContent(c) {
         h += '<span style="color:' + typeCol + ';font-weight:700">' + esc(item.type || '') + '</span>';
         if (item.estimatedMins) h += '<span>⏱ ' + item.estimatedMins + ' min</span>';
         if (item.hasMastery === 'TRUE' || item.hasMastery === true) h += '<span style="color:#059669;font-weight:700">✓ Mastery test</span>';
-        if (item.hasAssignment === 'TRUE' || item.hasAssignment === true) h += '<span style="color:#1A365E;font-weight:700">📋 Assignment</span>';
+        if (item.hasAssignment === 'TRUE' || item.hasAssignment === true) {
+          h += '<span style="background:#EEF3FF;color:#1A365E;font-weight:700;font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid #C7D9FF">📋 Assignment';
+          if (item.assignMaxScore) h += ' · Max: '+esc(String(item.assignMaxScore));
+          if (item.assignSubType) h += ' · '+esc(item.assignSubType);
+          h += '</span>';
+        }
         h += '</div></div>';
         h += '<div style="display:flex;gap:4px;flex-shrink:0">';
         h += '<button class="lms-edit-item" data-idx="' + real_idx + '" style="padding:5px 10px;background:#EEF3FF;color:#1A365E;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✏️</button>';
@@ -17205,11 +17210,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
   var unitOpts = unitTitles.map(function(u) {
     return '<option ' + (u === (item.unitTitle || prefillUnit) ? 'selected' : '') + '>' + esc(u) + '</option>';
   }).join('');
-  // AT assignment options from existing assignments
-  var atAssigns = getATAssignments ? getATAssignments() : [];
-  var atOpts = '<option value="">— Not linked —</option>' + atAssigns.map(function(a) {
-    return '<option value="' + esc(a.id) + '" ' + (a.id === item.assignmentId ? 'selected' : '') + '>' + esc(a.title) + '</option>';
-  }).join('');
+  // Assignment definition lives IN the lesson — no AT linking needed
 
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.65);z-index:400;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;backdrop-filter:blur(4px)';
@@ -17238,7 +17239,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">📋 Mastery Test & Assignment</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#3D5475;cursor:pointer"><input type="checkbox" id="lms-l-hasmastery" ' + ((item.hasMastery === 'TRUE' || item.hasMastery === true) ? 'checked' : '') + '/> Enable Mastery Test</label>'
-    + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#3D5475;cursor:pointer"><input type="checkbox" id="lms-l-hasassign" ' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'checked' : '') + '/> Has Assignment in AT</label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#3D5475;cursor:pointer"><input type="checkbox" id="lms-l-hasassign" ' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'checked' : '') + '/> 📋 Include Assignment</label>'
     + '</div>'
     + '<div id="lms-mastery-opts" style="display:' + ((item.hasMastery === 'TRUE' || item.hasMastery === true) ? 'flex' : 'none') + ';flex-direction:column;gap:10px">'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
@@ -17257,9 +17258,16 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div style="font-size:10px;color:#5A7290;margin-top:6px">Composite Grade = (Mastery × weight) + (Assignment × weight). Weights must total 100%.</div>'
     + '</div>'
     + '</div>'
-    + '<div id="lms-assign-opts" style="display:' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'block' : 'none') + ';margin-top:8px">'
-    + '<div class="fl"><label class="flb">Link to AT Assignment</label><select class="fsel2" id="lms-l-assignid">' + atOpts + '</select></div>'
-    + '</div></div>'
+    + '<div id="lms-assign-opts" style="display:' + ((item.hasAssignment === 'TRUE' || item.hasAssignment === true) ? 'flex' : 'none') + ';flex-direction:column;gap:10px;margin-top:8px;padding:12px;background:#FFF9F0;border-radius:10px;border:1px solid #FDE68A">'
+    + '<div style="font-size:10px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">📋 Assignment Definition</div>'
+    + '<div style="font-size:10px;color:#7A92B0;margin-bottom:8px">This assignment will be created directly in this lesson — no Assignment Tracker needed.</div>'
+    + '<div class="fl"><label class="flb">Assignment Instructions</label><textarea class="fta" id="lms-l-assign-instructions" rows="3" placeholder="Describe what students need to do...">' + esc(item.assignInstructions || '') + '</textarea></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+    + '<div class="fl"><label class="flb">Max Score</label><input class="fi" id="lms-l-assign-maxscore" type="number" min="1" max="100" value="' + (item.assignMaxScore || 100) + '" placeholder="100"/></div>'
+    + '<div class="fl"><label class="flb">Due (days after enrol)</label><input class="fi" id="lms-l-assign-duedays" type="number" min="1" value="' + (item.assignDueDays || '') + '" placeholder="e.g. 7"/></div>'
+    + '<div class="fl"><label class="flb">Submission Type</label><select class="fsel2" id="lms-l-assign-subtype"><option value="text" ' + (item.assignSubType==='text'?'selected':'') + '>Text / Notes</option><option value="link" ' + (item.assignSubType==='link'?'selected':'') + '>Link (Google Doc)</option><option value="both" ' + (!item.assignSubType||item.assignSubType==='both'?'selected':'') + '>Both</option></select></div>'
+    + '</div>'
+    + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
     + '<button id="lms-l-cancel" style="padding:9px 20px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>'
     + '<button id="lms-l-save" style="padding:9px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Lesson</button>'
@@ -17444,7 +17452,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
 
   var hasAssignEl = document.getElementById('lms-l-hasassign');
   var assignOpts = document.getElementById('lms-assign-opts');
-  hasAssignEl.addEventListener('change', function() { assignOpts.style.display = this.checked ? 'block' : 'none'; });
+  hasAssignEl.addEventListener('change', function() { assignOpts.style.display = this.checked ? 'flex' : 'none'; });
 
   var unitSel = document.getElementById('lms-l-unit');
   unitSel.addEventListener('change', function() {
@@ -17486,27 +17494,15 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       masteryWeight: hasMastery ? (parseInt(document.getElementById('lms-l-mweight') && document.getElementById('lms-l-mweight').value) || 60) : 60,
       assignWeight:  hasMastery ? (parseInt(document.getElementById('lms-l-aweight') && document.getElementById('lms-l-aweight').value) || 40) : 40,
       hasAssignment: hasAssign ? 'TRUE' : 'FALSE',
-      assignmentId: hasAssign ? document.getElementById('lms-l-assignid').value : '',
+      assignmentId: '',  // no AT link — assignment is native to this lesson
+      assignInstructions: hasAssign ? document.getElementById('lms-l-assign-instructions').value.trim() : '',
+      assignMaxScore:     hasAssign ? (parseInt(document.getElementById('lms-l-assign-maxscore').value) || 100) : 100,
+      assignDueDays:      hasAssign ? (parseInt(document.getElementById('lms-l-assign-duedays').value) || '') : '',
+      assignSubType:      hasAssign ? document.getElementById('lms-l-assign-subtype').value : 'both',
       createdAt: item.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    // Auto-create AT assignment if hasAssignment checked and no assignmentId selected
-    if (hasAssign && !obj.assignmentId && typeof getATAssignments === 'function') {
-      var newAT = {
-        id: atId(), title: title, type: 'Classwork',
-        subject: (_LMS.courses.find(function(x){return x.id===courseId;})||{}).subject || '',
-        division: (_LMS.courses.find(function(x){return x.id===courseId;})||{}).gradeLevel || '',
-        maxScore: 100, dateAssigned: new Date().toISOString().slice(0,10),
-        dueDate: new Date().toISOString().slice(0,10), dueTime: '18:30',
-        instructions: 'LMS Lesson Assignment: ' + title,
-        gradingScale: 'Percentage', status: 'Active', cohort: '',
-        teacherId: '', createdAt: new Date().toISOString(), lmsContentId: obj.id
-      };
-      var atAll = getATAssignments(); atAll.push(newAT);
-      saveATAssignments(atAll);
-      obj.assignmentId = newAT.id;
-      toast('AT assignment auto-created: ' + title, 'ok');
-    }
+    // Assignment is defined natively inside the lesson — no AT creation needed
     if (isNew) { _LMS.content.push(obj); }
     else { _LMS.content[idx] = obj; }
     saveLMSContent(_LMS.content);
@@ -17537,7 +17533,8 @@ function rLMSAssign(c) {
       var course = _LMS.courses.find(function(x){ return x.id === en.courseId; });
       h += '<div class="card" style="padding:12px 16px;display:flex;align-items:center;gap:12px">';
       h += '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#1A365E">' + esc((course && course.title) || 'Unknown Course') + '</div>';
-      h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + (en.targetType === 'cohort' ? '🏫 Cohort: ' : '👤 Student: ') + esc(en.targetValue || '') + (en.dueDate ? ' · Due: ' + esc(en.dueDate) : '') + '</div></div>';
+      var enrolStart = en.assignedAt ? new Date(en.assignedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+      h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + (en.targetType === 'cohort' ? '🏫 Cohort: ' : '👤 Student: ') + esc(en.targetValue || '') + (enrolStart ? ' · Start: ' + enrolStart : '') + (en.dueDate ? ' · Due: ' + esc(en.dueDate) : '') + '</div></div>';
       h += '<span style="font-size:9px;font-weight:700;color:' + (en.active === 'TRUE' || en.active === true ? '#059669' : '#94A3B8') + ';background:' + (en.active === 'TRUE' || en.active === true ? '#DCFCE7' : '#F1F5F9') + ';padding:2px 8px;border-radius:5px">' + (en.active === 'TRUE' || en.active === true ? 'Active' : 'Inactive') + '</span>';
       h += '<button class="lms-del-enrol" data-idx="' + idx + '" style="padding:6px 10px;background:#FFF0F1;color:#D61F31;border:1px solid #F5C2C7;border-radius:7px;font-size:10px;cursor:pointer">Remove</button>';
       h += '</div>';
@@ -17579,7 +17576,10 @@ function openLMSEnrolModal() {
     + '<div class="fl"><label class="flb">Assign to</label><select class="fsel2" id="lms-en-type"><option value="cohort">Cohort</option><option value="student">Individual Student</option></select></div>'
     + '<div class="fl" id="lms-en-cohort-wrap"><label class="flb">Cohort</label><select class="fsel2" id="lms-en-cohort">' + cohortOpts + '</select></div>'
     + '<div class="fl" id="lms-en-student-wrap" style="display:none"><label class="flb">Student</label><select class="fsel2" id="lms-en-student">' + studentOpts + '</select></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div class="fl"><label class="flb">Start Date</label><input class="fi" id="lms-en-start" type="date"/></div>'
     + '<div class="fl"><label class="flb">Due Date (optional)</label><input class="fi" id="lms-en-due" type="date"/></div>'
+    + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
     + '<button id="lms-en-cancel" style="padding:9px 20px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>'
     + '<button id="lms-en-save" style="padding:9px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Assign</button>'
@@ -17601,7 +17601,7 @@ function openLMSEnrolModal() {
     _LMS.enrolments.push({
       id: lmsId(), courseId: courseId, targetType: targetType, targetValue: targetValue,
       assignedBy: (_currentUser && _currentUser.name) || 'Admin',
-      assignedAt: new Date().toISOString(),
+      assignedAt: document.getElementById('lms-en-start').value ? new Date(document.getElementById('lms-en-start').value).toISOString() : new Date().toISOString(),
       dueDate: document.getElementById('lms-en-due').value || '',
       active: 'TRUE'
     });
@@ -17811,6 +17811,23 @@ function spRenderLMS(c) {
         h += '<span style="font-size:10px;font-weight:800;color:' + paceColor + ';background:' + paceBg + ';padding:4px 10px;border-radius:20px;white-space:nowrap;border:1px solid ' + paceColor + '33">' + paceIcon + ' ' + paceLabel + '</span>';
       }
       h += '</div>';
+      // Pending assignments badge
+      var pendingAssigns = courseContent.filter(function(item) {
+        var ha = item.hasAssignment === 'TRUE' || item.hasAssignment === true;
+        if (!ha) return false;
+        var p2 = myProg.find(function(p){ return p.contentId === item.id; });
+        if (!p2) return false;
+        // Submitted but not scored, or mastery passed but assignment not submitted
+        var mastPassed = p2.masteryPassed === 'TRUE' || p2.masteryPassed === true;
+        var hasMast = item.hasMastery === 'TRUE' || item.hasMastery === true;
+        var assignDone = p2.assignScore !== '' && p2.assignScore !== undefined && !isNaN(p2.assignScore);
+        var assignSubmitted = p2.assignStatus === 'submitted';
+        return (!hasMast || mastPassed) && !assignDone; // assignment available but not yet scored
+      }).length;
+      if (pendingAssigns > 0) {
+        h += '<div style="margin-bottom:6px;padding:5px 10px;background:#FEF3C7;border-radius:7px;font-size:10px;font-weight:700;color:#92400E;display:flex;align-items:center;gap:6px">';
+        h += '<span>📋</span><span>' + pendingAssigns + ' assignment' + (pendingAssigns !== 1 ? 's' : '') + ' need' + (pendingAssigns === 1 ? 's' : '') + ' attention</span></div>';
+      }
       h += '<div style="margin-top:8px;padding:8px 12px;background:' + subjectCol + ';color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-align:center">' + (pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue') + '</div>';
       h += '</div></div>';
     });
@@ -17904,7 +17921,18 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
     h += '<div style="display:flex;gap:8px;font-size:10px;color:#7A92B0;margin-top:2px;flex-wrap:wrap">';
     h += '<span>' + esc(item.type || '') + '</span>';
     if (item.estimatedMins) h += '<span>⏱ ' + item.estimatedMins + ' min</span>';
-    if (hasMastery) h += '<span style="color:' + (masteryPassed ? '#059669' : '#D97706') + ';font-weight:700">' + (masteryPassed ? '✓ Mastery passed' : '🎯 Mastery test') + '</span>';
+    if (hasMastery) {
+      var mastScoreDisp = prog && prog.masteryScore !== '' && !isNaN(prog.masteryScore) ? ' · ' + prog.masteryScore + '%' : '';
+      h += '<span style="color:' + (masteryPassed ? '#059669' : '#D97706') + ';font-weight:700">' + (masteryPassed ? '✓ Mastery' + mastScoreDisp : '🎯 Mastery test') + '</span>';
+    }
+    var hasAssign2 = item.hasAssignment === 'TRUE' || item.hasAssignment === true;
+    if (hasAssign2) {
+      var assignSt2 = prog ? (prog.assignStatus || '') : '';
+      var assignSc2 = prog && prog.assignScore !== '' && prog.assignScore !== undefined && !isNaN(prog.assignScore) ? Number(prog.assignScore) : null;
+      var assignBadgeCol = assignSc2 !== null ? (assignSc2 >= (parseInt(course.passMark)||80) ? '#059669' : '#D61F31') : (assignSt2 === 'submitted' ? '#D97706' : '#7A92B0');
+      var assignBadgeTxt = assignSc2 !== null ? ('📋 ' + assignSc2 + '%') : (assignSt2 === 'submitted' ? '📋 ⏳ Awaiting score' : '📋 Assignment due');
+      h += '<span style="color:' + assignBadgeCol + ';font-weight:700">' + assignBadgeTxt + '</span>';
+    }
     h += '</div></div>';
     h += '<div style="font-size:16px;color:' + statusCol + ';flex-shrink:0">' + statusIcon + '</div>';
     h += '</div>';
@@ -17948,7 +17976,30 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   h += '<button id="sp-lesson-back" style="padding:6px 12px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">← Course</button>';
   h += '<div style="flex:1"><div style="font-size:14px;font-weight:800;color:#1A365E">' + esc(item.title || 'Lesson') + '</div>';
   h += '<div style="font-size:11px;color:#7A92B0">' + esc(item.type || '') + (item.estimatedMins ? ' · ' + item.estimatedMins + ' min' : '') + '</div></div>';
-  if (completed) h += '<span style="font-size:11px;font-weight:700;color:#059669;background:#DCFCE7;padding:4px 10px;border-radius:7px">✅ Completed</span>';
+  // Show composite grade in header if scored
+  var headerBadge = '';
+  if (completed) {
+    var hMS = prog && prog.masteryScore !== '' && !isNaN(prog.masteryScore) ? Number(prog.masteryScore) : null;
+    var hAS = prog && prog.assignScore  !== '' && !isNaN(prog.assignScore)  ? Number(prog.assignScore)  : null;
+    var hHasA = item.hasAssignment === 'TRUE' || item.hasAssignment === true;
+    var hHasM = item.hasMastery    === 'TRUE' || item.hasMastery    === true;
+    if (hHasA && hHasM && hMS !== null && hAS !== null) {
+      var hMW = item.masteryWeight !== '' && item.masteryWeight !== undefined ? parseFloat(item.masteryWeight)/100 : 0.6;
+      var hAW = item.assignWeight  !== '' && item.assignWeight  !== undefined ? parseFloat(item.assignWeight)/100  : 0.4;
+      var hCS = Math.round(hMS * hMW + hAS * hAW);
+      var hCSCol = hCS >= passMark ? '#059669' : '#D61F31';
+      headerBadge = '<div style="display:flex;gap:6px;align-items:center">'
+        + '<span style="font-size:11px;font-weight:700;color:' + hCSCol + ';background:' + (hCS>=passMark?'#DCFCE7':'#FEE2E2') + ';padding:4px 10px;border-radius:7px">⭐ ' + hCS + '% composite</span>'
+        + '<span style="font-size:10px;color:#7A92B0">M:' + hMS + '% A:' + hAS + '%</span>'
+        + '</div>';
+    } else if (hHasM && hMS !== null) {
+      var hMCol = hMS >= passMark ? '#059669' : '#D61F31';
+      headerBadge = '<span style="font-size:11px;font-weight:700;color:' + hMCol + ';background:' + (hMS>=passMark?'#DCFCE7':'#FEE2E2') + ';padding:4px 10px;border-radius:7px">🎯 ' + hMS + '%</span>';
+    } else {
+      headerBadge = '<span style="font-size:11px;font-weight:700;color:#059669;background:#DCFCE7;padding:4px 10px;border-radius:7px">✅ Completed</span>';
+    }
+  }
+  if (headerBadge) h += headerBadge;
   h += '</div>';
 
   // Content area
@@ -18732,7 +18783,13 @@ function rLMSSection(c) {
       h+='<td style="padding:10px 8px;text-align:center"><span style="font-size:12px;font-weight:700;color:'+onTgtCol+'">'+onTgt+'%</span>&nbsp;<span style="font-size:10px;color:'+onTgtCol+'">('+gl(onTgt)+')</span></td>';
       // Current grade
       h+='<td style="padding:10px 8px;text-align:center">';
-      if(st.avgMastery!==null){h+='<span style="font-size:12px;font-weight:700;color:'+curMCol+'">'+st.avgMastery+'%</span>&nbsp;<span style="font-size:10px;color:'+curMCol+'">('+gl(st.avgMastery)+')</span>';}
+      // Composite if any assignments exist in this course
+      var hasCourseAssign = content.some(function(it){ return it.hasAssignment==='TRUE'||it.hasAssignment===true; });
+      var composite_sec = hasCourseAssign ? lmsCourseComposite(allProg.filter(function(p){return p.courseId===course.id&&String(p.studentId)===st.sid;}), content, passMark) : null;
+      if (composite_sec !== null) {
+        var compCol_sec = composite_sec >= passMark ? '#059669' : '#D61F31';
+        h += '<span style="font-size:12px;font-weight:800;color:'+compCol_sec+'">⭐'+composite_sec+'%</span>&nbsp;<span style="font-size:10px;color:'+compCol_sec+'">('+gl(composite_sec)+')</span>';
+      } else if(st.avgMastery!==null){h+='<span style="font-size:12px;font-weight:700;color:'+curMCol+'">'+st.avgMastery+'%</span>&nbsp;<span style="font-size:10px;color:'+curMCol+'">('+gl(st.avgMastery)+')</span>';}
       else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
       h+='</td>';
       // Course grade
@@ -18747,7 +18804,10 @@ function rLMSSection(c) {
       // Time on task
       h+='<td style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(st.timeMins)+'</td>';
       // Tasks (ready to score + locked)
-      var taskCount=st.readyToScore+st.lockedCount;
+      var toScore_sec = allProg.filter(function(p){
+        return p.courseId===course.id&&String(p.studentId)===st.sid&&p.assignStatus==='submitted'&&(p.assignScore===''||p.assignScore===undefined||isNaN(p.assignScore));
+      }).length;
+      var taskCount=st.readyToScore+st.lockedCount+toScore_sec;
       h+='<td style="padding:10px 8px;text-align:center">';
       if(taskCount>0){h+='<div style="display:flex;align-items:center;justify-content:center;gap:4px"><span style="font-size:14px">⏰</span><span style="font-size:12px;font-weight:900;color:#D61F31">'+taskCount+'</span></div>';}
       else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
@@ -18996,6 +19056,8 @@ function rLMSStudent(c) {
           var maxR=parseInt(item.masteryRetakes)||3;
           var isLocked=att>=maxR&&prog&&prog.masteryPassed!=='TRUE';
           var starHTML='';
+          var as_stu_cur = prog&&prog.assignScore!==''&&prog.assignScore!==undefined&&!isNaN(prog.assignScore)?Number(prog.assignScore):null;
+          var assignStatusCur = prog?(prog.assignStatus||''):'';
           if(hm){
             if(mp) starHTML='<span style="color:#D97706;font-size:14px">★</span>';
             else if(att>0) starHTML='<span style="color:#D97706;font-size:14px">★</span><span style="color:#D0D7E4;font-size:14px">☆</span>';
@@ -19017,8 +19079,20 @@ function rLMSStudent(c) {
           // Time
           h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(itTimeMins)+'</div>';
           // Score
+          // Score cell — mastery + assignment + composite
           h+='<div style="text-align:center">';
-          if(ms!==null){
+          var as_stu = prog && prog.assignScore!==''&&prog.assignScore!==undefined&&!isNaN(prog.assignScore)?Number(prog.assignScore):null;
+          var cs_stu = lmsCompositeScore(prog, item, passMark);
+          if(cs_stu!==null && item.hasAssignment==='TRUE'){
+            var csCol_stu = cs_stu>=passMark?'#059669':'#D61F31';
+            h+='<div style="display:flex;flex-direction:column;gap:2px;align-items:center">';
+            h+='<span style="font-size:12px;font-weight:900;color:'+csCol_stu+';background:'+(cs_stu>=passMark?'#DCFCE7':'#FEE2E2')+';padding:2px 7px;border-radius:6px">⭐'+cs_stu+'%</span>';
+            if(ms!==null)h+='<span style="font-size:9px;color:#7A92B0">M:'+ms+'%</span>';
+            if(as_stu!==null)h+='<span style="font-size:9px;color:#7A92B0">A:'+as_stu+'%</span>';
+            else if(prog&&prog.assignStatus==='submitted')h+='<span style="font-size:9px;color:#D97706">A:⏳</span>';
+            else if(prog&&prog.masteryPassed==='TRUE')h+='<span style="font-size:9px;color:#94A3B8">A:pending</span>';
+            h+='</div>';
+          } else if(ms!==null){
             h+='<span style="font-size:13px;font-weight:900;color:'+sCol+';background:'+(ms>=passMark?'#DCFCE7':'#FEE2E2')+';padding:2px 8px;border-radius:6px">'+ms+'%</span>';
           }
           h+='</div>';
@@ -19146,9 +19220,13 @@ function spRenderAssignmentPanel(item, prog, courseId, c, allItems) {
       + '</div>';
   }
 
+  var instructions = item.assignInstructions || '';
+  var maxScore = item.assignMaxScore || 100;
+  var subType  = item.assignSubType  || 'both';
+
   var h = '<div id="lms-assign-panel" style="margin-top:16px;background:#fff;border:1.5px solid #1A365E22;border-radius:12px;overflow:hidden">';
   h += '<div style="background:linear-gradient(135deg,#1A365E,#0F2240);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">';
-  h += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">📋</span><span style="font-size:13px;font-weight:800;color:#fff">Assignment</span></div>';
+  h += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">📋</span><span style="font-size:13px;font-weight:800;color:#fff">Assignment</span><span style="font-size:10px;color:rgba(255,255,255,.6);margin-left:4px">Max: '+maxScore+' pts</span></div>';
   // Score badge if scored
   if (assignScore !== null) {
     var sBg = assignScore >= (item.masteryPassMark||80) ? '#059669' : '#D61F31';
@@ -19176,20 +19254,35 @@ function spRenderAssignmentPanel(item, prog, courseId, c, allItems) {
 
   if (assignStatus === 'scored' || assignScore !== null) {
     // Already scored — show score + teacher note
+    var tNote = prog ? (prog.assignTeacherNote || '') : '';
     h += '<div style="padding:10px 12px;background:#DCFCE7;border-radius:8px;font-size:11px;color:#059669;font-weight:700">✅ Assignment scored by teacher: '+assignScore+'%</div>';
+    if (tNote) {
+      h += '<div style="padding:8px 12px;background:#F0FDF4;border-radius:8px;font-size:11px;color:#3D5475;margin-top:6px;border-left:3px solid #059669">';
+      h += '<div style="font-size:9px;font-weight:800;color:#059669;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Teacher Feedback</div>';
+      h += '<div>'+esc(tNote)+'</div></div>';
+    }
   } else if (assignStatus === 'submitted') {
     h += '<div style="padding:10px 12px;background:#FEF3C7;border-radius:8px;font-size:11px;color:#D97706;font-weight:700">⏳ Your assignment has been submitted and is awaiting teacher scoring.</div>';
   } else {
-    // Show submission form
-    h += '<div style="font-size:11px;color:#3D5475;margin-bottom:10px">Submit your work for this lesson. Your teacher will review and score it.</div>';
+    // Show assignment instructions + submission form
+    if (instructions) {
+      h += '<div style="background:#FEF9E7;border-radius:8px;padding:10px 12px;margin-bottom:10px;border-left:3px solid #F59E0B">';
+      h += '<div style="font-size:9px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Assignment Instructions</div>';
+      h += '<div style="font-size:11px;color:#3D5475;white-space:pre-wrap">'+esc(instructions)+'</div>';
+      h += '</div>';
+    }
+    h += '<div style="font-size:11px;color:#3D5475;margin-bottom:10px">Submit your work below. Your teacher will review and score it.</div>';
     h += '<div style="display:flex;flex-direction:column;gap:8px">';
-    h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Submission Notes</label>';
+    if (subType !== 'link') {
+      h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Submission Notes</label>';
     h += '<textarea id="lms-assign-note" rows="3" placeholder="Describe what you submitted or add notes for your teacher..." style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;font-family:Poppins,sans-serif;resize:vertical;box-sizing:border-box"></textarea></div>';
-    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
-    h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Link (Google Doc, Drive...)</label>';
-    h += '<input id="lms-assign-link" type="url" placeholder="https://docs.google.com/..." style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;font-family:Poppins,sans-serif;box-sizing:border-box"/></div>';
-    h += '<div style="display:flex;align-items:flex-end"><button id="lms-assign-submit-btn" data-cid="'+esc(item.id)+'" data-courseid="'+esc(courseId)+'" style="width:100%;padding:9px 16px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📤 Submit Assignment</button></div>';
-    h += '</div></div>';
+    }
+    if (subType !== 'text') {
+      h += '<div><label style="font-size:10px;font-weight:700;color:#5A7290;text-transform:uppercase;letter-spacing:.5px">Link (Google Doc, Drive...)</label>';
+      h += '<input id="lms-assign-link" type="url" placeholder="https://docs.google.com/..." style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;font-family:Poppins,sans-serif;box-sizing:border-box"/></div>';
+    }
+    h += '<button id="lms-assign-submit-btn" data-cid="'+esc(item.id)+'" data-courseid="'+esc(courseId)+'" style="padding:9px 16px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-end">📤 Submit Assignment</button>';
+    h += '</div>';
   }
   h += '</div></div>';
   return h;
@@ -19232,15 +19325,42 @@ function lmsWireAssignSubmit() {
 // ADMIN: Score Assignment inline in Gradebook / Section / Student views
 // ════════════════════════════════════════════════════════════════════════════
 function lmsShowScoreModal(studentId, contentId, courseId, currentScore, lessonTitle, callback) {
+  // Show student's submission notes, link, and assignment instructions
+  var progKey = studentId + '_' + contentId;
+  var progRec = (_LMS.progress || []).find(function(p){ return p.id === progKey; });
+  var submNote = progRec ? (progRec.assignNote || '') : '';
+  var submLink = progRec ? (progRec.assignLink || '') : '';
+  var lessonItem = (_LMS.content || []).find(function(x){ return x.id === contentId; });
+  var instructions = lessonItem ? (lessonItem.assignInstructions || '') : '';
+  var maxScore = lessonItem ? (parseInt(lessonItem.assignMaxScore) || 100) : 100;
+
+  var submHtml = '';
+  if (instructions) {
+    submHtml += '<div style="background:#EEF3FF;border-radius:8px;padding:10px 12px;margin-bottom:10px">';
+    submHtml += '<div style="font-size:9px;font-weight:800;color:#1A365E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Assignment Instructions</div>';
+    submHtml += '<div style="font-size:11px;color:#3D5475;white-space:pre-wrap">' + esc(instructions) + '</div>';
+    submHtml += '</div>';
+  }
+  if (submNote || submLink) {
+    submHtml += '<div style="background:#F7F9FC;border-radius:8px;padding:10px 12px;margin-bottom:10px;border-left:3px solid #1A365E">';
+    submHtml += '<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Student Submission</div>';
+    if (submNote) submHtml += '<div style="font-size:11px;color:#3D5475;margin-bottom:6px;white-space:pre-wrap">' + esc(submNote) + '</div>';
+    if (submLink) submHtml += '<a href="' + esc(submLink) + '" target="_blank" rel="noopener" style="font-size:11px;color:#1A365E;font-weight:700;word-break:break-all">🔗 ' + esc(submLink) + '</a>';
+    submHtml += '</div>';
+  } else {
+    submHtml += '<div style="background:#FEF3C7;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#92400E">⏳ No text submission — student may have worked offline.</div>';
+  }
+
   var ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:500;display:flex;align-items:center;justify-content:center';
-  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:500px;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">'
     + '<div style="font-size:16px;font-weight:900;color:#1A365E;margin-bottom:4px">📋 Score Assignment</div>'
-    + '<div style="font-size:11px;color:#7A92B0;margin-bottom:18px">'+esc(lessonTitle)+'</div>'
-    + '<div class="fl"><label class="flb">Assignment Score (0–100)</label>'
-    + '<input class="fi" id="lms-score-input" type="number" min="0" max="100" value="'+(currentScore||'')+'" placeholder="Enter score..."/></div>'
-    + '<div class="fl" style="margin-top:10px"><label class="flb">Teacher Note (optional)</label>'
-    + '<textarea class="fta" id="lms-score-note" rows="2" placeholder="Feedback for student..."></textarea></div>'
+    + '<div style="font-size:11px;color:#7A92B0;margin-bottom:14px">' + esc(lessonTitle) + ' &nbsp;·&nbsp; Max: ' + maxScore + ' pts</div>'
+    + submHtml
+    + '<div class="fl"><label class="flb">Assignment Score (0–' + maxScore + ')</label>'
+    + '<input class="fi" id="lms-score-input" type="number" min="0" max="' + maxScore + '" value="' + (currentScore || '') + '" placeholder="Enter score 0–' + maxScore + '"/></div>'
+    + '<div class="fl" style="margin-top:10px"><label class="flb">Teacher Feedback (optional)</label>'
+    + '<textarea class="fta" id="lms-score-note" rows="2" placeholder="Feedback visible to student..."></textarea></div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
     + '<button id="lms-score-cancel" style="padding:9px 20px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>'
     + '<button id="lms-score-save" style="padding:9px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Score</button>'
@@ -19249,23 +19369,20 @@ function lmsShowScoreModal(studentId, contentId, courseId, currentScore, lessonT
   document.getElementById('lms-score-cancel').addEventListener('click', function(){ ov.remove(); });
   document.getElementById('lms-score-save').addEventListener('click', function() {
     var score = parseInt(document.getElementById('lms-score-input').value);
-    if (isNaN(score) || score < 0 || score > 100) { toast('Enter a score between 0–100', 'err'); return; }
+    if (isNaN(score) || score < 0 || score > maxScore) { toast('Enter a score between 0–' + maxScore, 'err'); return; }
     var note  = document.getElementById('lms-score-note').value;
     gmsSheetRequest('saveLMSAssignScore', {
       submission: { studentId: studentId, contentId: contentId, courseId: courseId, assignScore: score, assignStatus: 'scored', teacherNote: note }
     }, function(d) {
       ov.remove();
-      // Update local _LMS.progress
       var key = studentId + '_' + contentId;
       var pr = (_LMS.progress||[]).find(function(p){return p.id===key;});
-      if (pr) { pr.assignScore = score; pr.assignStatus = 'scored'; pr.compositeScore = d.compositeScore||score; }
-      toast('✅ Assignment scored: '+score+'%', 'ok');
+      if (pr) { pr.assignScore = score; pr.assignStatus = 'scored'; pr.compositeScore = d.compositeScore||score; pr.assignTeacherNote = note; }
+      toast('✅ Assignment scored: ' + score + ' / ' + maxScore, 'ok');
       callback && callback(score, d.compositeScore);
     });
   });
 }
-
-// ════════════════════════════════════════════════════════════════════════════
 // ADMIN: Enhanced rLMSGradebook with Assignment + Composite columns
 // ════════════════════════════════════════════════════════════════════════════
 function rLMSGradebook(c) {
@@ -19320,8 +19437,22 @@ function rLMSGradebook(c) {
       if(diff>=10)ahead++;else if(diff>=-10)onP++;else off++;
     }
   });
+  // Count assignments needing scoring
+  var needsScoring = 0;
+  enrolled.forEach(function(s){
+    var sid = String(s.studentId||s.id);
+    var myP = allProg.filter(function(p){ return p.courseId===course.id&&String(p.studentId)===sid; });
+    content.forEach(function(item){
+      var ha = item.hasAssignment==='TRUE'||item.hasAssignment===true;
+      if(!ha) return;
+      var p = myP.find(function(pp){ return pp.contentId===item.id; });
+      if(!p) return;
+      // Submitted but not scored
+      if(p.assignStatus==='submitted' && (p.assignScore===''||p.assignScore===undefined||isNaN(p.assignScore))) needsScoring++;
+    });
+  });
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  [{icon:'👥',label:'All',val:total,col:'#1A365E',bg:'#EEF3FF'},{icon:'✅',label:'Done',val:done,col:'#059669',bg:'#DCFCE7'},{icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},{icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},{icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'}].forEach(function(st){
+  [{icon:'👥',label:'All',val:total,col:'#1A365E',bg:'#EEF3FF'},{icon:'✅',label:'Done',val:done,col:'#059669',bg:'#DCFCE7'},{icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},{icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},{icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'},{icon:'📋',label:'To Score',val:needsScoring,col:'#7C3AED',bg:'#EDE9FE'}].forEach(function(st){
     h+='<div style="padding:10px 14px;background:'+st.bg+';border-radius:10px;text-align:center;min-width:76px"><div style="font-size:16px">'+st.icon+'</div><div style="font-size:18px;font-weight:900;color:'+st.col+'">'+st.val+'</div><div style="font-size:9px;font-weight:700;color:'+st.col+';text-transform:uppercase">'+st.label+'</div></div>';
   });
   h+='</div>';
@@ -19458,14 +19589,19 @@ function rLMSGradebook(c) {
           h+='<div style="font-size:11px;font-weight:900;color:'+csCol_+'">'+cs+'</div>';
           if(ms!==null) h+='<div style="font-size:8px;color:'+csCol_+';opacity:.8">M:'+ms+'</div>';
           if(as_!==null) h+='<div style="font-size:8px;color:'+csCol_+';opacity:.8">A:'+as_+'</div>';
-          else if(assignSt==='submitted') h+='<div style="font-size:8px;color:#D97706">⏳sub</div>';
-          else h+='<div style="font-size:8px;color:#94A3B8">📝?</div>';
+          else if(assignSt==='submitted') h+='<div style="font-size:8px;font-weight:700;color:#7C3AED;cursor:pointer">📋⏳</div>';
+          else if(status==='completed') h+='<div style="font-size:8px;color:#94A3B8;cursor:pointer">📋+</div>';
           h+='</div>';
         } else if(hm&&ms!==null){
           var mColL=mp?'#059669':'#D61F31';
           h+='<div style="background:'+(mp?'#DCFCE7':'#FEE2E2')+';border-radius:5px;padding:3px 4px;display:inline-block">';
           h+='<div style="font-size:12px;font-weight:900;color:'+mColL+'">'+ms+'</div>';
-          if(ha) h+='<div style="font-size:8px;color:#94A3B8" class="lms-gb-score-cell" data-sid="'+esc(sid)+'" data-cid="'+esc(item.id)+'" data-courseid="'+esc(course.id)+'" data-title="'+esc(item.title)+'" data-ascore="" style="cursor:pointer">📝?</div>';
+          if(ha){
+            var aStCell = prog?(prog.assignStatus||''):'';
+            var aCellTxt = aStCell==='submitted'?'📋⏳':'📋+';
+            var aCellCol = aStCell==='submitted'?'#7C3AED':'#94A3B8';
+            h+='<div style="font-size:8px;color:'+aCellCol+';font-weight:700;cursor:pointer" class="lms-gb-score-cell" data-sid="'+esc(sid)+'" data-cid="'+esc(item.id)+'" data-courseid="'+esc(course.id)+'" data-title="'+esc(item.title)+'" data-ascore="">'+aCellTxt+'</div>';
+          }
           h+='</div>';
         } else {
           h+='<div style="background:#DCFCE7;border-radius:5px;padding:4px 5px;display:inline-block">';
