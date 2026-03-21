@@ -469,9 +469,12 @@ document.addEventListener("DOMContentLoaded",function(){
       <div class="sbsec">Learning Management</div>
       <button class="ni-parent" id="lms-parent">📚 LMS <span class="ni-arrow">▶</span></button>
       <div class="ni-sub" id="lms-sub">
+        <button class="ni" data-v="lms_manage">📋 Manage Courses</button>
         <button class="ni" data-v="lms_courses">📘 Courses</button>
         <button class="ni" data-v="lms_content">📄 Content Library</button>
         <button class="ni" data-v="lms_assign">👥 Assign Courses</button>
+        <button class="ni" data-v="lms_gradebook","lms_section","lms_student">📊 Gradebook</button>
+        <button class="ni" data-v="lms_section">📋 Section Details</button>
         <button class="ni" data-v="lms_progress">📈 Progress Reports</button>
       </div>
 
@@ -1524,14 +1527,14 @@ function nav(v){
   var ptParent=document.getElementById("pt-parent");
   var ptSub=document.getElementById("pt-sub");
   if(ptParent&&ptSub&&isPt){ptParent.classList.add("open");ptSub.classList.add("open");}
-  var titles={dashboard:"Dashboard",perf_dash:"School Performance",elem_grades:"Lower School Grades",applications:"Applications",enrolled:"Enrolled Students",alumni:"Alumni Directory",waitlist:"Waitlist",cohorts:"Cohorts",documents:"Documents",grades:"Grades",analytics:"Analytics",notifications:"Alerts & Notifications",settings:"Settings",users:"User Management",staff:"Staff Directory",attendance:"Attendance",interviews:"Interviews",fees:"Fees & Tuition",comms:"Communications",reportcards:"Report Cards",calendar:"Calendar",tpms:"Teaching & Planning",tpms_dashboard:"Teaching & Planning",tpms_lessons:"Lesson Plans",tpms_units:"Unit Plans",tpms_blocks:"Blocks / Timetable",tpms_curriculum:"Curriculum Map",tpms_pd:"Professional Development",tpms_analytics:"Teaching Analytics",health:"Health Records",behaviour:"Behaviour Log",at_dashboard:"Assignment Tracker",at_assignments:"Assignments",at_weekly:"Weekly Tracker",at_exactpath:"Exact Path Tracker",at_assessment:"Weekly Assessments",at_notes:"Class Notes & Corrections",at_late:"Late Submissions",at_reports:"Reports",pt_dashboard:"AWSC-27 Dashboard",pt_assign:"Assign Projects",pt_track:"Track Progress",pt_evaluate:"Evaluate Work",pt_reports:"Family Reports",lms_courses:"LMS Courses",lms_content:"Content Library",lms_assign:"Assign Courses",lms_progress:"LMS Progress Reports"};
+  var titles={dashboard:"Dashboard",perf_dash:"School Performance",elem_grades:"Lower School Grades",applications:"Applications",enrolled:"Enrolled Students",alumni:"Alumni Directory",waitlist:"Waitlist",cohorts:"Cohorts",documents:"Documents",grades:"Grades",analytics:"Analytics",notifications:"Alerts & Notifications",settings:"Settings",users:"User Management",staff:"Staff Directory",attendance:"Attendance",interviews:"Interviews",fees:"Fees & Tuition",comms:"Communications",reportcards:"Report Cards",calendar:"Calendar",tpms:"Teaching & Planning",tpms_dashboard:"Teaching & Planning",tpms_lessons:"Lesson Plans",tpms_units:"Unit Plans",tpms_blocks:"Blocks / Timetable",tpms_curriculum:"Curriculum Map",tpms_pd:"Professional Development",tpms_analytics:"Teaching Analytics",health:"Health Records",behaviour:"Behaviour Log",at_dashboard:"Assignment Tracker",at_assignments:"Assignments",at_weekly:"Weekly Tracker",at_exactpath:"Exact Path Tracker",at_assessment:"Weekly Assessments",at_notes:"Class Notes & Corrections",at_late:"Late Submissions",at_reports:"Reports",pt_dashboard:"AWSC-27 Dashboard",pt_assign:"Assign Projects",pt_track:"Track Progress",pt_evaluate:"Evaluate Work",pt_reports:"Family Reports",lms_manage:"Manage Courses",lms_courses:"LMS Courses",lms_content:"Content Library",lms_assign:"Assign Courses",lms_progress:"LMS Progress Reports",lms_gradebook:"LMS Gradebook",lms_section:"Section Details",lms_student:"Student Detail"};
   document.getElementById("pg-title").textContent=titles[v]||v;
   var existBtn=document.getElementById("add-existing-btn");
   var alumBtn=document.getElementById("add-alumni-btn");
   if(existBtn)existBtn.style.display=(v==="applications"||v==="enrolled")?"flex":"none";
   if(alumBtn)alumBtn.style.display=(v==="applications"||v==="alumni")?"flex":"none";
   document.getElementById("new-btn").textContent=v==="cohorts"?"+ Add Cohort":"+ New Application";
-  document.getElementById("new-btn").style.display=["dashboard","documents","analytics","notifications","settings","users","staff","reportcards","calendar","tpms","tpms_dashboard","tpms_lessons","tpms_units","tpms_blocks","tpms_curriculum","tpms_pd","tpms_analytics","health","behaviour","at_dashboard","at_assignments","at_weekly","at_exactpath","at_assessment","at_notes","at_late","at_reports","pt_dashboard","pt_assign","pt_track","pt_evaluate","pt_reports","alumni","grades","waitlist","lms_courses","lms_content","lms_assign","lms_progress"].includes(v)?"none":"flex";
+  document.getElementById("new-btn").style.display=["dashboard","documents","analytics","notifications","settings","users","staff","reportcards","calendar","tpms","tpms_dashboard","tpms_lessons","tpms_units","tpms_blocks","tpms_curriculum","tpms_pd","tpms_analytics","health","behaviour","at_dashboard","at_assignments","at_weekly","at_exactpath","at_assessment","at_notes","at_late","at_reports","pt_dashboard","pt_assign","pt_track","pt_evaluate","pt_reports","alumni","grades","waitlist","lms_manage","lms_courses","lms_content","lms_assign","lms_progress","lms_gradebook"].includes(v)?"none":"flex";
   document.getElementById("refresh-btn").style.display=webUrl?"flex":"none";
   var gmsBtn=document.getElementById("gms-sync-btn");
   if(gmsBtn)gmsBtn.style.display=(v==="grades"&&webUrl)?"flex":"none";
@@ -16924,9 +16927,12 @@ function loadLMSAdmin(cb) {
 // ── LMS Navigation tabs ───────────────────────────────────────────────────────
 function lmsNAV(active) {
   var tabs = [
+    {v:'lms_manage',  l:'📋 Manage'},
     {v:'lms_courses', l:'📘 Courses'},
     {v:'lms_content', l:'📄 Content'},
     {v:'lms_assign',  l:'👥 Assign'},
+    {v:'lms_gradebook',l:'📊 Gradebook'},
+    {v:'lms_section',l:'📋 Section'},
     {v:'lms_progress',l:'📈 Progress'}
   ];
   return '<div style="display:flex;gap:4px;flex-wrap:wrap;background:#F0F4FA;padding:8px;border-radius:12px;margin-bottom:14px">'
@@ -16938,16 +16944,20 @@ function lmsNAV(active) {
 
 // ── Main LMS router ────────────────────────────────────────────────────────────
 function rLMS(c) {
-  var t = (view || 'lms_courses').replace('lms_', '');
+  var t = (view || 'lms_manage').replace('lms_', '');
   if (!_LMS.loaded) {
     c.innerHTML = '<div style="padding:40px;text-align:center;color:#7A92B0">Loading LMS data...</div>';
     loadLMSAdmin(function() { rLMS(c); });
     return;
   }
-  if (t === 'courses')  rLMSCourses(c);
+  if (t === 'manage')   rLMSManage(c);
+  else if (t === 'courses')  rLMSCourses(c);
   else if (t === 'content')  rLMSContent(c);
   else if (t === 'assign')   rLMSAssign(c);
   else if (t === 'progress') rLMSProgress(c);
+  else if (t === 'gradebook') rLMSGradebook(c);
+  else if (t === 'section')   rLMSSection(c);
+  else if (t === 'student')   rLMSStudent(c);
   else rLMSCourses(c);
 }
 
@@ -17049,8 +17059,9 @@ function openLMSCourseModal(idx) {
     + '<div class="fl"><label class="flb">Grade Level</label><select class="fsel2" id="lms-c-grade">' + gradeOpts + '</select></div>'
     + '</div>'
     + '<div class="fl"><label class="flb">Description</label><textarea class="fta" id="lms-c-desc" rows="3" placeholder="What will students learn in this course?">' + esc(course.description || '') + '</textarea></div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
     + '<div class="fl"><label class="flb">Pass Mark (%)</label><input class="fi" id="lms-c-pass" type="number" min="1" max="100" value="' + (course.passMark || 80) + '"/></div>'
+    + '<div class="fl"><label class="flb">Credit Hours</label><input class="fi" id="lms-c-credits" type="number" min="0" max="10" step="0.5" value="' + (course.creditHours || 1) + '" placeholder="1"/></div>'
     + '<div class="fl"><label class="flb">Status</label><select class="fsel2" id="lms-c-status"><option ' + (course.status === 'Draft' ? 'selected' : '') + '>Draft</option><option ' + (course.status === 'Published' ? 'selected' : '') + '>Published</option></select></div>'
     + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
@@ -17069,6 +17080,7 @@ function openLMSCourseModal(idx) {
       gradeLevel: document.getElementById('lms-c-grade').value,
       description: document.getElementById('lms-c-desc').value.trim(),
       passMark: parseInt(document.getElementById('lms-c-pass').value) || 80,
+      creditHours: parseFloat(document.getElementById('lms-c-credits').value) || 1,
       status: document.getElementById('lms-c-status').value,
       createdBy: (_currentUser && _currentUser.name) || 'Admin',
       createdAt: course.createdAt || new Date().toISOString(),
@@ -17212,7 +17224,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + ['video','article','link','file','quiz','presentation'].map(function(t){ return '<option ' + (t === item.type ? 'selected' : '') + '>' + t + '</option>'; }).join('')
     + '</select></div>'
     + '</div>'
-    + '<div class="fl"><label class="flb">Content (URL / body)</label><textarea class="fta" id="lms-l-url" rows="3" placeholder="YouTube URL, article text, Google Drive link...">' + esc(item.url || item.body || '') + '</textarea></div>'
+    + '<div class="fl"><label class="flb">Content URL / Body</label>'    + '<div style="position:relative">'    + '<textarea class="fta" id="lms-l-url" rows="3" placeholder="YouTube URL, Google Slides URL, Google Drive file link, or paste article text...">' + esc(item.url || item.body || '') + '</textarea>'    + '</div>'    + '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'    + '<span style="font-size:10px;color:#7A92B0">📎 Or upload a file (PDF/PPT/image):</span>'    + '<input type="file" id="lms-l-file-upload" accept=".pdf,.ppt,.pptx,.jpg,.jpeg,.png,.gif" style="font-size:10px;flex:1"/>'    + '<button id="lms-l-upload-btn" style="padding:5px 12px;background:#059669;color:#fff;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">Upload</button>'    + '</div>'    + '<div id="lms-upload-status" style="font-size:10px;color:#059669;margin-top:4px;display:none"></div>'    + '</div>'
     + '<div id="lms-l-quiz-wrap" style="display:none">'
     + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:8px">📝 Content Quiz Questions (Practice)</div>'
     + '<div id="lms-cquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
@@ -17253,6 +17265,65 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
   }
   typeEl.addEventListener('change', toggleType);
   toggleType();
+
+  // ── File upload handler ─────────────────────────────────────────────────
+  var uploadBtn = document.getElementById('lms-l-upload-btn');
+  var uploadStatus = document.getElementById('lms-upload-status');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', function() {
+      var fileInput = document.getElementById('lms-l-file-upload');
+      if (!fileInput.files || !fileInput.files[0]) {
+        toast('Select a file first', 'err');
+        return;
+      }
+      var file = fileInput.files[0];
+      var maxMB = 10;
+      if (file.size > maxMB * 1024 * 1024) {
+        toast('File too large. Max ' + maxMB + 'MB. Use Google Drive and paste the link.', 'err');
+        return;
+      }
+      uploadBtn.textContent = '⏳ Uploading...';
+      uploadBtn.disabled = true;
+      uploadStatus.style.display = 'block';
+      uploadStatus.textContent = 'Reading file...';
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var base64 = e.target.result.split(',')[1];
+        uploadStatus.textContent = 'Uploading to Drive...';
+        gmsSheetRequest('uploadLMSFile', {
+          filename: file.name,
+          mimeType: file.type,
+          base64: base64
+        }, function(d) {
+          uploadBtn.textContent = 'Upload';
+          uploadBtn.disabled = false;
+          if (d && d.url) {
+            document.getElementById('lms-l-url').value = d.url;
+            uploadStatus.style.color = '#059669';
+            uploadStatus.textContent = '✅ Uploaded: ' + file.name;
+            // Auto-set type based on file extension
+            var ext = file.name.split('.').pop().toLowerCase();
+            if (['ppt','pptx'].includes(ext)) typeEl.value = 'presentation';
+            else if (['pdf'].includes(ext)) typeEl.value = 'file';
+            else if (['jpg','jpeg','png','gif'].includes(ext)) typeEl.value = 'file';
+            toggleType();
+            toast('File uploaded to Drive ✓', 'ok');
+          } else {
+            uploadStatus.style.color = '#D61F31';
+            uploadStatus.textContent = '❌ Upload failed. Paste a Drive link manually.';
+            toast('Upload failed', 'err');
+          }
+        });
+      };
+      reader.onerror = function() {
+        uploadBtn.textContent = 'Upload';
+        uploadBtn.disabled = false;
+        uploadStatus.style.color = '#D61F31';
+        uploadStatus.textContent = '❌ Could not read file.';
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   // ── Visual Quiz Builder ────────────────────────────────────────────────
   // State: arrays of question objects {q, opts, ans, type}
@@ -17361,7 +17432,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
 
   var hasMasteryEl = document.getElementById('lms-l-hasmastery');
   var masteryOpts = document.getElementById('lms-mastery-opts');
-  hasMasteryEl.addEventListener('change', function() { masteryOpts.style.display = this.checked ? 'grid' : 'none'; });
+  hasMasteryEl.addEventListener('change', function() { masteryOpts.style.display = this.checked ? 'flex' : 'none'; });
 
   var hasAssignEl = document.getElementById('lms-l-hasassign');
   var assignOpts = document.getElementById('lms-assign-opts');
@@ -17525,6 +17596,7 @@ function openLMSEnrolModal() {
       active: 'TRUE'
     });
     saveLMSEnrolments(_LMS.enrolments);
+    _LMS_MANAGE.loaded = false; // invalidate manage cache
     ov.remove();
     rLMSAssign(document.getElementById('content'));
     toast('Course assigned ✓', 'ok');
@@ -17630,6 +17702,49 @@ function spRenderLMS(c) {
   h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + myCourses.length + ' course' + (myCourses.length !== 1 ? 's' : '') + ' assigned to you</div></div>';
   h += '</div>';
 
+  // Pace summary row
+  if (myCourses.length > 0) {
+    var s_ahead=0, s_on=0, s_off=0, s_notstarted=0;
+    var s_stu = _SP.student || {};
+    var s_studentId = String(s_stu.studentId || s_stu.id || '');
+    var s_cohort2 = s_stu.cohort || '';
+    var s_enrols = _SP.lmsEnrolments || [];
+    var s_myCIds = {};
+    s_enrols.forEach(function(en) {
+      if (en.active === 'TRUE' || en.active === true) {
+        if (en.targetType === 'cohort' && s_cohort2 && en.targetValue === s_cohort2) s_myCIds[en.courseId] = en;
+        if (en.targetType === 'student' && en.targetValue === s_studentId) s_myCIds[en.courseId] = en;
+      }
+    });
+    myCourses.forEach(function(course) {
+      var cc = (_SP.lmsContent||[]).filter(function(x){return x.courseId===course.id;});
+      var mp = (_SP.lmsProgress||[]).filter(function(p){return p.courseId===course.id;});
+      var comp = mp.filter(function(p){return p.status==='completed';}).length;
+      var pct2 = cc.length ? Math.round(comp/cc.length*100) : 0;
+      var en2 = s_myCIds[course.id];
+      if (en2 && en2.dueDate && en2.assignedAt) {
+        var now2=Date.now(), st2=new Date(en2.assignedAt).getTime(), en2t=new Date(en2.dueDate).getTime();
+        var td2=(en2t-st2)/86400000, dp2=(now2-st2)/86400000;
+        var epct=td2>0?Math.min(100,Math.round(dp2/td2*100)):0;
+        var pd2=pct2-epct;
+        if(pct2===100)s_ahead++;
+        else if(pd2>=10)s_ahead++;
+        else if(pd2>=-10)s_on++;
+        else s_off++;
+      } else {
+        if(pct2===0)s_notstarted++;
+        else if(pct2===100)s_ahead++;
+        else s_on++;
+      }
+    });
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
+    if(s_ahead>0) h += '<div style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:#DCFCE7;border-radius:10px;border:1px solid #059669"><span style="font-size:16px">🏃‍♂️</span><div><div style="font-size:11px;font-weight:800;color:#059669">' + s_ahead + '</div><div style="font-size:9px;color:#059669">Ahead of Pace</div></div></div>';
+    if(s_on>0)    h += '<div style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:#DBEAFE;border-radius:10px;border:1px solid #2563EB"><span style="font-size:16px">🚶‍♂️</span><div><div style="font-size:11px;font-weight:800;color:#2563EB">' + s_on + '</div><div style="font-size:9px;color:#2563EB">On Pace</div></div></div>';
+    if(s_off>0)   h += '<div style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:#FEE2E2;border-radius:10px;border:1px solid #D61F31"><span style="font-size:16px">🐢</span><div><div style="font-size:11px;font-weight:800;color:#D61F31">' + s_off + '</div><div style="font-size:9px;color:#D61F31">Off Pace</div></div></div>';
+    if(s_notstarted>0) h += '<div style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:#F1F5F9;border-radius:10px;border:1px solid #94A3B8"><span style="font-size:16px">○</span><div><div style="font-size:11px;font-weight:800;color:#64748B">' + s_notstarted + '</div><div style="font-size:9px;color:#64748B">Not Started</div></div></div>';
+    h += '</div>';
+  }
+
   if (!myCourses.length) {
     h += '<div style="text-align:center;padding:60px 20px;background:#fff;border-radius:13px;border:1px solid #E4EAF2">';
     h += '<div style="font-size:48px;margin-bottom:14px">📚</div>';
@@ -17658,9 +17773,9 @@ function spRenderLMS(c) {
         var paceDiff = pct - expectedPct;
         if (pct === 100) { paceLabel = 'Complete'; paceIcon = '✅'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
         else if (daysPassed < 0) { paceLabel = 'Not Started'; paceIcon = '○'; paceColor = '#94A3B8'; paceBg = '#F1F5F9'; }
-        else if (paceDiff >= 10) { paceLabel = 'Ahead of Pace'; paceIcon = '🏃'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
-        else if (paceDiff >= -10) { paceLabel = 'On Pace'; paceIcon = '🚶'; paceColor = '#D97706'; paceBg = '#FEF3C7'; }
-        else { paceLabel = 'Off Pace'; paceIcon = '⚠️'; paceColor = '#D61F31'; paceBg = '#FEE2E2'; }
+        else if (paceDiff >= 10) { paceLabel = 'Ahead of Pace'; paceIcon = '🏃‍♂️'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
+        else if (paceDiff >= -10) { paceLabel = 'On Pace'; paceIcon = '🚶‍♂️'; paceColor = '#2563EB'; paceBg = '#DBEAFE'; }
+        else { paceLabel = 'Off Pace'; paceIcon = '🐢'; paceColor = '#D61F31'; paceBg = '#FEE2E2'; }
       } else if (courseContent.length > 0) {
         if (pct === 100) { paceLabel = 'Complete'; paceIcon = '✅'; paceColor = '#059669'; paceBg = '#DCFCE7'; }
         else if (pct === 0) { paceLabel = 'Not Started'; paceIcon = '○'; paceColor = '#94A3B8'; paceBg = '#F1F5F9'; }
@@ -17682,7 +17797,9 @@ function spRenderLMS(c) {
       h += '<span>📄 ' + courseContent.length + ' lessons</span>';
       if (en && en.dueDate) h += '<span>📅 Due: ' + esc(en.dueDate) + '</span>';
       h += '</div>';
-      if (paceLabel) h += '<span style="font-size:9px;font-weight:800;color:' + paceColor + ';background:' + paceBg + ';padding:3px 8px;border-radius:20px;white-space:nowrap">' + paceIcon + ' ' + paceLabel + '</span>';
+      if (paceLabel) {
+        h += '<span style="font-size:10px;font-weight:800;color:' + paceColor + ';background:' + paceBg + ';padding:4px 10px;border-radius:20px;white-space:nowrap;border:1px solid ' + paceColor + '33">' + paceIcon + ' ' + paceLabel + '</span>';
+      }
       h += '</div>';
       h += '<div style="margin-top:8px;padding:8px 12px;background:' + subjectCol + ';color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-align:center">' + (pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue') + '</div>';
       h += '</div></div>';
@@ -17809,10 +17926,11 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   var maxRetakes = parseInt(item.masteryRetakes) || 3;
   var passMark = parseInt(item.masteryPassMark) || 80;
 
-  // Mark as in_progress when opened
+  // Mark as in_progress when opened + start time tracker
   if (!prog || prog.status === 'not_started') {
     spSaveLMSProgress({ contentId: item.id, courseId: courseId, status: 'in_progress', startedAt: new Date().toISOString() });
   }
+  lmsStartLessonTimer(item.id, courseId);
 
   var h = '<div style="display:flex;flex-direction:column;gap:12px">';
   // Header
@@ -17824,7 +17942,12 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   h += '</div>';
 
   // Content area
+  var contentTypeLabels = {video:'🎬 Video',article:'📝 Article',link:'🔗 Web Link',file:'📎 File',quiz:'❓ Quiz',presentation:'🖥️ Presentation'};
   h += '<div style="background:#fff;border-radius:13px;border:1px solid #E4EAF2;overflow:hidden">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #F0F4FA;background:#F7F9FC">';
+  h += '<span style="font-size:11px;font-weight:700;color:#1A365E">' + (contentTypeLabels[item.type] || '📄 Content') + '</span>';
+  h += '<button id="sp-lms-fullscreen" style="padding:4px 10px;background:#EEF3FF;color:#1A365E;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⛶ Fullscreen</button>';
+  h += '</div>';
 
   if (item.type === 'video' && item.url) {
     // Extract YouTube embed ID
@@ -17898,10 +18021,17 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
     if (masteryPassed) {
       h += '<div style="padding:10px 14px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:12px;font-weight:700;color:#059669">✅ Mastery test passed — ' + (prog.masteryScore || 0) + '% score</div>';
     } else if (attempts >= maxRetakes) {
-      h += '<div style="padding:10px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E">No retakes remaining. Ask your teacher for help.</div>';
+      h += '<div style="padding:10px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E">⚠️ No retakes remaining. Ask your teacher for help.</div>';
     } else {
-      h += '<div id="sp-lms-mastery-area">' + spRenderLMSQuiz(item.masteryQuizJson || item.quizJson, 'sp-lms-mastery', true) + '</div>';
-      h += '<button id="sp-lms-submit-mastery" style="margin-top:10px;padding:10px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Submit Mastery Test</button>';
+      // Check if mastery questions are actually configured
+      var masteryQs = [];
+      try { masteryQs = JSON.parse(item.masteryQuizJson || '[]'); } catch(mxe) {}
+      if (!masteryQs.length) {
+        h += '<div style="padding:10px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E">⚠️ Mastery test questions have not been configured yet. Ask your teacher to add questions to this lesson.</div>';
+      } else {
+        h += '<div id="sp-lms-mastery-area">' + spRenderLMSQuiz(item.masteryQuizJson, 'sp-lms-mastery', true) + '</div>';
+        h += '<button id="sp-lms-submit-mastery" style="margin-top:10px;padding:10px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Submit Mastery Test (' + masteryQs.length + ' question' + (masteryQs.length!==1?'s':'') + ')</button>';
+      }
     }
     h += '</div>';
   }
@@ -17917,7 +18047,25 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   c.innerHTML = h;
 
   // Back
+  // Fullscreen viewer
+  var fsBtn = document.getElementById('sp-lms-fullscreen');
+  if (fsBtn) {
+    fsBtn.addEventListener('click', function() {
+      var contentBox = fsBtn.closest('div').parentElement;
+      if (!contentBox) return;
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:9999;display:flex;flex-direction:column';
+      overlay.innerHTML = '<div style="display:flex;justify-content:flex-end;padding:8px;background:rgba(0,0,0,.7)">'
+        + '<button id="sp-lms-fs-close" style="padding:6px 16px;background:#D61F31;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✕ Exit Fullscreen</button>'
+        + '</div>'
+        + '<div style="flex:1;overflow:auto;background:#000">' + contentBox.innerHTML + '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('sp-lms-fs-close').addEventListener('click', function() { overlay.remove(); });
+    });
+  }
+
   document.getElementById('sp-lesson-back').addEventListener('click', function() {
+    lmsStopLessonTimer();
     window._spLMSLesson = null;
     spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId);
   });
@@ -17985,18 +18133,22 @@ function spRenderLMSQuiz(quizJson, prefix, isMastery) {
   try { questions = JSON.parse(quizJson); } catch(e) { return '<div style="color:#D61F31;font-size:11px;padding:10px">Invalid quiz format.</div>'; }
   if (!questions.length) return '<div style="font-size:11px;color:#94A3B8;text-align:center;padding:12px">No questions.</div>';
   var h = '';
+  var letters = ['A','B','C','D','E'];
   questions.forEach(function(q, qi) {
-    h += '<div style="margin-bottom:14px;padding:12px 14px;background:#F7F9FC;border-radius:9px">';
-    h += '<div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:8px">' + (qi+1) + '. ' + esc(q.q || '') + '</div>';
+    h += '<div style="margin-bottom:12px;padding:14px;background:#F7F9FC;border:1px solid #E4EAF2;border-radius:10px">';
+    h += '<div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:10px">' + (qi+1) + '. ' + esc(q.q || '') + '</div>';
     if (q.type === 'mcq' || !q.type) {
       (q.opts || []).forEach(function(opt, oi) {
-        h += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:11px;color:#3D5475;margin-bottom:3px">';
+        if (!opt && opt !== 0) return; // skip empty options
+        var letter = letters[oi] || String(oi+1);
+        h += '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:11px;color:#3D5475;margin-bottom:4px;background:#fff;border:1.5px solid #E4EAF2">';
         h += '<input type="radio" name="' + prefix + '_q' + qi + '" value="' + oi + '" style="flex-shrink:0"/>';
-        h += esc(opt) + '</label>';
+        h += '<span style="font-size:10px;font-weight:800;color:#7A92B0;background:#F0F4FA;padding:2px 6px;border-radius:4px;flex-shrink:0">' + letter + '</span>';
+        h += '<span>' + esc(opt) + '</span></label>';
       });
     } else {
       // Short answer
-      h += '<textarea style="width:100%;padding:8px;border:1.5px solid #E4EAF2;border-radius:7px;font-size:11px;font-family:Poppins,sans-serif;resize:vertical" name="' + prefix + '_q' + qi + '_text" rows="2" placeholder="Your answer..."></textarea>';
+      h += '<textarea style="width:100%;padding:8px;border:1.5px solid #E4EAF2;border-radius:7px;font-size:11px;font-family:Poppins,sans-serif;resize:vertical" name="' + prefix + '_q' + qi + '_text" rows="2" placeholder="Type your answer here..."></textarea>';
     }
     h += '</div>';
   });
@@ -18053,6 +18205,1161 @@ function spSaveLMSProgress(data) {
     toast('🎓 Course complete! Check your badges.', 'ok');
   }
 }
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LMS GRADEBOOK — Edmentum-style per-course gradebook
+// ═══════════════════════════════════════════════════════════════════════════
+
+var _lmsGBCourseId = null; // currently selected course
+
+// ════════════════════════════════════════════════════════════════════════════
+// LMS MANAGE COURSES — Edmentum-style course management overview
+// ════════════════════════════════════════════════════════════════════════════
+
+var _LMS_MANAGE = { data: null, loaded: false };
+var _lmsManageTab = 'active'; // 'active' | 'inactive'
+var _lmsManageSearch = '';
+var _lmsManageExpanded = {}; // courseId → bool
+var _lmsManageTypeFilter = '';
+
+function loadLMSManage(cb) {
+  if (_LMS_MANAGE.loaded) { cb && cb(); return; }
+  if (!webUrl) { cb && cb(); return; }
+  gmsSheetRequest('getLMSManage', {}, function(d) {
+    _LMS_MANAGE.data = d;
+    _LMS_MANAGE.loaded = true;
+    cb && cb();
+  });
+}
+
+function fmtTime(mins) {
+  if (!mins || mins <= 0) return '—';
+  var h = Math.floor(mins / 60);
+  var m = Math.floor(mins % 60);
+  var s = 0;
+  return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':00';
+}
+
+function rLMSManage(c) {
+  if (!_LMS_MANAGE.loaded) {
+    c.innerHTML = '<div style="padding:40px;text-align:center;color:#7A92B0"><div style="font-size:24px;margin-bottom:10px">⏳</div>Loading course data...</div>';
+    loadLMSManage(function() { rLMSManage(c); });
+    return;
+  }
+  var d = _LMS_MANAGE.data || {};
+  var allCourses = (d.courses || _LMS.courses || []);
+  var stats = d.stats || {};
+
+  // Filter active/inactive
+  var isActive = _lmsManageTab === 'active';
+  var filtered = allCourses.filter(function(co) {
+    var active = co.status === 'Published';
+    return isActive ? active : !active;
+  });
+
+  // Search
+  if (_lmsManageSearch) {
+    var q = _lmsManageSearch.toLowerCase();
+    filtered = filtered.filter(function(co) { return (co.title||'').toLowerCase().includes(q) || (co.subject||'').toLowerCase().includes(q); });
+  }
+  // Type filter
+  if (_lmsManageTypeFilter) {
+    filtered = filtered.filter(function(co) { return co.subject === _lmsManageTypeFilter; });
+  }
+
+  var subjects = []; allCourses.forEach(function(co){ if (co.subject && !subjects.includes(co.subject)) subjects.push(co.subject); });
+
+  var h = '<div style="display:flex;flex-direction:column;gap:0">';
+
+  // ── Top header ────────────────────────────────────────────────────────
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">';
+  h += '<div>';
+  h += '<div style="font-size:18px;font-weight:900;color:#1A365E">Manage Courses</div>';
+  h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">Data as of ' + new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) + '</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;align-items:center">';
+  // Search
+  h += '<div style="position:relative">';
+  h += '<span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:#94A3B8">🔍</span>';
+  h += '<input id="lms-manage-search" value="' + esc(_lmsManageSearch) + '" placeholder="Search Courses or Sections..." style="padding:7px 10px 7px 28px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;width:240px;outline:none;font-family:Poppins,sans-serif"/>';
+  if (_lmsManageSearch) h += '<button id="lms-manage-search-clear" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:13px;color:#94A3B8">✕</button>';
+  h += '</div>';
+  // + New Section button
+  h += '<button onclick="nav(\'lms_courses\')" style="padding:8px 16px;background:#059669;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px"><span style="font-size:14px">⊕</span> NEW SECTION</button>';
+  h += '</div></div>';
+
+  // ── Tabs ──────────────────────────────────────────────────────────────
+  h += lmsNAV('lms_manage');
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">';
+  h += '<div style="display:flex;gap:0;border-bottom:2px solid #E4EAF2">';
+  ['active','inactive'].forEach(function(tab) {
+    var active = _lmsManageTab === tab;
+    h += '<button id="lms-tab-' + tab + '" style="padding:8px 18px;border:none;background:transparent;font-size:12px;font-weight:700;cursor:pointer;color:' + (active ? '#1A365E' : '#94A3B8') + ';border-bottom:' + (active ? '2px solid #1A365E' : '2px solid transparent') + ';margin-bottom:-2px;text-transform:capitalize">' + (tab === 'active' ? 'Active Sections' : 'Inactive Sections') + '</button>';
+  });
+  h += '</div>';
+  // Course type filter
+  h += '<div style="display:flex;align-items:center;gap:6px">';
+  h += '<select id="lms-type-filter" style="padding:6px 10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:11px;color:#1A365E">';
+  h += '<option value="">All Course Types</option>';
+  subjects.forEach(function(s) { h += '<option value="' + esc(s) + '" ' + (s === _lmsManageTypeFilter ? 'selected' : '') + '>' + esc(s) + '</option>'; });
+  h += '</select></div></div>';
+
+  // ── Course list header row ─────────────────────────────────────────────
+  h += '<div style="background:#F7F9FC;border:1px solid #E4EAF2;border-radius:12px;overflow:hidden">';
+  h += '<div style="display:grid;grid-template-columns:1fr 110px 130px 130px 80px;padding:8px 16px;border-bottom:1px solid #E4EAF2;gap:8px">';
+  h += '<div style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px">Course</div>';
+  h += '<div style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;text-align:center">ENROLLMENTS</div>';
+  h += '<div style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;text-align:center">TIME ON TASK</div>';
+  h += '<div style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;text-align:center">CREDITS EARNED</div>';
+  h += '<div></div>';
+  h += '</div>';
+
+  if (!filtered.length) {
+    h += '<div style="padding:40px;text-align:center;color:#94A3B8"><div style="font-size:32px;margin-bottom:10px">📋</div>';
+    h += '<div style="font-size:13px;font-weight:700;color:#1A365E">' + (_lmsManageSearch ? 'No courses match your search' : 'No ' + _lmsManageTab + ' courses') + '</div></div>';
+  } else {
+    filtered.forEach(function(co, idx) {
+      var st = stats[co.id] || { enrollCount: 0, totalTimeMins: 0, creditsEarned: 0, totalCredits: 0, students: [] };
+      var isExpanded = !!_lmsManageExpanded[co.id];
+      var subjectCol = {Mathematics:'#3B82F6','English Language Arts':'#8B5CF6',Science:'#059669','Social Studies':'#D97706',Entrepreneurship:'#D61F31',Other:'#6B7280'}[co.subject] || '#1A365E';
+      var rowBg = idx % 2 === 0 ? '#fff' : '#FAFBFF';
+
+      // Main row
+      h += '<div style="background:' + rowBg + ';border-bottom:1px solid #F0F4FA">';
+      h += '<div style="display:grid;grid-template-columns:1fr 110px 130px 130px 80px;padding:12px 16px;gap:8px;align-items:center">';
+
+      // Course title + expand toggle
+      h += '<div style="display:flex;align-items:center;gap:10px">';
+      h += '<button class="lms-expand-btn" data-cid="' + esc(co.id) + '" style="width:24px;height:24px;border-radius:5px;border:1px solid #E4EAF2;background:#F7F9FC;cursor:pointer;font-size:11px;color:#5A7290;flex-shrink:0">' + (isExpanded ? '▼' : '▶') + '</button>';
+      h += '<div style="width:32px;height:32px;border-radius:7px;background:' + subjectCol + '18;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:16px">📘</span></div>';
+      h += '<div>';
+      h += '<div style="font-size:13px;font-weight:700;color:#1A365E">' + esc(co.title) + '</div>';
+      h += '<div style="font-size:11px;color:#7A92B0">' + esc(co.subject||'') + (co.gradeLevel ? ' · ' + esc(co.gradeLevel) : '') + ' · ' + (st.students.length || 0) + ' student' + (st.students.length !== 1 ? 's' : '') + '</div>';
+      h += '</div></div>';
+
+      // Enrollments
+      h += '<div style="text-align:center">';
+      if (st.enrollCount > 0) h += '<div style="font-size:20px;font-weight:900;color:#1A365E">' + st.enrollCount + '</div>';
+      else h += '<div style="font-size:16px;color:#94A3B8">—</div>';
+      h += '</div>';
+
+      // Time on task (total all students HH:MM:SS)
+      h += '<div style="text-align:center">';
+      if (st.totalTimeMins > 0) h += '<div style="font-size:14px;font-weight:700;color:#1A365E">' + fmtTime(st.totalTimeMins) + '</div>';
+      else h += '<div style="font-size:16px;color:#94A3B8">—</div>';
+      h += '</div>';
+
+      // Credits earned / total
+      h += '<div style="text-align:center">';
+      if (st.enrollCount > 0) {
+        h += '<div style="font-size:20px;font-weight:900;color:#059669">' + st.creditsEarned + '</div>';
+        h += '<div style="font-size:9px;color:#7A92B0">of ' + (co.creditHours||1) + ' cr per student</div>';
+      } else h += '<div style="font-size:16px;color:#94A3B8">—</div>';
+      h += '</div>';
+
+      // Action buttons
+      h += '<div style="display:flex;gap:6px;justify-content:flex-end">';
+      h += '<button class="lms-go-gradebook" data-cid="' + esc(co.id) + '" title="View Gradebook" style="width:30px;height:30px;border-radius:7px;border:1px solid #E4EAF2;background:#EEF3FF;cursor:pointer;font-size:14px">📊</button>';
+      h += '<button class="lms-go-content" data-cid="' + esc(co.id) + '" title="Manage Content" style="width:30px;height:30px;border-radius:7px;border:1px solid #E4EAF2;background:#F7F9FC;cursor:pointer;font-size:14px">📝</button>';
+      h += '</div>';
+      h += '</div>'; // grid
+
+      // ── Expanded student section ─────────────────────────────────────
+      if (isExpanded && st.students.length > 0) {
+        h += '<div style="background:#F7F9FC;border-top:1px solid #E4EAF2;padding:0 16px 12px 56px">';
+        // Section header
+        h += '<div style="display:grid;grid-template-columns:1fr 100px 110px 100px 80px;gap:8px;padding:8px 0 6px 0;border-bottom:1px solid #E4EAF2;margin-bottom:4px">';
+        ['Student','Progress','Time on Task','Avg Mastery','Credits'].forEach(function(hd){
+          h += '<div style="font-size:9px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:.7px">' + hd + '</div>';
+        });
+        h += '</div>';
+        // Student rows
+        st.students.forEach(function(stu) {
+          var nameParts = (stu.name||',').split(',');
+          var lastName = nameParts[0]||''; var firstName = nameParts[1]||'';
+          var pCol = stu.completionPct >= 100 ? '#059669' : stu.completionPct > 0 ? '#D97706' : '#94A3B8';
+          var mCol = stu.avgMastery !== null ? (stu.avgMastery >= (parseFloat(co.passMark)||80) ? '#059669' : '#D61F31') : '#94A3B8';
+          h += '<div style="display:grid;grid-template-columns:1fr 100px 110px 100px 80px;gap:8px;padding:7px 0;border-bottom:1px solid #F0F4FA;align-items:center">';
+          h += '<div style="display:flex;align-items:center;gap:8px">';
+          h += '<div class="ava" style="width:26px;height:26px;font-size:9px;flex-shrink:0">' + esc((firstName[0]||'?') + (lastName[0]||'?')) + '</div>';
+          h += '<div style="font-size:11px;font-weight:700;color:#1A365E">' + esc(lastName + (firstName ? ', '+firstName : '')) + '</div>';
+          h += '</div>';
+          // Progress bar
+          h += '<div>';
+          h += '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px"><span style="color:' + pCol + ';font-weight:700">' + stu.completionPct + '%</span></div>';
+          h += '<div style="height:5px;background:#F0F4FA;border-radius:3px;overflow:hidden"><div style="height:100%;width:' + stu.completionPct + '%;background:' + pCol + ';border-radius:3px"></div></div>';
+          h += '</div>';
+          // Time
+          h += '<div style="font-size:11px;font-weight:700;color:#1A365E">' + fmtTime(stu.timeMins) + '</div>';
+          // Avg mastery
+          h += '<div style="text-align:center">';
+          if (stu.avgMastery !== null) h += '<span style="font-size:12px;font-weight:900;color:' + mCol + '">' + stu.avgMastery + '%</span>';
+          else h += '<span style="color:#94A3B8;font-size:11px">—</span>';
+          h += '</div>';
+          // Credits
+          h += '<div style="text-align:center;font-size:12px;font-weight:900;color:' + (stu.creditsEarned > 0 ? '#059669' : '#94A3B8') + '">' + stu.creditsEarned + '</div>';
+          h += '</div>';
+        });
+        h += '</div>';
+      } else if (isExpanded && st.students.length === 0) {
+        h += '<div style="background:#F7F9FC;border-top:1px solid #E4EAF2;padding:12px 56px;font-size:12px;color:#94A3B8">No students enrolled in this course.</div>';
+      }
+      h += '</div>'; // row wrapper
+    });
+  }
+  h += '</div>'; // course list
+  h += '</div>';
+  c.innerHTML = h;
+
+  // Wire tabs
+  ['active','inactive'].forEach(function(tab) {
+    var btn = document.getElementById('lms-tab-' + tab);
+    if (btn) btn.addEventListener('click', function() { _lmsManageTab = tab; rLMSManage(c); });
+  });
+  // Wire search
+  var srch = document.getElementById('lms-manage-search');
+  if (srch) {
+    srch.addEventListener('input', function() { _lmsManageSearch = this.value; rLMSManage(c); });
+  }
+  var clr = document.getElementById('lms-manage-search-clear');
+  if (clr) clr.addEventListener('click', function() { _lmsManageSearch = ''; rLMSManage(c); });
+  // Wire type filter
+  var tf = document.getElementById('lms-type-filter');
+  if (tf) tf.addEventListener('change', function() { _lmsManageTypeFilter = this.value; rLMSManage(c); });
+  // Wire expand buttons
+  c.querySelectorAll('.lms-expand-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var cid = btn.dataset.cid;
+      _lmsManageExpanded[cid] = !_lmsManageExpanded[cid];
+      rLMSManage(c);
+    });
+  });
+  // Wire gradebook button
+  c.querySelectorAll('.lms-go-gradebook').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _lmsSectionCourseId = btn.dataset.cid;
+      _lmsGBCourseId = btn.dataset.cid;
+      nav('lms_section');
+    });
+  });
+  // Wire content button
+  c.querySelectorAll('.lms-go-content').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      window._lmsActiveCourseId = btn.dataset.cid;
+      nav('lms_content');
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ENHANCED GRADEBOOK — with time on task + credits per student
+// ════════════════════════════════════════════════════════════════════════════
+
+// Override rLMSGradebook with enhanced version
+function rLMSGradebook(c) {
+  var courses = (_LMS.courses || []).filter(function(co){ return co.status === 'Published' || co.status === 'Draft'; });
+  if (!_lmsGBCourseId && courses.length) _lmsGBCourseId = courses[0].id;
+  var course = courses.find(function(co){ return co.id === _lmsGBCourseId; }) || courses[0];
+  var h = '<div style="display:flex;flex-direction:column;gap:12px">';
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  h += '<div><div style="font-size:16px;font-weight:900;color:#1A365E">📊 Gradebook</div>';
+  if (course) h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + esc(course.title||'') + ' · ' + esc(course.subject||'') + (course.gradeLevel ? ' · '+esc(course.gradeLevel) : '') + '</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;align-items:center">';
+  if (courses.length > 1) {
+    h += '<select id="lms-gb-course-sel" style="padding:7px 12px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;color:#1A365E;font-weight:600">';
+    courses.forEach(function(co) { h += '<option value="' + esc(co.id) + '" ' + (co.id === _lmsGBCourseId ? 'selected' : '') + '>' + esc(co.title) + '</option>'; });
+    h += '</select>';
+  }
+  h += '<button onclick="nav(\'lms_manage\')" style="padding:7px 14px;background:#F0F4FA;color:#1A365E;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">← Manage Courses</button>';
+  h += '</div></div>';
+  h += lmsNAV('lms_gradebook');
+
+  if (!course) {
+    h += '<div style="text-align:center;padding:60px;color:#94A3B8">No courses available.</div></div>';
+    c.innerHTML = h; return;
+  }
+
+  var content = (_LMS.content || []).filter(function(x){ return x.courseId === course.id; })
+    .sort(function(a,b){ return (parseInt(a.unitOrder)||0) - (parseInt(b.unitOrder)||0) || (parseInt(a.order)||0) - (parseInt(b.order)||0); });
+
+  // Get enrolled students
+  var enrolments = (_LMS.enrolments || []).filter(function(en){ return en.courseId === course.id && (en.active === 'TRUE' || en.active === true); });
+  var enrolledStudentIds = {};
+  enrolments.forEach(function(en) {
+    if (en.targetType === 'student') { enrolledStudentIds[en.targetValue] = true; }
+    else if (en.targetType === 'cohort') {
+      students.forEach(function(s) { if (s.cohort === en.targetValue && s.status === 'Enrolled') enrolledStudentIds[String(s.studentId||s.id)] = true; });
+    }
+  });
+  var enrolledStudents = students.filter(function(s){ return enrolledStudentIds[String(s.studentId||s.id)]; })
+    .sort(function(a,b){ return (a.lastName||'').localeCompare(b.lastName||''); });
+
+  var allProgress = _LMS.progress || [];
+  var passMark = parseFloat(course.passMark||80);
+  var creditHours = parseFloat(course.creditHours||1);
+  var courseEnrol = enrolments[0] || {};
+
+  // ── Stats bar ──────────────────────────────────────────────────────────
+  var total = enrolledStudents.length;
+  var ahead = 0, onP = 0, off = 0, done = 0;
+  enrolledStudents.forEach(function(s) {
+    var sid = String(s.studentId||s.id);
+    var myProg = allProgress.filter(function(p){ return p.courseId === course.id && String(p.studentId) === sid; });
+    var comp = myProg.filter(function(p){ return p.status === 'completed'; }).length;
+    var pct = content.length ? Math.round(comp/content.length*100) : 0;
+    if (pct === 100) { done++; return; }
+    if (courseEnrol.assignedAt && courseEnrol.dueDate) {
+      var now = Date.now(), start = new Date(courseEnrol.assignedAt).getTime(), end = new Date(courseEnrol.dueDate).getTime();
+      var expPct = Math.min(100, Math.round((now-start)/(end-start)*100));
+      var diff = pct - expPct;
+      if (diff >= 10) ahead++;
+      else if (diff >= -10) onP++;
+      else off++;
+    }
+  });
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  [{icon:'👥',label:'All Students',val:total,col:'#1A365E',bg:'#EEF3FF'},
+   {icon:'✅',label:'Complete',val:done,col:'#059669',bg:'#DCFCE7'},
+   {icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},
+   {icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},
+   {icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'}
+  ].forEach(function(st) {
+    h += '<div style="padding:10px 14px;background:'+st.bg+';border-radius:10px;text-align:center;min-width:80px">';
+    h += '<div style="font-size:16px">'+st.icon+'</div>';
+    h += '<div style="font-size:18px;font-weight:900;color:'+st.col+';line-height:1.1">'+st.val+'</div>';
+    h += '<div style="font-size:9px;font-weight:700;color:'+st.col+';text-transform:uppercase;letter-spacing:.5px;margin-top:2px">'+st.label+'</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+
+  if (!content.length || !enrolledStudents.length) {
+    h += '<div style="text-align:center;padding:30px;background:#fff;border-radius:12px;border:1px solid #E4EAF2;color:#94A3B8">' + (!content.length ? 'No lessons added yet.' : 'No students enrolled.') + '</div>';
+    h += '</div>'; c.innerHTML = h; return;
+  }
+
+  // ── Table ─────────────────────────────────────────────────────────────
+  var sL = 'position:sticky;left:0;z-index:2;background:#fff';
+  var sLH = 'position:sticky;left:0;z-index:3;background:#F0F4FA';
+
+  // Unit groups
+  var unitGroups = [], unitMap = {};
+  content.forEach(function(item) {
+    var ut = item.unitTitle||'Lessons';
+    if (!unitMap[ut]) { unitMap[ut]=[]; unitGroups.push(ut); }
+    unitMap[ut].push(item);
+  });
+
+  h += '<div style="overflow-x:auto;border:1px solid #E4EAF2;border-radius:13px;background:#fff;box-shadow:0 2px 8px rgba(26,54,94,.06)">';
+  h += '<table style="border-collapse:collapse;min-width:100%;font-size:11px">';
+  h += '<thead>';
+  // Row 1 — frozen cols + unit headers
+  h += '<tr style="background:#F0F4FA">';
+  var frozenCols = ['Student','On-Target','Current Grade','Course Grade','Time on Task','Credits'];
+  frozenCols.forEach(function(col,i) {
+    h += '<th rowspan="2" style="'+sLH+';padding:8px '+(i===0?'14':'8')+'px;text-align:'+(i===0?'left':'center')+';font-size:10px;font-weight:800;color:#1A365E;border-bottom:2px solid #E4EAF2;border-right:'+(i===frozenCols.length-1?'2':'1')+'px solid #E4EAF2;white-space:nowrap;min-width:'+(i===0?'200':'70')+'px">'+col+'</th>';
+  });
+  unitGroups.forEach(function(ut) {
+    var cols = unitMap[ut].length;
+    h += '<th colspan="'+cols+'" style="padding:6px 8px;text-align:center;font-size:10px;font-weight:800;color:#1A365E;border-bottom:1px solid #E4EAF2;border-left:2px solid #D0D7E4;background:#F7F9FC;white-space:nowrap">';
+    h += '📂 '+esc(ut.substring(0,28))+(ut.length>28?'…':'')+'</th>';
+  });
+  h += '</tr>';
+  // Row 2 — lesson columns
+  h += '<tr style="background:#F7F9FC">';
+  content.forEach(function(item,ci) {
+    var icons = {video:'🎬',article:'📝',link:'🔗',file:'📎',quiz:'❓',presentation:'🖥️'};
+    var hm = item.hasMastery==='TRUE'||item.hasMastery===true;
+    var borderL = (ci>0 && content[ci-1] && content[ci-1].unitTitle !== item.unitTitle) ? '2px solid #D0D7E4' : '1px solid #E4EAF2';
+    h += '<th style="padding:4px 3px;text-align:center;border-bottom:2px solid #E4EAF2;border-left:'+borderL+';width:54px;vertical-align:bottom">';
+    h += '<div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;font-weight:600;color:#3D5475;max-height:100px;overflow:hidden;padding:3px 1px;line-height:1.3" title="'+esc(item.title)+'">'+esc(item.title.substring(0,35))+'</div>';
+    h += '<div style="font-size:11px;margin-top:3px">'+(icons[item.type]||'📄')+'</div>';
+    if (hm) h += '<div style="font-size:8px;color:#059669;font-weight:800">🎯</div>';
+    h += '</th>';
+  });
+  h += '</tr></thead>';
+
+  // Data rows
+  h += '<tbody>';
+  enrolledStudents.forEach(function(s, rowIdx) {
+    var sid = String(s.studentId||s.id);
+    var myProg = allProgress.filter(function(p){ return p.courseId===course.id && String(p.studentId)===sid; });
+    var comp = myProg.filter(function(p){ return p.status==='completed'; }).length;
+    var pct = content.length ? Math.round(comp/content.length*100) : 0;
+    var masteryRows = myProg.filter(function(p){ return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore); });
+    var avgMastery = masteryRows.length ? Math.round(masteryRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/masteryRows.length) : null;
+    // Time on task — sum timeSpentMins, fallback to estimatedMins for completed
+    var realTime = myProg.reduce(function(s,p){ return s+(parseFloat(p.timeSpentMins)||0); }, 0);
+    var estTime = myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){
+      var item = content.find(function(x){return x.id===p.contentId;});
+      return s + (item&&item.estimatedMins ? parseFloat(item.estimatedMins)||0 : 0);
+    }, 0);
+    var timeMins = realTime > 0 ? realTime : estTime;
+    // Credits
+    var credEarned = (pct>=100 && avgMastery!==null && avgMastery>=passMark) ? creditHours : 0;
+    // Pace
+    var paceLabel='—'; var paceCol='#94A3B8';
+    if (pct===100) { paceLabel='✅ Done'; paceCol='#059669'; }
+    else if (courseEnrol.assignedAt && courseEnrol.dueDate) {
+      var now=Date.now(), start=new Date(courseEnrol.assignedAt).getTime(), end=new Date(courseEnrol.dueDate).getTime();
+      var expPct=Math.min(100,Math.round((now-start)/(end-start)*100));
+      var diff=pct-expPct;
+      if (diff>=10){paceLabel='🏃 Ahead';paceCol='#059669';}
+      else if(diff>=-10){paceLabel='🚶 On Pace';paceCol='#D97706';}
+      else{paceLabel='⚠️ Behind';paceCol='#D61F31';}
+    }
+    function gl(v){if(v===null)return'—';if(v>=90)return'A';if(v>=80)return'B';if(v>=70)return'C';if(v>=60)return'D';return'F';}
+    var rowBg = rowIdx%2===0?'#fff':'#FAFBFF';
+    h += '<tr style="background:'+rowBg+'">';
+    // Student
+    h += '<td style="'+sL+';background:'+rowBg+';padding:9px 14px;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;white-space:nowrap">';
+    h += '<div style="display:flex;align-items:center;gap:8px">';
+    h += '<div class="ava" style="width:28px;height:28px;font-size:10px;flex-shrink:0">'+esc((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</div>';
+    h += '<div><button class="lms-gb-stu-btn" data-sid="'+esc(sid)+'" data-cid="'+esc(course.id)+'" style="background:none;border:none;cursor:pointer;padding:0;text-align:left"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.lastName+', '+s.firstName)+'</div></button>';
+    h += '<div style="font-size:9px;color:#7A92B0">'+esc(s.grade||'')+(s.cohort?' · '+esc(s.cohort):'')+'</div></div></div></td>';
+    // On-target
+    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:10px;font-weight:700;color:'+paceCol+'">'+paceLabel+'</td>';
+    // Current grade
+    var cgCol = avgMastery!==null ? (avgMastery>=passMark?'#059669':'#D61F31') : '#94A3B8';
+    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
+    if (avgMastery!==null){h+='<div style="font-size:13px;font-weight:900;color:'+cgCol+'">'+avgMastery+'%</div><div style="font-size:9px;font-weight:700;color:'+cgCol+'">'+gl(avgMastery)+'</div>';}
+    else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
+    h += '</td>';
+    // Course grade
+    var pctCol = pct>=passMark?'#059669':pct>0?'#D97706':'#94A3B8';
+    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2">';
+    h += '<div style="font-size:13px;font-weight:900;color:'+pctCol+'">'+pct+'%</div>';
+    h += '<div style="font-size:9px;font-weight:700;color:'+pctCol+'">'+gl(pct)+'</div>';
+    h += '<div style="height:4px;background:#F0F4FA;border-radius:2px;margin-top:3px;width:44px;margin-inline:auto"><div style="height:100%;width:'+pct+'%;background:'+pctCol+';border-radius:2px"></div></div>';
+    h += '</td>';
+    // Time on task
+    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(timeMins)+'</td>';
+    // Credits
+    h += '<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:2px solid #D0D7E4;font-size:14px;font-weight:900;color:'+(credEarned>0?'#059669':'#94A3B8')+'">'+credEarned+'</td>';
+
+    // Per-lesson cells
+    content.forEach(function(item,ci) {
+      var prog = myProg.find(function(p){return p.contentId===item.id;});
+      var status = prog ? prog.status : 'not_started';
+      var hm = item.hasMastery==='TRUE'||item.hasMastery===true;
+      var mp = prog && (prog.masteryPassed==='TRUE'||prog.masteryPassed===true);
+      var ms = prog && prog.masteryScore!==''&&prog.masteryScore!==undefined ? Number(prog.masteryScore) : null;
+      var lessonTimeMins = prog ? (parseFloat(prog.timeSpentMins)||0)||(status==='completed'&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0) : 0;
+      var borderL = (ci>0 && content[ci-1] && content[ci-1].unitTitle!==item.unitTitle) ? '2px solid #D0D7E4' : '1px solid #F0F4FA';
+      h += '<td style="padding:5px 3px;text-align:center;border-bottom:1px solid #F0F4FA;border-left:'+borderL+';width:54px">';
+      if (status==='not_started') {
+        h += '<span style="color:#D0D7E4;font-size:13px">—</span>';
+      } else if (status==='in_progress') {
+        h += '<div style="background:#FEF3C7;border-radius:5px;padding:3px 4px;display:inline-block"><div style="font-size:10px;font-weight:700;color:#D97706">⏳</div>';
+        if (lessonTimeMins>0) h += '<div style="font-size:8px;color:#D97706">'+fmtTime(lessonTimeMins)+'</div>';
+        h += '</div>';
+      } else if (status==='completed') {
+        if (hm && ms!==null) {
+          var mCol = mp?'#059669':'#D61F31';
+          h += '<div style="background:'+(mp?'#DCFCE7':'#FEE2E2')+';border-radius:5px;padding:3px 4px;display:inline-block">';
+          h += '<div style="font-size:12px;font-weight:900;color:'+mCol+'">'+ms+'</div>';
+          h += '<div style="font-size:8px;font-weight:700;color:'+mCol+'">'+(mp?'✓':'✗')+'</div>';
+          if (lessonTimeMins>0) h += '<div style="font-size:8px;color:'+mCol+';opacity:.7">'+fmtTime(lessonTimeMins)+'</div>';
+          h += '</div>';
+        } else {
+          h += '<div style="background:#DCFCE7;border-radius:5px;padding:4px 5px;display:inline-block">';
+          h += '<div style="font-size:13px;color:#059669">✓</div>';
+          if (lessonTimeMins>0) h += '<div style="font-size:8px;color:#059669;opacity:.7">'+fmtTime(lessonTimeMins)+'</div>';
+          h += '</div>';
+        }
+      }
+      h += '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody>';
+
+  // Class averages footer
+  h += '<tfoot><tr style="background:#F0F4FA">';
+  h += '<td colspan="3" style="'+sLH+';padding:8px 14px;font-size:10px;font-weight:800;color:#1A365E;border-top:2px solid #E4EAF2">CLASS AVERAGES</td>';
+  // Avg course grade
+  var avgPct = enrolledStudents.length ? Math.round(enrolledStudents.reduce(function(s,stu){
+    var sid=String(stu.studentId||stu.id);
+    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
+    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
+    return s+(content.length?Math.round(comp/content.length*100):0);
+  },0)/enrolledStudents.length) : 0;
+  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:12px;font-weight:900;color:'+(avgPct>=passMark?'#059669':'#D97706')+'">' + avgPct + '%</td>';
+  // Avg total time
+  var totalTimeMins = enrolledStudents.reduce(function(s,stu){
+    var sid=String(stu.studentId||stu.id);
+    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
+    var real=myProg.reduce(function(t,p){return t+(parseFloat(p.timeSpentMins)||0);},0);
+    var est=myProg.filter(function(p){return p.status==='completed';}).reduce(function(t,p){
+      var item=content.find(function(x){return x.id===p.contentId;});
+      return t+(item&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0);
+    },0);
+    return s+(real>0?real:est);
+  },0);
+  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(totalTimeMins/Math.max(1,enrolledStudents.length))+'</td>';
+  // Total credits earned
+  var totalCred = enrolledStudents.reduce(function(s,stu){
+    var sid=String(stu.studentId||stu.id);
+    var myProg=allProgress.filter(function(p){return p.courseId===course.id&&String(p.studentId)===sid;});
+    var comp=myProg.filter(function(p){return p.status==='completed';}).length;
+    var pct2=content.length?Math.round(comp/content.length*100):0;
+    var mastRows=myProg.filter(function(p){return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
+    var avgM=mastRows.length?Math.round(mastRows.reduce(function(t,p){return t+Number(p.masteryScore);},0)/mastRows.length):null;
+    return s+((pct2>=100&&avgM!==null&&avgM>=passMark)?creditHours:0);
+  },0);
+  h += '<td style="'+sLH+';padding:7px 8px;text-align:center;border-top:2px solid #E4EAF2;font-size:13px;font-weight:900;color:'+(totalCred>0?'#059669':'#94A3B8')+'">'+totalCred+'</td>';
+  // Lesson avg footers
+  content.forEach(function(item,ci){
+    var lessonProgs=allProgress.filter(function(p){return p.courseId===course.id&&p.contentId===item.id&&p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
+    var avg=lessonProgs.length?Math.round(lessonProgs.reduce(function(s,p){return s+Number(p.masteryScore);},0)/lessonProgs.length):null;
+    var hm=item.hasMastery==='TRUE'||item.hasMastery===true;
+    h += '<td style="padding:6px 3px;text-align:center;border-top:2px solid #E4EAF2;border-left:1px solid #E4EAF2">';
+    if (hm&&avg!==null){var ac=avg>=(parseFloat(item.masteryPassMark)||passMark)?'#059669':'#D61F31';h+='<div style="font-size:11px;font-weight:900;color:'+ac+'">'+avg+'</div>';}
+    else h+='<span style="color:#94A3B8;font-size:10px">—</span>';
+    h+='</td>';
+  });
+  h += '</tr></tfoot></table></div>';
+
+  // Legend
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:#F7F9FC;border-radius:10px">';
+  h += '<span style="font-size:10px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.5px;align-self:center">Legend:</span>';
+  [{bg:'#DCFCE7',col:'#059669',l:'Mastery Passed'},{bg:'#FEE2E2',col:'#D61F31',l:'Mastery Failed'},{bg:'#FEF3C7',col:'#D97706',l:'In Progress'},{bg:'#F0F4FA',col:'#94A3B8',l:'Not Started'}].forEach(function(lg){
+    h+='<div style="display:flex;align-items:center;gap:5px"><div style="width:13px;height:13px;border-radius:3px;background:'+lg.bg+'"></div><span style="font-size:10px;color:#3D5475">'+lg.l+'</span></div>';
+  });
+  h += '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px">🎯</span><span style="font-size:10px;color:#3D5475">Mastery test</span></div>';
+  h += '<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:#7A92B0">⏱ Time shown below score</span></div>';
+  h += '</div></div>';
+  c.innerHTML = h;
+
+  var sel = document.getElementById('lms-gb-course-sel');
+  if (sel) sel.addEventListener('change', function() { _lmsGBCourseId = this.value; rLMSGradebook(c); });
+  c.querySelectorAll('.lms-gb-stu-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _lmsStudentId = btn.dataset.sid;
+      _lmsStudentCourseId = btn.dataset.cid;
+      nav('lms_student');
+    });
+  });
+}
+
+// ── Time tracking: start timer when student opens a lesson ─────────────────
+var _lmsLessonTimer = null;
+var _lmsLessonStartTime = null;
+var _lmsLessonTimerItem = null;
+
+function lmsStartLessonTimer(itemId, courseId) {
+  lmsStopLessonTimer(); // stop any previous
+  _lmsLessonTimerItem = { itemId: itemId, courseId: courseId };
+  _lmsLessonStartTime = Date.now();
+  _lmsLessonTimer = setInterval(function() {
+    // Every 60 seconds, save elapsed time
+    var elapsed = Math.round((Date.now() - _lmsLessonStartTime) / 1000 / 60 * 10) / 10;
+    if (elapsed >= 1) {
+      spSaveLMSProgressWithTime({ contentId: _lmsLessonTimerItem.itemId, courseId: _lmsLessonTimerItem.courseId, timeSpentMins: 1 });
+      _lmsLessonStartTime = Date.now(); // reset
+    }
+  }, 60000);
+}
+
+function lmsStopLessonTimer() {
+  if (_lmsLessonTimer) {
+    clearInterval(_lmsLessonTimer);
+    _lmsLessonTimer = null;
+    // Save remaining time
+    if (_lmsLessonStartTime && _lmsLessonTimerItem) {
+      var elapsed = Math.round((Date.now() - _lmsLessonStartTime) / 1000 / 60 * 10) / 10;
+      if (elapsed >= 0.1) {
+        spSaveLMSProgressWithTime({ contentId: _lmsLessonTimerItem.itemId, courseId: _lmsLessonTimerItem.courseId, timeSpentMins: elapsed });
+      }
+    }
+    _lmsLessonStartTime = null;
+    _lmsLessonTimerItem = null;
+  }
+}
+
+function spSaveLMSProgressWithTime(data) {
+  // Only save time — accumulate on existing record
+  var sid = String((_SP.student && (_SP.student.studentId || _SP.student.id)) || '');
+  var key = sid + '_' + data.contentId;
+  var existing = (_SP.lmsProgress || []).find(function(p){ return p.id === key; });
+  if (existing) {
+    existing.timeSpentMins = (parseFloat(existing.timeSpentMins)||0) + (parseFloat(data.timeSpentMins)||0);
+    existing.lastAccessAt = new Date().toISOString();
+    spSave('data', _SP);
+    spRequest('saveLMSProgress', { progress: { contentId: data.contentId, courseId: data.courseId, timeSpentMins: data.timeSpentMins } }, null);
+  }
+}
+
+// Stop timer when leaving page
+window.addEventListener('beforeunload', function() { lmsStopLessonTimer(); });
+
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════════════════
+var _lmsSectionCourseId   = null;  // selected course for Section view
+var _lmsSectionFilter     = 'all'; // pace filter pill
+var _lmsSectionStudentTab = 'gradebook'; // 'gradebook' | 'curriculum'
+var _lmsStudentId         = null;  // selected student
+var _lmsStudentCourseId   = null;  // course context for student detail
+var _lmsStudentTab        = 'curriculum'; // 'curriculum' | 'weekly'
+var _lmsStudentExpanded   = {};    // unitTitle → bool
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION DETAILS (Screenshots 3 & 4) — per-course class list with pace pills
+// ════════════════════════════════════════════════════════════════════════════
+function rLMSSection(c) {
+  var courses = (_LMS.courses||[]).filter(function(co){ return co.status==='Published'||co.status==='Draft'; });
+  if (!_lmsSectionCourseId && courses.length) _lmsSectionCourseId = courses[0].id;
+  var course  = courses.find(function(co){ return co.id===_lmsSectionCourseId; }) || courses[0];
+  if (!course) { c.innerHTML='<div style="padding:40px;text-align:center;color:#94A3B8">No courses yet.</div>'; return; }
+
+  var content   = (_LMS.content||[]).filter(function(x){ return x.courseId===course.id; });
+  var allProg   = _LMS.progress||[];
+  var enrolRows = (_LMS.enrolments||[]).filter(function(en){ return en.courseId===course.id&&(en.active==='TRUE'||en.active===true); });
+  var enrolIds  = {};
+  enrolRows.forEach(function(en){
+    if(en.targetType==='student'){ enrolIds[en.targetValue]=true; }
+    else if(en.targetType==='cohort'){ students.forEach(function(s){ if(s.cohort===en.targetValue&&s.status==='Enrolled') enrolIds[String(s.studentId||s.id)]=true; }); }
+  });
+  var enrolled = students.filter(function(s){ return enrolIds[String(s.studentId||s.id)]; })
+    .sort(function(a,b){ return (a.lastName||'').localeCompare(b.lastName||''); });
+
+  var total = enrolled.length;
+  var passMark = parseFloat(course.passMark||80);
+  var creditHours = parseFloat(course.creditHours||1);
+  var enrol0 = enrolRows[0]||{};
+
+  // Compute per-student stats + pace bucket
+  function calcStudentStats(s) {
+    var sid = String(s.studentId||s.id);
+    var myProg = allProg.filter(function(p){ return p.courseId===course.id&&String(p.studentId)===sid; });
+    var comp   = myProg.filter(function(p){ return p.status==='completed'; }).length;
+    var pct    = content.length ? Math.round(comp/content.length*100) : 0;
+    var mastRows = myProg.filter(function(p){ return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore); });
+    var avgMastery = mastRows.length ? Math.round(mastRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mastRows.length) : null;
+    var realTime = myProg.reduce(function(s,p){return s+(parseFloat(p.timeSpentMins)||0);},0);
+    var estTime  = myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){
+      var it=content.find(function(x){return x.id===p.contentId;});
+      return s+(it&&it.estimatedMins?parseFloat(it.estimatedMins)||0:0);
+    },0);
+    var timeMins = realTime>0?realTime:estTime;
+    // Pace
+    var paceKey='none'; var paceLabel='—'; var paceIcon='—'; var paceColor='#94A3B8';
+    if(pct===100){ paceKey='done'; paceLabel='Done'; paceIcon='✅'; paceColor='#059669'; }
+    else if(enrol0.assignedAt&&enrol0.dueDate){
+      var now=Date.now(),s0=new Date(enrol0.assignedAt).getTime(),e0=new Date(enrol0.dueDate).getTime();
+      var expPct=Math.min(100,Math.round((now-s0)/(e0-s0)*100));
+      var diff=pct-expPct;
+      if(diff>=15){paceKey='ahead';paceLabel='Ahead of Pace';paceIcon='🏃';paceColor='#059669';}
+      else if(diff>=5){paceKey='onpace';paceLabel='On Pace';paceIcon='🚶';paceColor='#16A34A';}
+      else if(diff>=-10){paceKey='slightlyoff';paceLabel='Slightly Off Pace';paceIcon='🚶';paceColor='#D97706';}
+      else{paceKey='off';paceLabel='Off Pace';paceIcon='🏃';paceColor='#D61F31';}
+    }
+    // Mastery items that used all retakes = "locked"
+    var lockedItems = myProg.filter(function(p){
+      var it=content.find(function(x){return x.id===p.contentId;});
+      if(!it||it.hasMastery!=='TRUE') return false;
+      var maxR=parseInt(it.masteryRetakes)||3;
+      return (parseInt(p.masteryAttempts)||0)>=maxR && p.masteryPassed!=='TRUE';
+    });
+    var readyToScore = myProg.filter(function(p){
+      var it=content.find(function(x){return x.id===p.contentId;});
+      return it&&it.type==='quiz'&&p.status==='completed'&&(p.masteryScore===''||p.masteryScore===undefined||p.masteryScore===null);
+    });
+    // On-target grade = what grade they SHOULD have at this pace
+    var onTargetPct = enrol0.assignedAt&&enrol0.dueDate ? Math.min(100,Math.round(
+      (Date.now()-new Date(enrol0.assignedAt).getTime())/(new Date(enrol0.dueDate).getTime()-new Date(enrol0.assignedAt).getTime())*100
+    )) : pct;
+    var onTargetGrade = onTargetPct;
+    return { sid, pct, avgMastery, timeMins, paceKey, paceLabel, paceIcon, paceColor, comp, total:content.length, lockedCount:lockedItems.length, readyToScore:readyToScore.length, onTargetGrade };
+  }
+
+  var stuStats = enrolled.map(function(s){ return { s, stat:calcStudentStats(s) }; });
+
+  // Pace bucket counts
+  var buckets = {all:total,off:0,slightlyoff:0,onpace:0,ahead:0,locked:0,lockedNoAttempts:0,readyToScore:0};
+  stuStats.forEach(function(x){
+    var pk=x.stat.paceKey;
+    if(pk==='off')buckets.off++;
+    else if(pk==='slightlyoff')buckets.slightlyoff++;
+    else if(pk==='onpace'||pk==='done')buckets.onpace++;
+    else if(pk==='ahead')buckets.ahead++;
+    buckets.locked+=x.stat.lockedCount;
+    buckets.readyToScore+=x.stat.readyToScore;
+  });
+
+  // Filter
+  var filtered = stuStats;
+  if(_lmsSectionFilter!=='all'){
+    filtered=stuStats.filter(function(x){
+      if(_lmsSectionFilter==='off')return x.stat.paceKey==='off';
+      if(_lmsSectionFilter==='slightlyoff')return x.stat.paceKey==='slightlyoff';
+      if(_lmsSectionFilter==='onpace')return x.stat.paceKey==='onpace'||x.stat.paceKey==='done';
+      if(_lmsSectionFilter==='ahead')return x.stat.paceKey==='ahead';
+      if(_lmsSectionFilter==='locked')return x.stat.lockedCount>0;
+      if(_lmsSectionFilter==='readytoscore')return x.stat.readyToScore>0;
+      return true;
+    });
+  }
+
+  var subjectCol={Mathematics:'#3B82F6','English Language Arts':'#8B5CF6',Science:'#059669','Social Studies':'#D97706',Entrepreneurship:'#D61F31'}[course.subject]||'#0F5699';
+
+  var h='<div style="display:flex;flex-direction:column;gap:0">';
+
+  // ── Blue course header banner ─────────────────────────────────────────
+  h+='<div style="background:linear-gradient(135deg,'+subjectCol+','+subjectCol+'CC);border-radius:14px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;gap:16px">';
+  h+='<div style="width:64px;height:64px;background:rgba(255,255,255,.15);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:32px">📘</span></div>';
+  h+='<div style="flex:1">';
+  h+='<div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.75);margin-bottom:2px">'+esc(course.subject||'')+(course.gradeLevel?' · '+esc(course.gradeLevel):'')+'</div>';
+  h+='<div style="font-size:18px;font-weight:900;color:#fff">'+esc(course.title)+'</div>';
+  h+='<div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:3px">'+total+' student'+(total!==1?'s':'')+(enrol0.dueDate?' · End Date: '+enrol0.dueDate.substring(0,10):'')+'</div>';
+  h+='</div>';
+  // Course selector
+  if(courses.length>1){
+    h+='<select id="lms-sec-course-sel" style="padding:7px 12px;border:none;border-radius:9px;font-size:12px;color:#1A365E;font-weight:600">';
+    courses.forEach(function(co){ h+='<option value="'+esc(co.id)+'" '+(co.id===_lmsSectionCourseId?'selected':'')+'>'+esc(co.title)+'</option>'; });
+    h+='</select>';
+  }
+  h+='<div style="text-align:right"><div style="font-size:10px;color:rgba(255,255,255,.7)">End Date</div><div style="font-size:12px;font-weight:700;color:#fff">'+(enrol0.dueDate?enrol0.dueDate.substring(0,10):'—')+'</div></div>';
+  h+='</div>';
+
+  // ── Tab bar: GRADEBOOK | CURRICULUM ──────────────────────────────────
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">';
+  h+='<div style="display:flex;gap:0;background:#fff;border:1.5px solid #E4EAF2;border-radius:10px;overflow:hidden">';
+  [{k:'gradebook',l:'📊 GRADEBOOK'},{k:'curriculum',l:'🔍 CURRICULUM'}].forEach(function(tab){
+    var a=_lmsSectionStudentTab===tab.k;
+    h+='<button id="lms-sec-tab-'+tab.k+'" style="padding:9px 18px;border:none;background:'+(a?'#1A365E':'transparent')+';color:'+(a?'#fff':'#5A7290')+';font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.5px">'+tab.l+'</button>';
+  });
+  h+='</div>';
+  h+=lmsNAV('lms_section');
+  h+='</div>';
+
+  // ── Pace filter pills ────────────────────────────────────────────────
+  var pills=[
+    {k:'all',label:'All Students',icon:'👥',col:'#1A365E',bg:'#EEF3FF',count:buckets.all},
+    {k:'off',label:'Off Pace',icon:'🏃',col:'#D61F31',bg:'#FEE2E2',count:buckets.off,flipIcon:true},
+    {k:'slightlyoff',label:'Slightly Off Pace',icon:'🚶',col:'#D97706',bg:'#FEF3C7',count:buckets.slightlyoff},
+    {k:'onpace',label:'On Pace',icon:'🚶',col:'#16A34A',bg:'#DCFCE7',count:buckets.onpace},
+    {k:'ahead',label:'Ahead of Pace',icon:'🏃',col:'#059669',bg:'#D1FAE5',count:buckets.ahead},
+    {k:'lockedNoAttempts',label:'Locked (No Attempts)',icon:'🔐',col:'#9333EA',bg:'#F3E8FF',count:buckets.lockedNoAttempts},
+    {k:'locked',label:'Locked',icon:'🔒',col:'#6B7280',bg:'#F1F5F9',count:buckets.locked},
+    {k:'readytoscore',label:'Ready to Score',icon:'⏰',col:'#DC2626',bg:'#FEF2F2',count:buckets.readyToScore},
+  ];
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;overflow-x:auto;padding-bottom:4px">';
+  pills.forEach(function(p){
+    var a=_lmsSectionFilter===p.k;
+    h+='<button class="lms-sec-pill" data-filter="'+p.k+'" style="padding:12px 16px;border-radius:12px;border:2px solid '+(a?p.col:'transparent')+';background:'+(a?p.bg:'#fff')+';cursor:pointer;text-align:center;min-width:90px;box-shadow:0 1px 4px rgba(0,0,0,.08);flex-shrink:0">';
+    h+='<div style="font-size:20px;margin-bottom:4px">'+p.icon+'</div>';
+    h+='<div style="font-size:22px;font-weight:900;color:'+p.col+';line-height:1">'+p.count+'</div>';
+    h+='<div style="font-size:9px;font-weight:700;color:'+p.col+';text-transform:uppercase;letter-spacing:.3px;margin-top:3px;line-height:1.2;max-width:80px">'+p.label+'</div>';
+    h+='</button>';
+  });
+  h+='</div>';
+
+  // ── Course section header ────────────────────────────────────────────
+  h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;overflow:hidden">';
+  h+='<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #E4EAF2;background:#FAFBFF">';
+  h+='<span style="font-size:18px">📋</span>';
+  h+='<div style="font-size:13px;font-weight:800;color:#1A365E">'+esc(course.title)+'</div>';
+  h+='</div>';
+
+  // Table header
+  h+='<div style="overflow-x:auto">';
+  h+='<table style="border-collapse:collapse;width:100%;min-width:800px;font-size:11px">';
+  h+='<thead><tr style="background:#F7F9FC;border-bottom:2px solid #E4EAF2">';
+  h+='<th style="width:36px;padding:10px 8px;text-align:center"></th>'; // checkbox
+  h+='<th style="width:40px;padding:10px 6px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">PACE</th>';
+  h+='<th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">STUDENT ▾</th>';
+  h+='<th style="padding:10px 8px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">ON-TARGET GRADE ⓘ</th>';
+  h+='<th style="padding:10px 8px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">CURRENT GRADE ⓘ</th>';
+  h+='<th style="padding:10px 8px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">COURSE GRADE ⓘ</th>';
+  h+='<th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">ACTIVITIES COMPLETED</th>';
+  h+='<th style="padding:10px 8px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">TIME ON TASK</th>';
+  h+='<th style="padding:10px 8px;text-align:center;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">TASKS</th>';
+  h+='<th style="width:40px"></th>';
+  h+='</tr></thead><tbody>';
+
+  if(!filtered.length){
+    h+='<tr><td colspan="10" style="padding:30px;text-align:center;color:#94A3B8">No students match this filter.</td></tr>';
+  } else {
+    filtered.forEach(function(x,idx){
+      var s=x.s; var st=x.stat;
+      var rowBg=idx%2===0?'#fff':'#FAFBFF';
+      function gl(v){if(v===null||v===undefined)return'—';if(v>=90)return'A';if(v>=80)return'B';if(v>=70)return'C';if(v>=60)return'D';return'F';}
+      var onTgt=st.onTargetGrade; var onTgtCol=onTgt>=passMark?'#059669':'#D61F31';
+      var curMCol=st.avgMastery!==null?(st.avgMastery>=passMark?'#059669':'#D61F31'):'#7A92B0';
+      var crsCol=st.pct>=passMark?'#059669':st.pct>0?'#D97706':'#94A3B8';
+      h+='<tr style="background:'+rowBg+';border-bottom:1px solid #F0F4FA" class="lms-sec-row" data-sid="'+esc(st.sid)+'">';
+      h+='<td style="padding:10px 8px;text-align:center"><input type="checkbox" style="cursor:pointer"/></td>';
+      // Pace icon
+      h+='<td style="padding:10px 6px;text-align:center"><span style="font-size:16px" title="'+esc(st.paceLabel)+'">'+st.paceIcon+'</span></td>';
+      // Student name — clickable
+      h+='<td style="padding:10px 12px"><button class="lms-sec-student-btn" data-sid="'+esc(st.sid)+'" style="background:none;border:none;color:#1A365E;font-size:12px;font-weight:700;cursor:pointer;text-align:left;text-decoration:none;padding:0">'+esc(s.lastName+(s.firstName?', '+s.firstName:''))+'</button></td>';
+      // On-target grade
+      h+='<td style="padding:10px 8px;text-align:center"><span style="font-size:12px;font-weight:700;color:'+onTgtCol+'">'+onTgt+'%</span>&nbsp;<span style="font-size:10px;color:'+onTgtCol+'">('+gl(onTgt)+')</span></td>';
+      // Current grade
+      h+='<td style="padding:10px 8px;text-align:center">';
+      if(st.avgMastery!==null){h+='<span style="font-size:12px;font-weight:700;color:'+curMCol+'">'+st.avgMastery+'%</span>&nbsp;<span style="font-size:10px;color:'+curMCol+'">('+gl(st.avgMastery)+')</span>';}
+      else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
+      h+='</td>';
+      // Course grade
+      h+='<td style="padding:10px 8px;text-align:center"><span style="font-size:12px;font-weight:700;color:'+crsCol+'">'+st.pct+'%</span>&nbsp;<span style="font-size:10px;color:'+crsCol+'">('+gl(st.pct)+')</span></td>';
+      // Activities completed with progress bar
+      h+='<td style="padding:10px 12px;min-width:180px">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+      h+='<span style="font-size:11px;font-weight:700;color:#1A365E">'+st.comp+'/'+st.total+' ('+st.pct+'%)</span>';
+      h+='</div>';
+      h+='<div style="height:6px;background:#F0F4FA;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+st.pct+'%;background:'+crsCol+';border-radius:3px"></div></div>';
+      h+='</td>';
+      // Time on task
+      h+='<td style="padding:10px 8px;text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(st.timeMins)+'</td>';
+      // Tasks (ready to score + locked)
+      var taskCount=st.readyToScore+st.lockedCount;
+      h+='<td style="padding:10px 8px;text-align:center">';
+      if(taskCount>0){h+='<div style="display:flex;align-items:center;justify-content:center;gap:4px"><span style="font-size:14px">⏰</span><span style="font-size:12px;font-weight:900;color:#D61F31">'+taskCount+'</span></div>';}
+      else h+='<span style="color:#94A3B8;font-size:11px">—</span>';
+      h+='</td>';
+      // Actions
+      h+='<td style="padding:10px 8px;text-align:center"><button class="lms-sec-menu" style="background:none;border:none;cursor:pointer;font-size:16px;color:#94A3B8">•••</button></td>';
+      h+='</tr>';
+    });
+  }
+  h+='</tbody></table></div></div></div>';
+  c.innerHTML=h;
+
+  // Wire course selector
+  var csel=document.getElementById('lms-sec-course-sel');
+  if(csel) csel.addEventListener('change',function(){ _lmsSectionCourseId=this.value; rLMSSection(c); });
+  // Wire tab buttons
+  ['gradebook','curriculum'].forEach(function(tk){
+    var btn=document.getElementById('lms-sec-tab-'+tk);
+    if(btn) btn.addEventListener('click',function(){ _lmsSectionStudentTab=tk; rLMSSection(c); });
+  });
+  // Wire pace pills
+  c.querySelectorAll('.lms-sec-pill').forEach(function(btn){
+    btn.addEventListener('click',function(){ _lmsSectionFilter=btn.dataset.filter; rLMSSection(c); });
+  });
+  // Wire student name click → Student Detail
+  c.querySelectorAll('.lms-sec-student-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      _lmsStudentId=btn.dataset.sid;
+      _lmsStudentCourseId=_lmsSectionCourseId;
+      nav('lms_student');
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// STUDENT CURRICULUM DETAIL (Screenshots 1 & 2)
+// ════════════════════════════════════════════════════════════════════════════
+function rLMSStudent(c) {
+  if(!_lmsStudentId||!_lmsStudentCourseId){ c.innerHTML='<div style="padding:40px;text-align:center;color:#94A3B8">No student selected.</div>'; return; }
+  var s = students.find(function(st){ return String(st.studentId||st.id)===_lmsStudentId; });
+  var course = (_LMS.courses||[]).find(function(co){ return co.id===_lmsStudentCourseId; });
+  if(!s||!course){ c.innerHTML='<div style="padding:40px;text-align:center;color:#94A3B8">Student or course not found.</div>'; return; }
+
+  var content = (_LMS.content||[]).filter(function(x){ return x.courseId===course.id; })
+    .sort(function(a,b){ return (parseInt(a.unitOrder)||0)-(parseInt(b.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(b.order)||0); });
+  var allProg  = _LMS.progress||[];
+  var myProg   = allProg.filter(function(p){ return p.courseId===course.id&&String(p.studentId)===_lmsStudentId; });
+  var enrolRows = (_LMS.enrolments||[]).filter(function(en){ return en.courseId===course.id&&(en.active==='TRUE'||en.active===true); });
+  var enrol0   = enrolRows[0]||{};
+
+  var comp     = myProg.filter(function(p){ return p.status==='completed'; }).length;
+  var pct      = content.length ? Math.round(comp/content.length*100) : 0;
+  var mastRows = myProg.filter(function(p){ return p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore); });
+  var avgMastery = mastRows.length ? Math.round(mastRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mastRows.length) : null;
+  var realTime = myProg.reduce(function(s,p){return s+(parseFloat(p.timeSpentMins)||0);},0);
+  var estTime  = myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){
+    var it=content.find(function(x){return x.id===p.contentId;});
+    return s+(it&&it.estimatedMins?parseFloat(it.estimatedMins)||0:0);
+  },0);
+  var timeMins = realTime>0?realTime:estTime;
+  var passMark = parseFloat(course.passMark||80);
+
+  // Pace
+  var paceLabel='—'; var paceColor='#94A3B8'; var paceIcon='—';
+  if(pct===100){paceLabel='Complete';paceColor='#059669';paceIcon='✅';}
+  else if(enrol0.assignedAt&&enrol0.dueDate){
+    var now=Date.now(),s0=new Date(enrol0.assignedAt).getTime(),e0=new Date(enrol0.dueDate).getTime();
+    var expPct=Math.min(100,Math.round((now-s0)/(e0-s0)*100));
+    var diff=pct-expPct;
+    if(diff>=15){paceLabel='Ahead of Pace';paceColor='#059669';paceIcon='🏃';}
+    else if(diff>=5){paceLabel='On Pace';paceColor='#16A34A';paceIcon='🚶';}
+    else if(diff>=-10){paceLabel='Slightly Off Pace';paceColor='#D97706';paceIcon='🚶';}
+    else{paceLabel='Off Pace';paceColor='#D61F31';paceIcon='🏃';}
+  }
+  function gl(v){if(v===null||v===undefined)return'—';if(v>=90)return'A';if(v>=80)return'B';if(v>=70)return'C';if(v>=60)return'D';return'F';}
+
+  var onTgt = enrol0.assignedAt&&enrol0.dueDate ? Math.min(100,Math.round(
+    (Date.now()-new Date(enrol0.assignedAt).getTime())/(new Date(enrol0.dueDate).getTime()-new Date(enrol0.assignedAt).getTime())*100
+  )) : pct;
+  var subjectCol={Mathematics:'#3B82F6','English Language Arts':'#8B5CF6',Science:'#059669','Social Studies':'#D97706',Entrepreneurship:'#D61F31'}[course.subject]||'#0F5699';
+  var lastAccessed = myProg.length ? myProg.reduce(function(latest,p){ return (!latest||(p.lastAccessAt&&p.lastAccessAt>latest))?p.lastAccessAt:latest; },null) : null;
+
+  var h='<div style="display:flex;flex-direction:column;gap:0">';
+
+  // ── Blue course top bar ───────────────────────────────────────────────
+  h+='<div style="background:linear-gradient(135deg,'+subjectCol+','+subjectCol+'BB);border-radius:14px;padding:12px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
+  h+='<span style="font-size:22px">📘</span>';
+  h+='<div style="flex:1"><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,.7)">'+esc(course.subject||'')+'</div>';
+  h+='<div style="font-size:14px;font-weight:800;color:#fff">'+esc(course.title)+'</div></div>';
+  h+='<button onclick="nav(\'lms_section\')" style="padding:6px 14px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">← Back to Section</button>';
+  h+='</div>';
+
+  // ── Student profile card ──────────────────────────────────────────────
+  h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:18px 20px;margin-bottom:14px">';
+  h+='<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">';
+  // Avatar
+  h+='<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#0F2240,#1A365E);display:flex;align-items:center;justify-content:center;flex-shrink:0">';
+  h+='<span style="font-size:22px;font-weight:900;color:#fff">'+esc((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</span></div>';
+  // Name & info
+  h+='<div style="flex:1">';
+  h+='<div style="font-size:18px;font-weight:900;color:#1A365E">'+esc((s.firstName||'')+' '+(s.lastName||''))+'</div>';
+  h+='<div style="font-size:11px;color:#7A92B0;margin-top:3px">';
+  h+=esc(s.grade?'Grade '+s.grade:'')+(s.studentId?' · SIS ID: '+esc(s.studentId):'');
+  if(lastAccessed) h+=' · Last Accessed: '+new Date(lastAccessed).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'})+', '+new Date(lastAccessed).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  h+='</div></div>';
+  // Start/End dates
+  h+='<div style="text-align:right;font-size:11px;color:#7A92B0">';
+  if(enrol0.assignedAt) h+='<div>Start Date: <span style="font-weight:700;color:#1A365E">'+new Date(enrol0.assignedAt).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'})+'</span></div>';
+  if(enrol0.dueDate) h+='<div>End Date: <span style="font-weight:700;color:#1A365E">'+enrol0.dueDate.substring(0,10)+'</span></div>';
+  h+='</div></div>';
+
+  // ── Stats bar ─────────────────────────────────────────────────────────
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0;border-top:1px solid #F0F4FA;margin-top:14px;padding-top:14px">';
+  // Pacing Status
+  h+='<div style="padding:0 16px 0 0;border-right:1px solid #F0F4FA">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">PACING STATUS</div>';
+  h+='<div style="font-size:16px;margin-bottom:3px">'+paceIcon+'</div>';
+  h+='<div style="font-size:13px;font-weight:800;color:'+paceColor+'">'+paceLabel+'</div>';
+  h+='</div>';
+  // On-target grade
+  var otCol=onTgt>=passMark?'#059669':'#D61F31';
+  h+='<div style="padding:0 16px;border-right:1px solid #F0F4FA">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">ON-TARGET GRADE ⓘ</div>';
+  h+='<div style="font-size:18px;font-weight:900;color:'+otCol+'">'+onTgt+'% <span style="font-size:13px">('+gl(onTgt)+')</span></div>';
+  h+='</div>';
+  // Current grade
+  var cgColV=avgMastery!==null?(avgMastery>=passMark?'#059669':'#D61F31'):'#94A3B8';
+  h+='<div style="padding:0 16px;border-right:1px solid #F0F4FA">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">CURRENT GRADE ⓘ</div>';
+  if(avgMastery!==null) h+='<div style="font-size:18px;font-weight:900;color:'+cgColV+'">'+avgMastery+'% <span style="font-size:13px">('+gl(avgMastery)+')</span></div>';
+  else h+='<div style="font-size:16px;color:#94A3B8">—</div>';
+  h+='</div>';
+  // Course grade
+  var crGCol=pct>=passMark?'#059669':pct>0?'#D97706':'#94A3B8';
+  h+='<div style="padding:0 16px;border-right:1px solid #F0F4FA">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">COURSE GRADE ⓘ</div>';
+  h+='<div style="font-size:18px;font-weight:900;color:'+crGCol+'">'+pct+'% <span style="font-size:13px">('+gl(pct)+')</span></div>';
+  h+='</div>';
+  // Activities completed with pacing goal bar
+  var pacingGoalPct = enrol0.assignedAt&&enrol0.dueDate ? Math.min(100,Math.round(
+    (Date.now()-new Date(enrol0.assignedAt).getTime())/(new Date(enrol0.dueDate).getTime()-new Date(enrol0.assignedAt).getTime())*content.length
+  )) : 0;
+  h+='<div style="padding:0 16px;border-right:1px solid #F0F4FA;flex:2">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">ACTIVITIES COMPLETED</div>';
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">';
+  h+='<span style="font-size:15px;font-weight:900;color:#1A365E">'+comp+'/'+content.length+' ('+pct+'%)</span>';
+  h+='<span style="font-size:10px;color:#7A92B0">PACING GOAL: '+pacingGoalPct+'/'+content.length+' ('+Math.round(pacingGoalPct/Math.max(1,content.length)*100)+'%)</span>';
+  h+='</div>';
+  // Progress bar with pacing marker
+  h+='<div style="position:relative;height:10px;background:#F0F4FA;border-radius:5px;overflow:visible">';
+  h+='<div style="height:100%;width:'+pct+'%;background:'+crGCol+';border-radius:5px"></div>';
+  if(pacingGoalPct>0){
+    var markerLeft=Math.min(99,Math.round(pacingGoalPct/content.length*100));
+    h+='<div style="position:absolute;top:-3px;left:'+markerLeft+'%;width:3px;height:16px;background:#1A365E;border-radius:2px" title="Pacing goal"></div>';
+  }
+  h+='</div></div>';
+  // Time on task
+  h+='<div style="padding:0 0 0 16px">';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">TIME ON TASK</div>';
+  h+='<div style="font-size:18px;font-weight:900;color:#1A365E">'+fmtTime(timeMins)+'</div>';
+  h+='</div>';
+  h+='</div></div>'; // stats bar + profile card
+
+  // ── Tabs: Curriculum Details | Weekly Progress ────────────────────────
+  h+='<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid #E4EAF2">';
+  [{k:'curriculum',l:'📋 Curriculum Details'},{k:'weekly',l:'📅 Weekly Progress'}].forEach(function(tab){
+    var a=_lmsStudentTab===tab.k;
+    h+='<button id="lms-stu-tab-'+tab.k+'" style="padding:10px 20px;border:none;background:transparent;font-size:12px;font-weight:700;cursor:pointer;color:'+(a?'#1A365E':'#94A3B8')+';border-bottom:2px solid '+(a?'#1A365E':'transparent')+';margin-bottom:-2px">'+tab.l+'</button>';
+  });
+  h+='<div style="flex:1"></div>';
+  h+='<button style="padding:8px 14px;background:transparent;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;color:#5A7290;cursor:pointer;margin-bottom:4px">ADD NOTES</button>';
+  h+='<button style="padding:8px 14px;background:transparent;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;color:#5A7290;cursor:pointer;margin-bottom:4px;margin-left:6px">🖨 PRINT</button>';
+  h+='</div>';
+
+  if(_lmsStudentTab==='curriculum'){
+    // ── Curriculum Detail table ─────────────────────────────────────────
+    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;overflow:hidden">';
+    // Column headers
+    h+='<div style="display:grid;grid-template-columns:1fr 100px 200px 80px 80px 70px 60px;padding:10px 16px;background:#F7F9FC;border-bottom:2px solid #E4EAF2;gap:6px;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px">';
+    h+='<div>'+esc(course.title)+'</div>';
+    h+='<div style="text-align:center">TARGET DATE</div>';
+    h+='<div style="text-align:center">STATUSES &nbsp; ★ ✏ 🔒 👁 📄</div>';
+    h+='<div style="text-align:center">ATTEMPTS</div>';
+    h+='<div style="text-align:center">TIME</div>';
+    h+='<div style="text-align:center">SCORE</div>';
+    h+='<div style="text-align:right"></div>';
+    h+='</div>';
+
+    // Group by unit
+    var unitGroups=[]; var unitMap={};
+    content.forEach(function(item){
+      var ut=item.unitTitle||'General';
+      if(!unitMap[ut]){unitMap[ut]=[];unitGroups.push(ut);}
+      unitMap[ut].push(item);
+    });
+
+    unitGroups.forEach(function(ut){
+      var items=unitMap[ut];
+      var isExp=_lmsStudentExpanded[ut]!==false; // default expanded
+      // Unit stats
+      var unitProgs=items.map(function(it){ return myProg.find(function(p){return p.contentId===it.id;})||null; });
+      var unitComp=unitProgs.filter(function(p){return p&&p.status==='completed';}).length;
+      var unitAtt=unitProgs.reduce(function(s,p){return s+(p?parseInt(p.masteryAttempts)||0:0);},0);
+      var unitTimeMins=unitProgs.reduce(function(s,p){
+        if(!p)return s;
+        var rt=parseFloat(p.timeSpentMins)||0;
+        if(rt>0)return s+rt;
+        if(p.status==='completed'){var it=items.find(function(x){return x.id===p.contentId;});return s+(it&&it.estimatedMins?parseFloat(it.estimatedMins)||0:0);}
+        return s;
+      },0);
+      var unitMastRows=unitProgs.filter(function(p){return p&&p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore);});
+      var unitAvgScore=unitMastRows.length?Math.round(unitMastRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/unitMastRows.length):null;
+      // Status: has mastery star? completed star?
+      var hasMastStar=unitMastRows.some(function(p){return p&&(p.masteryPassed==='TRUE'||p.masteryPassed===true);});
+      var hasPartStar=unitMastRows.length>0&&!hasMastStar;
+
+      // Unit row
+      h+='<div class="lms-stu-unit-row" data-ut="'+esc(ut)+'" style="display:grid;grid-template-columns:1fr 100px 200px 80px 80px 70px 60px;padding:11px 16px;background:#F7F9FC;border-bottom:1px solid #E4EAF2;gap:6px;align-items:center;cursor:pointer">';
+      h+='<div style="display:flex;align-items:center;gap:10px">';
+      h+='<span style="font-size:11px;color:#7A92B0;font-weight:700">'+(isExp?'−':'+')+'</span>';
+      h+='<div style="width:14px;height:14px;border-radius:50%;background:#1A365E;flex-shrink:0"></div>';
+      h+='<span style="font-size:13px;font-weight:800;color:#1A365E">'+esc(ut)+'</span>';
+      h+='</div>';
+      h+='<div></div>';
+      h+='<div style="text-align:center">'+(hasMastStar?'<span style="color:#D97706;font-size:16px">★</span>':(hasPartStar?'<span style="color:#D97706;font-size:16px">★</span><span style="color:#E4EAF2;font-size:16px">★</span>':''))+'</div>';
+      h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+(unitAtt>0?unitAtt:'')+'</div>';
+      h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(unitTimeMins)+'</div>';
+      h+='<div style="text-align:center">'+(unitAvgScore!==null?'<span style="font-size:12px;font-weight:900;color:'+(unitAvgScore>=passMark?'#059669':'#D61F31')+'">'+unitAvgScore+'%</span>':'')+'</div>';
+      h+='<div style="text-align:right"><button style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:16px">•••</button></div>';
+      h+='</div>';
+
+      if(isExp){
+        items.forEach(function(item){
+          var prog=myProg.find(function(p){return p.contentId===item.id;})||null;
+          var status=prog?prog.status:'not_started';
+          var hm=item.hasMastery==='TRUE'||item.hasMastery===true;
+          var mp=prog&&(prog.masteryPassed==='TRUE'||prog.masteryPassed===true);
+          var ms=prog&&prog.masteryScore!==''&&prog.masteryScore!==undefined&&!isNaN(prog.masteryScore)?Number(prog.masteryScore):null;
+          var att=prog?parseInt(prog.masteryAttempts)||0:0;
+          var itTimeMins=prog?(parseFloat(prog.timeSpentMins)||0)||(status==='completed'&&item.estimatedMins?parseFloat(item.estimatedMins)||0:0):0;
+          // Status dot color
+          var dotCol=status==='completed'?'#1A365E':status==='in_progress'?'#D97706':'#CBD5E1';
+          // Score color
+          var sCol=ms!==null?(ms>=passMark?'#059669':'#D61F31'):'#1A365E';
+          // Stars: filled=mastery passed, empty outline=submitted not passed, lock=max attempts used
+          var maxR=parseInt(item.masteryRetakes)||3;
+          var isLocked=att>=maxR&&prog&&prog.masteryPassed!=='TRUE';
+          var starHTML='';
+          if(hm){
+            if(mp) starHTML='<span style="color:#D97706;font-size:14px">★</span>';
+            else if(att>0) starHTML='<span style="color:#D97706;font-size:14px">★</span><span style="color:#D0D7E4;font-size:14px">☆</span>';
+            else starHTML='<span style="color:#D0D7E4;font-size:14px">☆</span>';
+          }
+          h+='<div style="display:grid;grid-template-columns:1fr 100px 200px 80px 80px 70px 60px;padding:9px 16px 9px 40px;border-bottom:1px solid #F7F9FC;gap:6px;align-items:center;background:#fff">';
+          h+='<div style="display:flex;align-items:center;gap:10px">';
+          h+='<div style="width:12px;height:12px;border-radius:50%;background:'+dotCol+';flex-shrink:0"></div>';
+          h+='<span style="font-size:12px;color:#3D5475;font-weight:'+(status==='completed'?'700':'500')+'">'+esc(item.title)+'</span>';
+          h+='</div>';
+          h+='<div style="text-align:center;font-size:10px;color:#7A92B0">'+(item.dueDate||'')+'</div>';
+          // Statuses
+          h+='<div style="display:flex;align-items:center;gap:4px;justify-content:center">';
+          h+=starHTML;
+          if(isLocked) h+='<span style="font-size:14px">🔒</span>';
+          h+='</div>';
+          // Attempts
+          h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+(att>0?att:'')+'</div>';
+          // Time
+          h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(itTimeMins)+'</div>';
+          // Score
+          h+='<div style="text-align:center">';
+          if(ms!==null){
+            h+='<span style="font-size:13px;font-weight:900;color:'+sCol+';background:'+(ms>=passMark?'#DCFCE7':'#FEE2E2')+';padding:2px 8px;border-radius:6px">'+ms+'%</span>';
+          }
+          h+='</div>';
+          h+='<div style="text-align:right"><button style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:16px">•••</button></div>';
+          h+='</div>';
+        });
+      }
+    });
+    h+='</div>';
+  } else {
+    // ── Weekly Progress ───────────────────────────────────────────────
+    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:20px">';
+    h+='<div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:14px">Weekly Activity</div>';
+    // Group progress by week
+    var weekMap={};
+    myProg.filter(function(p){return p.lastAccessAt;}).forEach(function(p){
+      var d=new Date(p.lastAccessAt);
+      var weekStart=new Date(d);
+      weekStart.setDate(d.getDate()-d.getDay());
+      var wk=weekStart.toISOString().substring(0,10);
+      if(!weekMap[wk])weekMap[wk]={wk,items:[],timeMins:0,comp:0};
+      weekMap[wk].items.push(p);
+      weekMap[wk].timeMins+=(parseFloat(p.timeSpentMins)||0);
+      if(p.status==='completed')weekMap[wk].comp++;
+    });
+    var weeks=Object.values(weekMap).sort(function(a,b){return b.wk.localeCompare(a.wk);});
+    if(!weeks.length){
+      h+='<div style="text-align:center;padding:30px;color:#94A3B8">No activity recorded yet.</div>';
+    } else {
+      h+='<div style="display:grid;grid-template-columns:120px 1fr 100px 80px;gap:0;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px;padding:8px 0;border-bottom:1px solid #E4EAF2;margin-bottom:4px">';
+      h+='<div>Week</div><div>Activities</div><div style="text-align:center">Time</div><div style="text-align:center">Completed</div></div>';
+      weeks.forEach(function(w){
+        var wEnd=new Date(w.wk); wEnd.setDate(wEnd.getDate()+6);
+        h+='<div style="display:grid;grid-template-columns:120px 1fr 100px 80px;gap:0;padding:10px 0;border-bottom:1px solid #F0F4FA;align-items:center">';
+        h+='<div style="font-size:11px;font-weight:700;color:#1A365E">'+w.wk.substring(5)+'</div>';
+        h+='<div>';
+        w.items.slice(0,3).forEach(function(p){
+          var it=content.find(function(x){return x.id===p.contentId;});
+          if(it) h+='<div style="font-size:10px;color:#5A7290;margin-bottom:1px">· '+esc(it.title.substring(0,40))+'</div>';
+        });
+        if(w.items.length>3) h+='<div style="font-size:10px;color:#94A3B8">+ '+(w.items.length-3)+' more</div>';
+        h+='</div>';
+        h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(w.timeMins)+'</div>';
+        h+='<div style="text-align:center;font-size:12px;font-weight:900;color:#059669">'+w.comp+'</div>';
+        h+='</div>';
+      });
+    }
+    h+='</div>';
+  }
+  h+='</div>';
+  c.innerHTML=h;
+
+  // Wire tabs
+  ['curriculum','weekly'].forEach(function(tk){
+    var btn=document.getElementById('lms-stu-tab-'+tk);
+    if(btn) btn.addEventListener('click',function(){ _lmsStudentTab=tk; rLMSStudent(c); });
+  });
+  // Wire unit expand/collapse
+  c.querySelectorAll('.lms-stu-unit-row').forEach(function(row){
+    row.addEventListener('click',function(){
+      var ut=row.dataset.ut;
+      _lmsStudentExpanded[ut]=!(_lmsStudentExpanded[ut]!==false);
+      rLMSStudent(c);
+    });
+  });
+}
+
 
 </script>
 </body>
