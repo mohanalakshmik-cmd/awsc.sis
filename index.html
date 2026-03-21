@@ -8508,6 +8508,11 @@ function spFetchData(onDone) {
     _SP.remarks    = d.remarks    || {};
     _SP.ptAssign   = (d.pt && d.pt.assignments) || d.ptAssign || [];
     _SP.ptEvals    = (d.pt && d.pt.evaluations) || d.ptEvals  || [];
+    _SP.atNotes    = d.atNotes       || [];
+    _SP.atCorrections = d.atCorrections || [];
+    _SP.atReports  = d.atReports     || [];
+    _SP.atAssessments = d.atAssessments || [];
+    _SP.atEP       = d.atEP          || [];
     _SP.portfolio  = d.portfolio  || [];
     _SP.goals      = d.goals      || [];
     _SP.skills     = d.skills     || null;
@@ -8888,6 +8893,29 @@ function spRenderDash(c) {
     overdue.slice(0,3).forEach(function(a){
       h += '<div style="font-size:11px;color:#3D5475;margin-bottom:3px">📝 ' + esc(a.title) + ' — Due ' + esc(a.dueDate||'?') + ' · ' + esc(a.subject||'') + '</div>';
     });
+    h += '</div>';
+  }
+
+  // ── Coach Report & Corrections alerts ───────────────────────────────────
+  var latestReport = (_SP.atReports||[]).slice().sort(function(a,b){
+    return (b.generatedAt||'').localeCompare(a.generatedAt||'');
+  })[0];
+  if (latestReport && latestReport.coachNote) {
+    h += '<div style="background:#F0FDF4;border-left:4px solid #059669;border-radius:8px;padding:12px 16px">';
+    h += '<div style="font-size:10px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 Latest Coach Report · Week of ' + esc(latestReport.week||'') + '</div>';
+    h += '<div style="font-size:12px;color:#1A365E;line-height:1.6">' + esc(latestReport.coachNote.slice(0,200)) + (latestReport.coachNote.length>200?'…':'') + '</div>';
+    h += '</div>';
+  }
+  var pendingCorr = (_SP.atCorrections||[]).filter(function(c){
+    return c.status === 'Assigned' || c.status === 'In Progress';
+  });
+  if (pendingCorr.length) {
+    h += '<div style="background:#FFF7ED;border-left:4px solid #D97706;border-radius:8px;padding:12px 16px">';
+    h += '<div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:6px">✏️ ' + pendingCorr.length + ' Correction Task' + (pendingCorr.length>1?'s':'') + ' Assigned</div>';
+    pendingCorr.slice(0,3).forEach(function(c){
+      h += '<div style="font-size:11px;color:#3D5475;margin-bottom:3px">· ' + esc(c.subject||'') + ' — ' + esc((c.instructions||'').slice(0,60)) + (c.deadline?' (due '+esc(c.deadline)+')':'') + '</div>';
+    });
+    h += '<button onclick="window._spTab=\'sp_assign\';spRender()" style="margin-top:6px;font-size:10px;color:#D97706;background:none;border:none;cursor:pointer;font-weight:700;font-family:Poppins,sans-serif;padding:0">View all → </button>';
     h += '</div>';
   }
 
@@ -9431,7 +9459,10 @@ function spRenderAssign(c) {
   });
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
   h += '<div style="font-size:18px;font-weight:800;color:#1A365E">📝 My Assignments</div>';
+  h += '<button id="sp-assign-refresh" style="padding:7px 14px;background:#EEF3FF;color:#1A365E;border:1.5px solid #DDE6F0;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer">↻ Refresh Grades</button>';
+  h += '</div>';
 
   // Filter tabs
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
@@ -9530,9 +9561,15 @@ function spRenderAssign(c) {
       }
 
       // Submit form — show for unsubmitted or resubmit
-      var canSubmit = !['Turned In'].includes(subStatus) || subStatus === 'Resubmit';
+      var canSubmit = !['Turned In','Resubmitted'].includes(subStatus) || subStatus === 'Resubmit';
       if (canSubmit) {
         h += '<div style="padding:14px 18px;border-top:2px dashed #E4EAF2;background:#F7F9FC">';
+        if (subStatus === 'Resubmit') {
+          h += '<div style="background:#FDF4FF;border:1.5px solid #A855F7;border-radius:8px;padding:8px 12px;margin-bottom:10px">';
+          h += '<div style="font-size:11px;font-weight:700;color:#7C3AED">🔄 Resubmission Requested</div>';
+          h += '<div style="font-size:11px;color:#6B21A8;margin-top:3px">Your teacher has reviewed your work and is asking for a revision. Check the feedback above, then resubmit below.</div>';
+          h += '</div>';
+        }
         h += '<div style="font-size:12px;font-weight:800;color:#1A365E;margin-bottom:10px">'+(subStatus==='Resubmit'?'🔄 Resubmit Your Work':'📤 Turn In Your Work')+'</div>';
         h += '<div style="display:flex;flex-direction:column;gap:8px">';
         // Link input
@@ -9557,7 +9594,86 @@ function spRenderAssign(c) {
   }
 
   h += '</div>';
-  c.innerHTML = h;
+
+  // ── AT Notes visible to student ──────────────────────────────────────────
+  var visibleNotes = (_SP.atNotes||[]).slice().sort(function(a,b){
+    return (b.dateLogged||'').localeCompare(a.dateLogged||'');
+  });
+  if (visibleNotes.length) {
+    h += '<div><div style="font-size:14px;font-weight:800;color:#1A365E;margin-bottom:10px">📌 Class Notes & Feedback</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    visibleNotes.forEach(function(n){
+      var needsCorr = n.correctionRequired;
+      var bc = needsCorr ? '#D97706' : '#E4EAF2';
+      h += '<div style="padding:12px 14px;background:'+(needsCorr?'#FFF7ED':'#F7F9FC')+';border:1px solid '+bc+';border-left:4px solid '+bc+';border-radius:8px">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">';
+      if (needsCorr) h += '<span style="font-size:9px;font-weight:800;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px">CORRECTION REQUIRED</span>';
+      if (n.subject) h += '<span style="font-size:10px;font-weight:700;color:#7A92B0">'+esc(n.subject)+'</span>';
+      if (n.topicTag) h += '<span style="font-size:10px;color:#94A3B8">· '+esc(n.topicTag)+'</span>';
+      h += '<span style="font-size:9px;color:#94A3B8;margin-left:auto">'+esc(n.dateLogged||'')+'</span>';
+      h += '</div>';
+      h += '<div style="font-size:12px;color:#1A365E;line-height:1.6">'+esc(n.noteText||'')+'</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+  // ── AT Corrections ────────────────────────────────────────────────────────
+  var myCorr = (_SP.atCorrections||[]);
+  if (myCorr.length) {
+    h += '<div><div style="font-size:14px;font-weight:800;color:#1A365E;margin-bottom:10px">✏️ My Corrections</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    myCorr.forEach(function(cr){
+      var isDone = cr.status==='Verified Complete';
+      var sc = isDone?'#059669':cr.status==='In Progress'?'#D97706':'#D61F31';
+      h += '<div style="padding:12px 14px;background:'+(isDone?'#F0FDF4':'#FFF7ED')+';border:1px solid '+(isDone?'#BBF7D0':'#FDE68A')+';border-radius:8px">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">';
+      h += '<div style="display:flex;align-items:center;gap:8px">';
+      if (cr.subject) h += '<span style="font-size:10px;font-weight:700;color:#7A92B0">'+esc(cr.subject)+'</span>';
+      h += '<span style="font-size:9px;font-weight:700;color:'+sc+';background:'+sc+'15;padding:2px 8px;border-radius:5px">'+esc(cr.status||'Assigned')+'</span>';
+      h += '</div>';
+      if (cr.deadline) h += '<span style="font-size:9px;color:#94A3B8">Due: '+esc(cr.deadline)+'</span>';
+      h += '</div>';
+      h += '<div style="font-size:12px;color:#1A365E;line-height:1.5">'+esc(cr.instructions||'')+'</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+  // ── Weekly Coach Reports ──────────────────────────────────────────────────
+  var myReports = (_SP.atReports||[]).slice().sort(function(a,b){
+    return (b.week||'').localeCompare(a.week||'');
+  });
+  if (myReports.length) {
+    h += '<div><div style="font-size:14px;font-weight:800;color:#1A365E;margin-bottom:10px">📋 Weekly Coach Reports</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    myReports.slice(0,5).forEach(function(r){
+      h += '<div style="padding:12px 14px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px">';
+      h += '<div style="font-size:10px;font-weight:700;color:#059669;margin-bottom:5px">Week of '+esc(r.week||'')+'</div>';
+      h += '<div style="font-size:12px;color:#1A365E;line-height:1.6">'+esc(r.coachNote||'No note written.')+'</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+  // ── Weekly Assessment Scores ──────────────────────────────────────────────
+  var myAssess = (_SP.atAssessments||[]).slice().sort(function(a,b){
+    return (b.weekStart||'').localeCompare(a.weekStart||'');
+  });
+  if (myAssess.length) {
+    h += '<div><div style="font-size:14px;font-weight:800;color:#1A365E;margin-bottom:10px">📊 Weekly Assessment Scores</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">';
+    myAssess.forEach(function(a){
+      var pct = (a.maxScore&&a.rawScore!==''&&a.rawScore!==undefined) ? Math.round(parseFloat(a.rawScore)/parseFloat(a.maxScore)*100) : null;
+      var col = pct===null?'#94A3B8':pct>=80?SP_GREEN:pct>=60?SP_GOLD:SP_RED;
+      h += '<div style="padding:12px;background:#F7F9FC;border:1px solid #E4EAF2;border-radius:8px">';
+      h += '<div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase;margin-bottom:2px">'+esc(a.subject||'')+'</div>';
+      h += '<div style="font-size:9px;color:#94A3B8;margin-bottom:5px">Week of '+esc(a.weekStart||'')+'</div>';
+      h += '<div style="font-size:22px;font-weight:900;color:'+col+'">'+(a.rawScore!==''&&a.rawScore!==undefined?a.rawScore:'—')+(a.maxScore?'<span style="font-size:11px;color:#94A3B8;font-weight:400">/'+esc(String(a.maxScore))+'</span>':'')+'</div>';
+      if (pct!==null) h += '<div style="font-size:11px;font-weight:700;color:'+col+'">'+pct+'%</div>';
+      if (a.feedback) h += '<div style="font-size:10px;color:#3D5475;margin-top:4px;font-style:italic">'+esc(a.feedback)+'</div>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  }
+    c.innerHTML = h;
 
   // Wire filter buttons
   c.querySelectorAll('.sp-af-btn').forEach(function(btn){
@@ -9597,12 +9713,14 @@ function spRenderAssign(c) {
       btn.disabled = true; btn.textContent = file ? '⏳ Uploading…' : '⏳ Submitting…';
 
       function doSubmit(fileUrl) {
-        var payload = { assignId: aid, linkUrl: link, note: note, fileUrl: fileUrl||'' };
+        var isResubmit = subStatus === 'Resubmit';
+        var payload = { assignId: aid, linkUrl: link, note: note, fileUrl: fileUrl||'', isResubmit: isResubmit };
         // Save locally immediately
         var subSid = _currentUser && _currentUser.studentId || '';
         var subKey = aid + '_' + subSid;
+        var newSubStatus = isResubmit ? 'Resubmitted' : 'Turned In';
         _SP.atSubs[subKey] = Object.assign(_SP.atSubs[subKey]||{}, {
-          status:'Turned In', submittedDate: today, linkUrl: link,
+          status: newSubStatus, submittedDate: today, linkUrl: link,
           fileUrl: fileUrl||'', studentNote: note
         });
         spSave('data', _SP);
@@ -9643,6 +9761,17 @@ function spRenderAssign(c) {
   });
 }
 
+  // Wire refresh button
+  var spRefBtn = document.getElementById('sp-assign-refresh');
+  if (spRefBtn) spRefBtn.addEventListener('click', function() {
+    spRefBtn.textContent = 'Refreshing…';
+    spRefBtn.disabled = true;
+    spFetchData(function() {
+      spRenderAssign(c);
+      // button re-rendered so no need to re-enable
+    });
+  });
+
 function spRenderProject(c) {
   var assigns = _SP.ptAssign || [];
   var evals   = _SP.ptEvals  || [];
@@ -9650,8 +9779,11 @@ function spRenderProject(c) {
   var today   = new Date().toISOString().slice(0,10);
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   h += '<div><div style="font-size:18px;font-weight:800;color:#1A365E">🚀 My AWSC-27 Projects</div>';
   h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + assigns.length + ' project' + (assigns.length!==1?'s':'') + ' assigned</div></div>';
+  h += '<button id="sp-project-refresh" style="padding:7px 14px;background:#EEF3FF;color:#1A365E;border:1.5px solid #DDE6F0;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer">↻ Refresh</button>';
+  h += '</div>';
 
   if (!assigns.length) {
     h += '<div class="card" style="padding:40px;text-align:center">';
@@ -9664,13 +9796,14 @@ function spRenderProject(c) {
       var ev  = evals.find(function(e){ return e.aid === a.id; });
       var stColors = {
         'Not Assigned':'#94A3B8','Assigned':'#0EA5E9','In Progress':SP_GOLD,
-        'Submitted':SP_PURPLE,'Evaluated':SP_GREEN,'Approved':SP_GREEN
+        'Work Uploaded':SP_PURPLE,'Under Review':'#9A3412','Evaluated':SP_GREEN,'Approved':SP_GREEN,
+        'Resubmission Required':SP_RED
       };
       var stCol = stColors[a.status] || '#94A3B8';
-      var pctMap = {'Not Assigned':0,'Assigned':15,'In Progress':50,'Submitted':80,'Evaluated':100,'Approved':100};
+      var pctMap = {'Not Assigned':0,'Assigned':15,'In Progress':50,'Work Uploaded':75,'Under Review':85,'Evaluated':100,'Approved':100,'Resubmission Required':60};
       var pct   = pctMap[a.status] || 0;
-      var isOverdue = a.due && a.due < today && !['Submitted','Evaluated','Approved'].includes(a.status);
-      var canSubmit = ['Assigned','In Progress','Not Assigned'].includes(a.status);
+      var isOverdue = a.due && a.due < today && !['Work Uploaded','Under Review','Evaluated','Approved'].includes(a.status);
+      var canSubmit = ['Assigned','In Progress','Not Assigned','Resubmission Required'].includes(a.status);
 
       h += '<div class="card" style="padding:0;overflow:hidden;border:' + (isOverdue?'2px solid '+SP_RED:'1px solid #E4EAF2') + '">';
 
@@ -9738,7 +9871,26 @@ function spRenderProject(c) {
           h += '<div style="font-size:9px;color:#7A92B0">/ 5</div></div>';
         });
         h += '</div>';
-        if (ev.comment) h += '<div style="font-size:11px;color:#1A365E;line-height:1.5"><strong>Feedback:</strong> ' + esc(ev.comment) + '</div>';
+        if (ev.cr && Object.keys(ev.cr).length) {
+          h += '<div style="margin-bottom:10px;padding:10px 12px;background:#fff;border-radius:8px">';
+          h += '<div style="font-size:9px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Criteria Breakdown</div>';
+          Object.keys(ev.cr).forEach(function(crName){
+            var crVal = parseInt(ev.cr[crName])||0;
+            var crCol = crVal>=4?SP_GREEN:crVal>=3?SP_GOLD:SP_RED;
+            var crLbl = {4:'Mastery',3:'Proficient',2:'Developing',1:'Beginning'}[crVal]||'—';
+            h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">';
+            h += '<div style="flex:1;font-size:10px;color:#3D5475">' + esc(crName) + '</div>';
+            h += '<div style="display:flex;gap:3px">';
+            [1,2,3,4].forEach(function(dot){
+              h += '<div style="width:7px;height:7px;border-radius:50%;background:' + (dot<=crVal?crCol:'#E4EAF2') + '"></div>';
+            });
+            h += '</div>';
+            h += '<div style="font-size:9px;font-weight:700;color:' + crCol + ';min-width:60px;text-align:right">' + crVal + '/4 · ' + crLbl + '</div>';
+            h += '</div>';
+          });
+          h += '</div>';
+        }
+        if (ev.comment) h += '<div style="font-size:11px;color:#1A365E;line-height:1.5;padding:8px 10px;background:#fff;border-radius:7px;margin-bottom:6px"><span style="font-weight:700;color:#059669">💬 Feedback: </span>' + esc(ev.comment) + '</div>';
         if (ev.mastery) h += '<div style="margin-top:8px;display:inline-block;background:linear-gradient(135deg,#FAC600,#F5A623);color:#fff;padding:4px 14px;border-radius:20px;font-size:11px;font-weight:800">⭐ Mastery Achieved</div>';
         h += '</div>';
       }
@@ -9746,6 +9898,12 @@ function spRenderProject(c) {
       // ── SUBMIT SECTION ──────────────────────────────────────────────────
       if (canSubmit) {
         h += '<div style="border-top:2px solid #F0F4FA;padding-top:14px;margin-top:4px">';
+        if (subStatus === 'Resubmission Required') {
+          h += '<div style="background:#FDF4FF;border:1.5px solid #A855F7;border-radius:8px;padding:10px 14px;margin-bottom:12px">';
+          h += '<div style="font-size:11px;font-weight:700;color:#7C3AED">🔄 Resubmission Requested</div>';
+          h += '<div style="font-size:11px;color:#6B21A8;margin-top:3px">Your teacher reviewed your work and has asked for a revision. Check their feedback above, then submit your updated work below.</div>';
+          h += '</div>';
+        }
         h += '<div style="font-size:12px;font-weight:800;color:#1A365E;margin-bottom:10px">📤 Submit Your Work</div>';
 
         h += '<div style="display:flex;flex-direction:column;gap:10px">';
@@ -9776,11 +9934,13 @@ function spRenderProject(c) {
         h += 'style="width:100%;padding:12px;background:' + SP_NAVY + ';color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:Poppins,sans-serif">✅ Submit Project</button>';
         h += '</div>'; // end flex column
         h += '</div>'; // end submit section
-      } else if (a.status === 'Submitted' || a.status === 'Evaluated' || a.status === 'Approved') {
+      } else if (a.status === 'Work Uploaded' || a.status === 'Under Review' || a.status === 'Evaluated' || a.status === 'Approved') {
         h += '<div style="background:#F0FDF4;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px">';
         h += '<span style="font-size:18px">✅</span>';
-        h += '<div><div style="font-size:12px;font-weight:700;color:#0E6B3B">Project Submitted</div>';
-        h += '<div style="font-size:11px;color:#7A92B0">Your teacher is reviewing your work.</div></div>';
+        var stageMsg = a.status==='Approved'?'Project Approved ✅':a.status==='Evaluated'?'Evaluated — check your results above':a.status==='Under Review'?'Under Review — teacher is marking':'Submitted — waiting for teacher review';
+        var stageCol = (a.status==='Approved'||a.status==='Evaluated')?'#0E6B3B':'#92400E';
+        h += '<div><div style="font-size:12px;font-weight:700;color:'+stageCol+'">'+stageMsg+'</div>';
+        h += '<div style="font-size:11px;color:#7A92B0">'+esc(a.wurl?'Work link: '+a.wurl.slice(0,60)+'…':'No work link yet.')+'</div></div>';
         h += '</div>';
       }
 
@@ -9823,7 +9983,7 @@ function spRenderProject(c) {
 
       function doSubmit(fileUrl) {
         a.wurl    = fileUrl || wurl;
-        a.status  = 'Submitted';
+        a.status  = 'Work Uploaded';
         a.reflect = (document.getElementById('pt-reflect-' + ai)||{value:''}).value.trim();
         a.submittedAt = new Date().toISOString();
         _SP.ptAssign[ai] = a;
@@ -9880,6 +10040,14 @@ function spRenderProject(c) {
 // ══════════════════════════════════════════════════════════════════════════════
 // TAB 6: PORTFOLIO
 // ══════════════════════════════════════════════════════════════════════════════
+  // Wire project refresh button
+  var spProjRef = document.getElementById('sp-project-refresh');
+  if (spProjRef) spProjRef.addEventListener('click', function() {
+    spProjRef.textContent = 'Refreshing…';
+    spProjRef.disabled = true;
+    spFetchData(function() { spRenderProject(c); });
+  });
+
 function spRenderPortfolio(c) {
   var items = _SP.portfolio || [];
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
@@ -13935,6 +14103,18 @@ function getATAssignments(){return atLoad("assignments");}
 function saveATAssignments(v){atSave("assignments",v);if(webUrl)gmsSheetRequest("saveATAssignments",{assignments:v},null);}
 function getATSubmissions(){return atLoadObj("submissions");}
 function saveATSubmissions(v){atSaveObj("submissions",v);if(webUrl)gmsSheetRequest("saveATSubmissions",{submissions:v},null);}
+// Return canonical subKey for a student: prefer formatted studentId over numeric id
+function atSubKey(assignId, student){
+  var sid = student.studentId || String(student.id);
+  return assignId + "_" + sid;
+}
+// Get submission by assignId+student, trying both formatted and numeric keys
+function atGetSub(assignId, student, subs){
+  var subs = subs || getATSubmissions();
+  var key1 = assignId + "_" + (student.studentId || String(student.id));
+  var key2 = assignId + "_" + String(student.id);
+  return subs[key1] || subs[key2] || {status:"Assigned",score:null};
+}
 function getATEP(){return atLoad("exactpath");}
 function saveATEP(v){atSave("exactpath",v);if(webUrl)gmsSheetRequest("saveATExactPath",{exactpath:v},null);}
 function getATAssess(){return atLoad("assessments");}
@@ -13952,7 +14132,7 @@ function atId(){return "A"+Date.now().toString(36).toUpperCase()+(Math.random()*
 var AT_TYPES = ["Homework","Classwork","Project","Quiz","Assessment","Worksheet","Lab","Reading","Correction","Custom"];
 var AT_SUBJECTS = ["Mathematics","English Language Arts","Reading","Science","Social Studies","Entrepreneurship","Art","World Language","Physical Education","Computer Science","Other"];
 var AT_DIVISIONS = ["Elementary","Middle School","High School","All"];
-var AT_STATUS = ["Assigned","Turned In","Missing","Late","Incomplete","Resubmit","Excused"];
+var AT_STATUS = ["Assigned","Turned In","Resubmitted","Missing","Late","Incomplete","Resubmit","Excused"];
 var AT_NOTE_TYPES = ["Academic Observation","Misconception","Participation","Behaviour","Positive Highlight","Other"];
 var AT_LATE_REASONS = ["Absent","Technical Issues","Family Circumstance","Medical","Forgot","No Reason Given","Other"];
 var AT_CORR_STATUS = ["Assigned","In Progress","Submitted","Verified Complete","Overdue"];
@@ -14155,7 +14335,7 @@ function rATDashboard(c){
   // At-risk: GPA < 2.0 or any missing
   var atRisk=enrolled.filter(function(s){
     var g=calcStudentGPA(s.id,"week");
-    var hasMissing=assigns.some(function(a){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Missing";});
+    var hasMissing=assigns.some(function(a){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Missing";});
     return(g!==null&&g<2.0)||hasMissing;
   });
 
@@ -14222,8 +14402,8 @@ function rATDashboard(c){
   h+='<button onclick="nav(\'at_assignments\')" style="font-size:10px;background:none;border:none;color:#D61F31;cursor:pointer;font-weight:700">All →</button></div>';
   h+='<div style="display:flex;flex-direction:column;gap:7px">';
   assigns.slice(0,6).forEach(function(a){
-    var submCount=enrolled.filter(function(s){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Turned In";}).length;
-    var missCount=enrolled.filter(function(s){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Missing";}).length;
+    var submCount=enrolled.filter(function(s){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Turned In";}).length;
+    var missCount=enrolled.filter(function(s){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Missing";}).length;
     var pct=enrolled.length?Math.round(submCount/enrolled.length*100):0;
     var typeCol={Homework:"#3B82F6",Classwork:"#8B5CF6",Quiz:"#EF4444",Assessment:"#D97706",Project:"#0891B2",Lab:"#059669",Worksheet:"#6366F1"}[a.type]||"#6B7280";
     h+='<div style="padding:9px 12px;border:1.5px solid #E4EAF2;border-radius:10px">';
@@ -14281,7 +14461,10 @@ function rATAssignments(c){
   h+='<div style="display:flex;justify-content:space-between;align-items:center">';
   h+='<div><div style="font-size:15px;font-weight:800;color:#1A365E">📝 Assignment Management</div>';
   h+='<div style="font-size:11px;color:#7A92B0;margin-top:2px">'+assigns.length+' assignments · '+Object.keys(subs).length+' submission records</div></div>';
+  h+='<div style="display:flex;gap:8px">';
+  h+='<button id="at-refresh-subs" style="padding:9px 14px;background:#EEF3FF;color:#1A365E;border:1.5px solid #DDE6F0;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">↻ Refresh Submissions</button>';
   h+='<button id="at-new-assign" style="padding:9px 18px;background:#1A365E;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer">+ New Assignment</button>';
+  h+='</div>';
   h+='</div>';
 
   // Filters
@@ -14299,9 +14482,9 @@ function rATAssignments(c){
     h+='<div style="display:flex;flex-direction:column;gap:8px">';
     filtered.forEach(function(a,i){
       var realIdx=assigns.indexOf(a);
-      var submCount=enrolled.filter(function(s){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Turned In";}).length;
-      var missCount=enrolled.filter(function(s){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Missing";}).length;
-      var lateCount=enrolled.filter(function(s){var sub=subs[a.id+"_"+s.id];return sub&&sub.status==="Late";}).length;
+      var submCount=enrolled.filter(function(s){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Turned In";}).length;
+      var missCount=enrolled.filter(function(s){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Missing";}).length;
+      var lateCount=enrolled.filter(function(s){var sub=atGetSub(a.id,s,subs);return sub&&sub.status==="Late";}).length;
       var pct=enrolled.length?Math.round(submCount/enrolled.length*100):0;
       var typeCol={Homework:"#3B82F6",Classwork:"#8B5CF6",Quiz:"#EF4444",Assessment:"#D97706",Project:"#0891B2",Lab:"#059669",Worksheet:"#6366F1"}[a.type]||"#6B7280";
       var isOpen=selAssign===a.id;
@@ -14332,9 +14515,9 @@ function rATAssignments(c){
         h+='<div style="font-size:10px;font-weight:700;color:#7A92B0;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Student Submissions & Grades</div>';
         h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
         enrolled.forEach(function(s){
-          var sub=subs[a.id+"_"+s.id]||{status:"Assigned",score:null};
+          var sub=atGetSub(a.id,s,subs);
           var gpa=a.maxScore&&sub.score!==null&&sub.score!==undefined?calcATGPA(sub.score,a.maxScore):null;
-          var statCol={Assigned:"#94A3B8","Turned In":"#059669",Missing:"#D61F31",Late:"#D97706",Incomplete:"#6366F1",Resubmit:"#0891B2",Excused:"#6B7280"}[sub.status]||"#94A3B8";
+          var statCol={Assigned:"#94A3B8","Turned In":"#059669",Resubmitted:"#7C3AED",Missing:"#D61F31",Late:"#D97706",Incomplete:"#6366F1",Resubmit:"#0891B2",Excused:"#6B7280"}[sub.status]||"#94A3B8";
           h+='<div style="padding:10px 12px;background:#F7F9FC;border-radius:10px;border:1px solid #E4EAF2">';
           h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
           h+='<div class="ava" style="width:26px;height:26px;font-size:10px">'+esc(ini(s))+'</div>';
@@ -14342,12 +14525,21 @@ function rATAssignments(c){
           h+='<span style="font-size:9px;font-weight:700;color:'+statCol+'">'+esc(sub.status)+'</span></div>';
           if(gpa!==null)h+=gpaBadge(gpa,10);
           h+='</div>';
+          if(sub.fileUrl||sub.linkUrl||sub.studentNote){
+            h+='<div style="margin-bottom:8px;padding:7px 9px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;display:flex;flex-direction:column;gap:4px">';
+            h+='<div style="font-size:9px;font-weight:800;color:#1D4ED8;text-transform:uppercase;letter-spacing:.6px">&#128236; Student Submission</div>';
+            if(sub.fileUrl)h+='<a href="'+esc(sub.fileUrl)+'" target="_blank" style="font-size:10px;font-weight:700;color:#0369A1;text-decoration:none">&#128206; View uploaded file</a>';
+            if(sub.linkUrl)h+='<a href="'+esc(sub.linkUrl)+'" target="_blank" style="font-size:10px;font-weight:700;color:#0369A1;text-decoration:none">&#128279; '+esc(sub.linkUrl.length>50?sub.linkUrl.slice(0,50)+'\u2026':sub.linkUrl)+'</a>';
+            if(sub.studentNote)h+='<div style="font-size:10px;color:#374151;font-style:italic">&#128172; &ldquo;'+esc(sub.studentNote)+'&rdquo;</div>';
+            if(sub.submittedDate)h+='<div style="font-size:9px;color:#94A3B8">Submitted: '+esc(sub.submittedDate)+'</div>';
+            h+='</div>';
+          }
           h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">';
-          h+='<select class="at-sub-status" data-aid="'+a.id+'" data-sid="'+s.id+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;grid-column:span 1">';
+          h+='<select class="at-sub-status" data-aid="'+a.id+'" data-sid="'+esc(s.studentId||String(s.id))+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;grid-column:span 1">';
           AT_STATUS.forEach(function(st){h+='<option '+(sub.status===st?"selected":"")+'>'+st+'</option>';});
           h+='</select>';
-          h+='<input class="at-sub-score" data-aid="'+a.id+'" data-sid="'+s.id+'" type="number" placeholder="Score" min="0" max="'+a.maxScore+'" value="'+(sub.score!==null&&sub.score!==undefined?sub.score:"")+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;width:100%;box-sizing:border-box">';
-          h+='<input class="at-sub-note" data-aid="'+a.id+'" data-sid="'+s.id+'" type="text" placeholder="Feedback" value="'+esc(sub.teacherNote||"")+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;width:100%;box-sizing:border-box;grid-column:span 1">';
+          h+='<input class="at-sub-score" data-aid="'+a.id+'" data-sid="'+esc(s.studentId||String(s.id))+'" type="number" placeholder="Score" min="0" max="'+a.maxScore+'" value="'+(sub.score!==null&&sub.score!==undefined?sub.score:'')+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;width:100%;box-sizing:border-box">';
+          h+='<input class="at-sub-note" data-aid="'+a.id+'" data-sid="'+esc(s.studentId||String(s.id))+'" type="text" placeholder="Feedback" value="'+esc(sub.teacherNote||'')+'" style="padding:4px 6px;border:1.5px solid #E4EAF2;border-radius:6px;font-size:10px;width:100%;box-sizing:border-box;grid-column:span 1">';
           h+='</div></div>';
         });
         h+='</div>';
@@ -14371,6 +14563,19 @@ function rATAssignments(c){
   // New assignment
   var nb=document.getElementById("at-new-assign");
   if(nb)nb.addEventListener("click",function(){openATAssignModal(null,c);});
+  var refBtn=document.getElementById("at-refresh-subs");
+  if(refBtn)refBtn.addEventListener("click",function(){
+    refBtn.textContent='Refreshing...';
+    if(!webUrl){toast('No sheet connected — using local data','err');refBtn.textContent='↻ Refresh Submissions';return;}
+    gmsSheetRequest('getAll',{},function(d){
+      if(d&&d.at&&d.at.submissions){
+        atSaveObj('submissions',d.at.submissions);
+        rATAssignments(c);
+        toast('Submissions refreshed ✓','ok');
+      } else { toast('No submissions data in response','err'); }
+      refBtn.textContent='↻ Refresh Submissions';
+    });
+  });
 
   // Toggle grade panel
   c.querySelectorAll(".at-assign-toggle").forEach(function(b){
@@ -14535,15 +14740,18 @@ function rATWeekly(c){
       h+='<td style="padding:6px 10px;text-align:center">'+gpaBadge(weekGpa,11)+'</td>';
       var doneCount=0;
       weekAssigns.forEach(function(a){
-        var sub=subs[a.id+"_"+s.id]||{status:"Assigned"};
-        var statCol={"Turned In":"#059669","Missing":"#D61F31","Late":"#D97706","Incomplete":"#6366F1","Resubmit":"#0891B2","Excused":"#6B7280","Assigned":"#94A3B8"}[sub.status]||"#94A3B8";
+        var sub=atGetSub(a.id,s,subs);
+        var statCol={"Turned In":"#059669","Resubmitted":"#7C3AED","Missing":"#D61F31","Late":"#D97706","Incomplete":"#6366F1","Resubmit":"#0891B2","Excused":"#6B7280","Assigned":"#94A3B8"}[sub.status]||"#94A3B8";
         if(sub.status==="Turned In")doneCount++;
         var scoreDisplay=sub.score!==null&&sub.score!==undefined?sub.score+(a.maxScore?"/"+a.maxScore:""):"—";
         var subGpa=a.maxScore&&sub.score!==null&&sub.score!==undefined?calcATGPA(sub.score,a.maxScore):null;
-        h+='<td style="padding:6px 8px;text-align:center;border-left:1px solid #F0F4FA">';
+        var hasSubContent=sub.fileUrl||sub.linkUrl;
+        h+='<td style="padding:6px 8px;text-align:center;border-left:1px solid #F0F4FA'+(hasSubContent?';background:#F0FDF4':'')+'">';
         h+='<div style="font-size:9px;font-weight:800;color:'+statCol+';margin-bottom:2px">'+esc(sub.status)+'</div>';
         h+='<div style="font-size:11px;font-weight:700;color:#1A365E">'+scoreDisplay+'</div>';
         if(subGpa!==null)h+='<div>'+gpaBadge(subGpa,9)+'</div>';
+        if(sub.fileUrl)h+='<a href="'+esc(sub.fileUrl)+'" target="_blank" title="View uploaded file" style="font-size:9px;color:#0369A1;text-decoration:none;display:block">&#128206; File</a>';
+        else if(sub.linkUrl)h+='<a href="'+esc(sub.linkUrl)+'" target="_blank" title="View submitted link" style="font-size:9px;color:#0369A1;text-decoration:none;display:block">&#128279; Link</a>';
         h+='</td>';
       });
       var donePct=weekAssigns.length?Math.round(doneCount/weekAssigns.length*100):0;
@@ -15069,7 +15277,9 @@ function rATLate(c){
 
   h+='<div style="display:flex;justify-content:space-between;align-items:center">';
   h+='<div><div style="font-size:15px;font-weight:800;color:#1A365E">⏰ Late Submission Management</div>';
-  h+='<div style="font-size:11px;color:#7A92B0;margin-top:2px">'+lateRecords.length+' late/missing records</div></div></div>';
+  h+='<div style="font-size:11px;color:#7A92B0;margin-top:2px">'+lateRecords.length+' late/missing records</div></div>';
+  h+='<button id="at-late-refresh" style="padding:7px 14px;background:#EEF3FF;color:#1A365E;border:1.5px solid #DDE6F0;border-radius:9px;font-size:11px;font-weight:700;cursor:pointer">↻ Refresh</button>';
+  h+='</div>';
 
   // Summary chips
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
@@ -15109,6 +15319,14 @@ function rATLate(c){
       h+='</div>';
       h+='<div style="font-size:12px;color:#3D5475;margin-bottom:3px">📝 '+esc(r.assign.title)+'</div>';
       h+='<div style="font-size:10px;color:#94A3B8">📚 '+esc(r.assign.subject)+'  ·  Due: '+esc(r.assign.dueDate)+(r.sub.submittedDate?" · Submitted: "+esc(r.sub.submittedDate):"")+'</div>';
+      if(r.sub.fileUrl||r.sub.linkUrl||r.sub.studentNote){
+        h+='<div style="margin-top:5px;padding:6px 8px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:7px;display:flex;flex-direction:column;gap:3px">';
+        h+='<div style="font-size:9px;font-weight:800;color:#1D4ED8">&#128236; Submission</div>';
+        if(r.sub.fileUrl)h+='<a href="'+esc(r.sub.fileUrl)+'" target="_blank" style="font-size:10px;font-weight:700;color:#0369A1;text-decoration:none">&#128206; View uploaded file</a>';
+        if(r.sub.linkUrl)h+='<a href="'+esc(r.sub.linkUrl)+'" target="_blank" style="font-size:10px;font-weight:700;color:#0369A1;text-decoration:none">&#128279; '+esc(r.sub.linkUrl.length>55?r.sub.linkUrl.slice(0,55)+'…':r.sub.linkUrl)+'</a>';
+        if(r.sub.studentNote)h+='<div style="font-size:10px;color:#374151;font-style:italic">&#128172; &ldquo;'+esc(r.sub.studentNote)+'&rdquo;</div>';
+        h+='</div>';
+      }
       if(r.sub.score!==null&&r.sub.score!==undefined){
         h+='<div style="font-size:10px;color:#64748B;margin-top:3px">Score: '+r.sub.score+(r.assign.maxScore?"/"+r.assign.maxScore:"");
         if(penalty&&penalisedScore!==null)h+=' → Penalised: <span style="color:#D61F31;font-weight:700">'+penalisedScore.toFixed(1)+'</span>';
@@ -15136,6 +15354,16 @@ function rATLate(c){
   c.innerHTML=h;
 
   document.getElementById("at-late-stu").addEventListener("change",function(){window._atLateStu=parseInt(this.value)||null;rATLate(c);});
+  var lrefBtn=document.getElementById("at-late-refresh");
+  if(lrefBtn)lrefBtn.addEventListener("click",function(){
+    lrefBtn.textContent='Refreshing...';
+    if(!webUrl){toast('No sheet connected','err');lrefBtn.textContent='↻ Refresh';return;}
+    gmsSheetRequest('getAll',{},function(d){
+      if(d&&d.at&&d.at.submissions){atSaveObj('submissions',d.at.submissions);rATLate(c);toast('Submissions refreshed ✓','ok');}
+      else{toast('No submissions data in response','err');}
+      lrefBtn.textContent='↻ Refresh';
+    });
+  });
 
   c.querySelectorAll(".at-apply-penalty").forEach(function(b){
     b.addEventListener("click",function(){
