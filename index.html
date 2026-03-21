@@ -1195,7 +1195,62 @@ function sheetFetch(){
         // AT — restore from sheet using atSave/atSaveObj to avoid triggering write-back
         if(d.at){
           if(Array.isArray(d.at.assignments)&&d.at.assignments.length){atSave("assignments",d.at.assignments);}
-          if(d.at.submissions&&Object.keys(d.at.submissions).length){atSaveObj("submissions",d.at.submissions);}
+          if(d.at.submissions&&Object.keys(d.at.submissions).length){
+            // Normalize subKeys: remap formatted studentId -> numeric s.id
+            // so admin grade panel always finds submissions regardless of
+            // which ID format the student used when submitting via portal
+            var rawSubs = d.at.submissions;
+            var normalizedSubs = {};
+            // Build formatted->numeric map from loaded students
+            var sidToId = {};
+            if(Array.isArray(d.students)){
+              d.students.forEach(function(s){
+                if(s.studentId && s.id) sidToId[String(s.studentId)] = String(s.id);
+              });
+            }
+            Object.keys(rawSubs).forEach(function(key){
+              var parts = key.split("_");
+              // subKey = assignId_studentPart
+              // assignId itself may contain underscores, find last part that is the studentId
+              // Try: last segment, then last two segments joined
+              var lastPart = parts[parts.length-1];
+              var assignPart = parts.slice(0,-1).join("_");
+              // Check if lastPart is a formatted studentId we can remap
+              if(sidToId[lastPart]){
+                var numericId = sidToId[lastPart];
+                var newKey = assignPart + "_" + numericId;
+                // Merge: if numeric key already exists (seed data), merge student fields
+                var existing = normalizedSubs[newKey] || rawSubs[newKey] || {};
+                var incoming = rawSubs[key];
+                normalizedSubs[newKey] = Object.assign({}, existing, {
+                  subKey: newKey,
+                  studentId: numericId,
+                  // Prefer student-submitted content from portal submission
+                  fileUrl:     incoming.fileUrl     || existing.fileUrl     || "",
+                  linkUrl:     incoming.linkUrl     || existing.linkUrl     || "",
+                  studentNote: incoming.studentNote || existing.studentNote || "",
+                  submittedDate: incoming.submittedDate || existing.submittedDate || "",
+                  // Prefer admin-set fields from existing graded record
+                  status:      existing.status && existing.status!=="Assigned" ? existing.status : (incoming.status || "Assigned"),
+                  score:       existing.score  !== null && existing.score  !== undefined && existing.score  !== "" ? existing.score  : incoming.score,
+                  teacherNote: existing.teacherNote || incoming.teacherNote || "",
+                  penaltyApplied: existing.penaltyApplied || incoming.penaltyApplied || false,
+                  penaltyWaived:  existing.penaltyWaived  || incoming.penaltyWaived  || false,
+                  penaltyPoints:  existing.penaltyPoints  || incoming.penaltyPoints  || 0
+                });
+              } else {
+                // Key already uses numeric id or unknown format — keep as-is
+                // but still merge if there's a duplicate
+                var existing2 = normalizedSubs[key];
+                normalizedSubs[key] = existing2 ? Object.assign({}, existing2, {
+                  fileUrl:     rawSubs[key].fileUrl     || existing2.fileUrl     || "",
+                  linkUrl:     rawSubs[key].linkUrl     || existing2.linkUrl     || "",
+                  studentNote: rawSubs[key].studentNote || existing2.studentNote || ""
+                }) : rawSubs[key];
+              }
+            });
+            atSaveObj("submissions", normalizedSubs);
+          }
           if(Array.isArray(d.at.assessments)&&d.at.assessments.length){atSave("assessments",d.at.assessments);}
           if(Array.isArray(d.at.exactpath)&&d.at.exactpath.length){atSave("exactpath",d.at.exactpath);}
           if(Array.isArray(d.at.notes)&&d.at.notes.length){atSave("notes",d.at.notes);}
@@ -8650,18 +8705,67 @@ function spCheckBadges() {
 }
 
 // ── gmsSheetRequest for student-specific actions
-function spRequest(action, payload, onOk) {
-  if (!webUrl) return;
+function spRequest(action, payload, onOk, onErr) {
+  if (!webUrl) { if (onErr) onErr('No API URL configured'); return; }
   payload.token = _sessionToken;
-  var body = encodeURIComponent(JSON.stringify(payload));
-  var c = new AbortController(), t = setTimeout(function(){c.abort();}, 30000);
-  fetch(webUrl + '?action=' + action + '&payload=' + body + '&token=' + encodeURIComponent(_sessionToken),
-    { signal: c.signal })
-  .then(function(r){ clearTimeout(t); return r.json(); })
-  .then(function(d){
-    if (d.status === 'ok') { if (onOk) onOk(d); }
-    else toast('Error: ' + (d.message||'Unknown'), 'err');
-  }).catch(function(e){ toast('Sync failed: ' + (e.message||''), 'err'); });
+  payload.action = action;
+  // File uploads (base64) must use POST — GET has ~8KB URL limit in Apps Script
+  // which is far too small for any file (even a 10KB file becomes ~14KB base64)
+  var isUpload = payload.base64 && payload.base64.length > 0;
+  var timeoutMs = isUpload ? 120000 : 30000; // 2 min for uploads, 30s for normal
+  var c = new AbortController();
+  var t = setTimeout(function(){
+    c.abort();
+    toast(isUpload ? 'Upload timed out — please paste a Google Drive link instead' : 'Request timed out', 'err');
+    if (onErr) onErr('timeout');
+  }, timeoutMs);
+  var fetchOpts;
+  if (isUpload) {
+    // POST with JSON body — avoids URL length limit entirely
+    // No Content-Type header — keeps this a CORS "simple request" so Apps Script
+    // receives it without a preflight OPTIONS that it cannot respond to
+    fetchOpts = {
+      method: 'POST',
+      signal: c.signal,
+      body: JSON.stringify(payload)
+    };
+  } else {
+    // GET for normal requests (no file data)
+    var body = encodeURIComponent(JSON.stringify(payload));
+    fetchOpts = {
+      method: 'GET',
+      signal: c.signal
+    };
+    // Rebuild URL for GET
+    var getUrl = webUrl + '?action=' + action + '&payload=' + body + '&token=' + encodeURIComponent(_sessionToken);
+    fetch(getUrl, fetchOpts)
+      .then(function(r){ clearTimeout(t); return r.json(); })
+      .then(function(d){
+        if (d.status === 'ok') { if (onOk) onOk(d); }
+        else { toast('Error: ' + (d.message||'Unknown'), 'err'); if (onErr) onErr(d.message||'error'); }
+      }).catch(function(e){
+        clearTimeout(t);
+        if (e.name !== 'AbortError') { toast('Sync failed: ' + (e.message||''), 'err'); if (onErr) onErr(e.message||'fetch error'); }
+      });
+    return; // GET path handled above
+  }
+  // POST path (file uploads)
+  // Include action+token in URL — Apps Script redirects from /exec to a unique URL,
+  // and the redirect may convert POST->GET losing the body. Having them in the URL
+  // ensures the action is always available regardless of redirect behaviour.
+  var postUrl = webUrl
+    + (webUrl.indexOf('?') >= 0 ? '&' : '?')
+    + 'action=' + encodeURIComponent(action)
+    + '&token=' + encodeURIComponent(_sessionToken);
+  fetch(postUrl, fetchOpts)
+    .then(function(r){ clearTimeout(t); return r.json(); })
+    .then(function(d){
+      if (d.status === 'ok') { if (onOk) onOk(d); }
+      else { toast('Error: ' + (d.message||'Unknown'), 'err'); if (onErr) onErr(d.message||'error'); }
+    }).catch(function(e){
+      clearTimeout(t);
+      if (e.name !== 'AbortError') { toast('Upload failed — check your connection and try pasting a Drive link instead', 'err'); if (onErr) onErr(e.message||'fetch error'); }
+    });
 }
 
 
@@ -9576,11 +9680,14 @@ function spRenderAssign(c) {
         h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">🔗 Paste a Link (Google Doc, Slides, Drive folder, website…)</label>';
         h += '<input id="sp-link-'+a.id+'" class="fi" placeholder="https://docs.google.com/..." value="'+esc(sub.linkUrl||'')+'" style="margin:0"/></div>';
         // File upload
-        h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">📎 Or Upload a File (PDF, Word, image — max 10 MB)</label>';
+        h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:2px">📎 Or Upload a File (PDF, Word, image — max 10 MB)</label>';
+        h += '<div style="font-size:10px;color:#94A3B8;margin-bottom:5px">💡 Tip: Files over 1 MB may time out. For reliable submission upload to <a href="https://drive.google.com" target="_blank" style="color:#0369A1">Google Drive</a> and paste the link above instead.</div>';
         h += '<div id="sp-file-drop-'+a.id+'" style="border:2px dashed #C4D4E8;border-radius:9px;padding:14px;text-align:center;cursor:pointer;background:#fff;transition:background .2s">';
         h += '<div id="sp-file-label-'+a.id+'" style="font-size:12px;color:#7A92B0">📁 Click to choose file or drag & drop here</div>';
         h += '<input type="file" id="sp-file-'+a.id+'" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.mp4,.zip" style="display:none"/>';
-        h += '</div></div>';
+        h += '</div>';
+        h += '<div id="sp-file-tip-'+a.id+'" style="display:none;margin-top:6px;padding:7px 10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:7px;font-size:11px;color:#92400E;line-height:1.5"></div>';
+        h += '</div>';
         // Note
         h += '<div><label style="font-size:10px;font-weight:700;color:#7A92B0;display:block;margin-bottom:4px">📝 Note to Teacher (optional)</label>';
         h += '<input id="sp-note-'+a.id+'" class="fi" placeholder="Any context or comments for your teacher..." style="margin:0"/></div>';
@@ -9694,7 +9801,21 @@ function spRenderAssign(c) {
       if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; label.textContent = '📎 '+e.dataTransfer.files[0].name; }
     });
     input.addEventListener('change', function(){
-      if (input.files.length) { label.textContent = '📎 '+input.files[0].name+' ('+Math.round(input.files[0].size/1024)+' KB)'; }
+      if (input.files.length) {
+        var f = input.files[0];
+        var kb = Math.round(f.size/1024);
+        label.textContent = '📎 ' + f.name + ' (' + kb + ' KB)';
+        // Warn for large files and suggest Drive link
+        if (f.size > 1*1024*1024) {
+          var tip = document.getElementById('sp-file-tip-'+aid);
+          if (tip) {
+            tip.innerHTML = '⚠️ <strong>' + (f.size/1024/1024).toFixed(1) + ' MB file</strong> — large files may time out. '
+              + 'For reliable submission: upload to <a href="https://drive.google.com" target="_blank" style="color:#0369A1">Google Drive</a> '
+              + 'and paste the link above instead.';
+            tip.style.display = 'block';
+          }
+        }
+      }
     });
   });
 
@@ -9708,7 +9829,9 @@ function spRenderAssign(c) {
       var file = fileInput && fileInput.files.length ? fileInput.files[0] : null;
 
       if (!link && !file) { toast('Please provide a link or upload a file to turn in', 'err'); return; }
-      if (file && file.size > 10*1024*1024) { toast('File is too large — maximum 10 MB', 'err'); return; }
+      if (file && file.size > 10*1024*1024) { toast('File is too large — max 10 MB. Upload to Google Drive and paste the link instead.', 'err'); return; }
+      if (file && file.size > 3*1024*1024) { toast('Large file (' + (file.size/1024/1024).toFixed(1) + ' MB) — upload will take up to 2 minutes. For faster results paste a Google Drive link instead.', 'ok'); }
+      if (file && file.size > 1.5*1024*1024) { toast('Tip: For files over 1.5 MB, uploading to Google Drive and pasting the link is much faster and more reliable.', 'ok'); }
 
       btn.disabled = true; btn.textContent = file ? '⏳ Uploading…' : '⏳ Submitting…';
 
@@ -9733,26 +9856,63 @@ function spRenderAssign(c) {
         });
       }
 
+      function resetBtn() {
+        btn.disabled = false;
+        btn.textContent = '✅ Turn In Assignment';
+      }
+
       if (file) {
         var reader = new FileReader();
         reader.onload = function(e){
           var b64 = e.target.result.split(',')[1];
-          doSubmit(''); // submit with base64 in payload
-          // Override payload with file data
-          var payload2 = { assignId: aid, linkUrl: link, note: note, fileUrl: '',
-                          base64: b64, mimeType: file.type, fileName: file.name };
-          spRequest('studentSubmitAssign', payload2, function(d){
+          btn.textContent = '⏳ Uploading file…';
+          // Single request — send base64 directly, Apps Script uploads to Drive
+          var uploadPayload = {
+            assignId: aid, linkUrl: link, note: note, fileUrl: '',
+            base64: b64, mimeType: file.type, fileName: file.name,
+            isResubmit: (typeof isResubmit !== 'undefined' ? isResubmit : false)
+          };
+          // Set a client-side timeout — if Drive upload takes >45s, submit without file
+          var uploadDone = false;
+          var fallbackTimer = setTimeout(function(){
+            if (uploadDone) return;
+            uploadDone = true;
+            toast('⚠️ File upload timed out. Your assignment is being submitted without the file — please paste a Google Drive link to share your work.', 'err');
+            doSubmit('');
+          }, 90000);
+
+          spRequest('studentSubmitAssign', uploadPayload, function(d){
+            if (uploadDone) return; // fallback already triggered
+            uploadDone = true;
+            clearTimeout(fallbackTimer);
             if (d && d.fileUrl) {
               var subSid2 = _currentUser && _currentUser.studentId || '';
               var subKey2 = aid + '_' + subSid2;
-              _SP.atSubs[subKey2].fileUrl = d.fileUrl;
+              if (!_SP.atSubs[subKey2]) _SP.atSubs[subKey2] = {};
+              _SP.atSubs[subKey2].fileUrl   = d.fileUrl;
+              _SP.atSubs[subKey2].status    = 'Turned In';
+              _SP.atSubs[subKey2].submittedDate = today;
+              _SP.atSubs[subKey2].linkUrl   = link;
+              _SP.atSubs[subKey2].studentNote = note;
               spSave('data', _SP);
               toast('✅ File uploaded & assignment turned in!', 'ok');
+            } else {
+              // Submitted without Drive URL (Apps Script may not have Drive access)
+              doSubmit('');
+              return;
             }
             spRenderAssign(c);
+          }, function(){ // onError callback
+            clearTimeout(fallbackTimer);
+            uploadDone = true;
+            toast('Upload failed — submitting without file', 'err');
+            doSubmit('');
           });
         };
-        reader.onerror = function(){ toast('Could not read file — try pasting a link instead', 'err'); btn.disabled=false; btn.textContent='✅ Turn In Assignment'; };
+        reader.onerror = function(){
+          toast('Could not read file — try pasting a Google Drive link instead', 'err');
+          resetBtn();
+        };
         reader.readAsDataURL(file);
       } else {
         doSubmit('');
@@ -14569,7 +14729,21 @@ function rATAssignments(c){
     if(!webUrl){toast('No sheet connected — using local data','err');refBtn.textContent='↻ Refresh Submissions';return;}
     gmsSheetRequest('getAll',{},function(d){
       if(d&&d.at&&d.at.submissions){
-        atSaveObj('submissions',d.at.submissions);
+        var rawSubs=d.at.submissions; var ns={};
+        var sm={}; students.forEach(function(s){if(s.studentId&&s.id)sm[String(s.studentId)]=String(s.id);});
+        Object.keys(rawSubs).forEach(function(k){
+          var parts=k.split("_"); var lp=parts[parts.length-1]; var ap=parts.slice(0,-1).join("_");
+          if(sm[lp]){var nk=ap+"_"+sm[lp]; var ex=ns[nk]||getATSubmissions()[nk]||{}; var inc=rawSubs[k];
+            ns[nk]=Object.assign({},ex,{subKey:nk,studentId:sm[lp],
+              fileUrl:inc.fileUrl||ex.fileUrl||"",linkUrl:inc.linkUrl||ex.linkUrl||"",
+              studentNote:inc.studentNote||ex.studentNote||"",
+              submittedDate:inc.submittedDate||ex.submittedDate||"",
+              status:ex.status&&ex.status!=="Assigned"?ex.status:(inc.status||"Assigned"),
+              score:ex.score!==null&&ex.score!==undefined&&ex.score!==""?ex.score:inc.score,
+              teacherNote:ex.teacherNote||inc.teacherNote||""});
+          } else { ns[k]=rawSubs[k]; }
+        });
+        atSaveObj('submissions',ns);
         rATAssignments(c);
         toast('Submissions refreshed ✓','ok');
       } else { toast('No submissions data in response','err'); }
@@ -15359,8 +15533,23 @@ function rATLate(c){
     lrefBtn.textContent='Refreshing...';
     if(!webUrl){toast('No sheet connected','err');lrefBtn.textContent='↻ Refresh';return;}
     gmsSheetRequest('getAll',{},function(d){
-      if(d&&d.at&&d.at.submissions){atSaveObj('submissions',d.at.submissions);rATLate(c);toast('Submissions refreshed ✓','ok');}
-      else{toast('No submissions data in response','err');}
+      if(d&&d.at&&d.at.submissions){
+        var rawSubs=d.at.submissions; var ns={};
+        var sm={}; students.forEach(function(s){if(s.studentId&&s.id)sm[String(s.studentId)]=String(s.id);});
+        Object.keys(rawSubs).forEach(function(k){
+          var parts=k.split("_"); var lp=parts[parts.length-1]; var ap=parts.slice(0,-1).join("_");
+          if(sm[lp]){var nk=ap+"_"+sm[lp]; var ex=ns[nk]||{}; var inc=rawSubs[k];
+            ns[nk]=Object.assign({},ex,{subKey:nk,studentId:sm[lp],
+              fileUrl:inc.fileUrl||ex.fileUrl||"",linkUrl:inc.linkUrl||ex.linkUrl||"",
+              studentNote:inc.studentNote||ex.studentNote||"",
+              submittedDate:inc.submittedDate||ex.submittedDate||"",
+              status:ex.status&&ex.status!=="Assigned"?ex.status:(inc.status||"Assigned"),
+              score:ex.score!==null&&ex.score!==undefined&&ex.score!==""?ex.score:inc.score,
+              teacherNote:ex.teacherNote||inc.teacherNote||""});
+          } else { ns[k]=rawSubs[k]; }
+        });
+        atSaveObj('submissions',ns);rATLate(c);toast('Submissions refreshed ✓','ok');
+      } else{toast('No submissions data in response','err');}
       lrefBtn.textContent='↻ Refresh';
     });
   });
