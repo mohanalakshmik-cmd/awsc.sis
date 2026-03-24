@@ -17637,6 +17637,9 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div class="fl"><label class="flb">Pass Mark (%)</label><input class="fi" id="lms-l-mpass" type="number" min="1" max="100" value="' + (item.masteryPassMark || 80) + '"/></div>'
     + '<div class="fl"><label class="flb">Max Retakes</label><input class="fi" id="lms-l-retakes" type="number" min="1" max="10" value="' + (item.masteryRetakes || 3) + '"/></div>'
     + '</div>'
+    + '<div class="fl" style="grid-column:span 2"><label class="flb">📋 Assessment Brief <span style="font-weight:400;color:#94A3B8">(optional — shown to student before the test)</span></label>'
+    + '<textarea class="fta" id="lms-l-mbrief" rows="3" placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style="font-size:11px">'
+    + esc(item.masteryBrief || '') + '</textarea></div>'
     + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:6px">🎯 Mastery Test Questions</div>'
     + '<div id="lms-mquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
     + '<button id="lms-mquiz-add" style="padding:6px 14px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Add Mastery Question</button>'
@@ -17831,7 +17834,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
   }
 
   function addQuestion(arr, listId) {
-    arr.push({ q: '', type: 'mcq', opts: ['','','',''], ans: 0 });
+    arr.push({ q: '', type: 'mcq', opts: ['','','',''], ans: 0, brief: '' });
     renderQuizBuilder(arr, listId);
   }
 
@@ -17961,6 +17964,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       masteryPassMark: hasMastery ? (parseInt(document.getElementById('lms-l-mpass').value) || 80) : '',
       masteryRetakes: hasMastery ? (parseInt(document.getElementById('lms-l-retakes').value) || 3) : '',
       masteryQuizJson: hasMastery ? JSON.stringify(_mQuestions) : '',
+      masteryBrief:    hasMastery ? (document.getElementById('lms-l-mbrief') ? document.getElementById('lms-l-mbrief').value.trim() : (item.masteryBrief||'')) : '',
       masteryWeight: hasMastery ? (parseInt(document.getElementById('lms-l-mweight') && document.getElementById('lms-l-mweight').value) || 60) : 60,
       assignWeight:  hasMastery ? (parseInt(document.getElementById('lms-l-aweight') && document.getElementById('lms-l-aweight').value) || 40) : 40,
       hasAssignment: hasAssign ? 'TRUE' : 'FALSE',
@@ -18602,10 +18606,32 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
     h += '<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:16px">';
     h += '<div style="font-size:13px;font-weight:800;color:#1A365E;margin-bottom:4px">🎯 Mastery Test</div>';
     h += '<div style="font-size:11px;color:#7A92B0;margin-bottom:12px">Pass with ' + passMark + '% to unlock the next lesson · ' + (maxRetakes - attempts) + ' attempt' + ((maxRetakes - attempts) !== 1 ? 's' : '') + ' remaining</div>';
+    // Assessment Brief — shown to student before the test
+    if (item.masteryBrief && item.masteryBrief.trim()) {
+      h += '<div style="background:#EEF3FF;border:1px solid #C4D4E8;border-radius:10px;padding:14px 16px;margin-bottom:14px">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      h += '<div style="width:28px;height:28px;border-radius:8px;background:#1A365E;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📋</div>';
+      h += '<div style="font-size:11px;font-weight:800;color:#1A365E;text-transform:uppercase;letter-spacing:.5px">Assessment Brief</div>';
+      h += '</div>';
+      h += '<div style="font-size:12px;color:#2D3F5E;line-height:1.7;white-space:pre-wrap">' + esc(item.masteryBrief) + '</div>';
+      h += '</div>';
+    }
     if (masteryPassed) {
       h += '<div style="padding:10px 14px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;font-size:12px;font-weight:700;color:#059669">✅ Mastery test passed — ' + (prog.masteryScore || 0) + '% score</div>';
+      if (item.masteryBrief && item.masteryBrief.trim()) {
+        h += '<div style="margin-top:8px;padding:10px 14px;background:#F7F9FC;border-radius:8px;border-left:3px solid #059669">';
+        h += '<div style="font-size:9px;font-weight:800;color:#059669;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 This assessment tested</div>';
+        h += '<div style="font-size:11px;color:#3D5475;line-height:1.6;white-space:pre-wrap">' + esc(item.masteryBrief) + '</div>';
+        h += '</div>';
+      }
     } else if (attempts >= maxRetakes) {
       h += '<div style="padding:10px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E">⚠️ No retakes remaining. Ask your teacher for help.</div>';
+      if (item.masteryBrief && item.masteryBrief.trim()) {
+        h += '<div style="margin-top:8px;padding:10px 14px;background:#FFFBEA;border-radius:8px;border-left:3px solid #F59E0B">';
+        h += '<div style="font-size:9px;font-weight:800;color:#92400E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📋 What this assessment covers</div>';
+        h += '<div style="font-size:11px;color:#3D5475;line-height:1.6;white-space:pre-wrap">' + esc(item.masteryBrief) + '</div>';
+        h += '</div>';
+      }
     } else {
       // Check if mastery questions are actually configured
       var masteryQs = [];
