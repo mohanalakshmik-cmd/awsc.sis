@@ -1572,7 +1572,7 @@ function updateBadges(){
   var alerts=0;
   students.forEach(function(s){
     if(s.status==="Enrolled"&&!s.studentId&&!dismissed.includes("no-sid-"+s.id))alerts++;
-    if(s.documents.length<3&&!["Denied","Withdrawn"].includes(s.status)&&!dismissed.includes("docs-"+s.id))alerts++;
+    if((s.documents||[]).length<3&&!["Denied","Withdrawn"].includes(s.status)&&!dismissed.includes("docs-"+s.id))alerts++;
     if(s.status==="Waitlisted"&&!dismissed.includes("wl-"+s.id))alerts++;
     if(s.status==="Under Review"&&!dismissed.includes("rev-"+s.id))alerts++;
     if(s.intDate){var d=Math.round((new Date(s.intDate)-new Date())/86400000);if(d>=-1&&d<=7&&!dismissed.includes("int-"+s.id))alerts++;}
@@ -1583,45 +1583,56 @@ function updateBadges(){
 }
 
 function render(){
-  updateBadges();
   // Campus scope: partners only see their campus students
   var _fullStudents=students;
   if(isPartner()&&getPartnerCampus()){
     students=scopeStudents(_fullStudents);
   }
   var c=document.getElementById("content");
-  if(view==="dashboard")rDash(c);
-  else if(view==="perf_dash")rPerfDash(c);
-  else if(view==="applications")rApps(c);
-  else if(view==="enrolled")rEnrolled(c);
-  else if(view==="alumni")rAlumni(c);
-  else if(view==="waitlist")rWaitlist(c);
-  else if(view==="cohorts")rCohorts(c);
-  else if(view==="documents")rDocs(c);
-  else if(view==="grades")rGrades(c);
-  else if(view==="elem_grades")rElemGrades(c);
-  else if(view==="analytics")rAnalytics(c)
-  else if(view==="attendance")rAttendance(c)
-  else if(view==="interviews")rInterviews(c)
-  else if(view==="fees")rFees(c)
-  else if(view==="comms")rComms(c);
-  else if(view==="reportcards")rReportCards(c);
-  else if(view==="calendar")rCalendar(c);
-  else if(view==="staff")rStaff(c);
-  else if(view==="notifications")rNotifs(c);
-  else if(view==="audit")rAuditLog(c);
-  else if(view==="student360")rStudent360(c);
-  else if(view==="goals")rGoals(c);
-  else if(view==="pipeline")rAdmissionsPipeline(c);
-  else if(view==="backup")rFullBackup(c);
-  else if(view==="settings")rSettings(c);
-  else if(view==="tpms"||view.startsWith("tpms_"))rTPMS(c);
-  else if(view.startsWith("at_"))rAT(c);
-  else if(view.startsWith("pt_"))rPT(c);
-  else if(view.startsWith("lms_"))rLMS(c);
-  else if(view==="health")rHealth(c);
-  else if(view==="behaviour")rBehaviour(c);
-  else if(view==="users")rUsers(c);
+  try {
+    updateBadges();
+    if(view==="dashboard")rDash(c);
+    else if(view==="perf_dash")rPerfDash(c);
+    else if(view==="applications")rApps(c);
+    else if(view==="enrolled")rEnrolled(c);
+    else if(view==="alumni")rAlumni(c);
+    else if(view==="waitlist")rWaitlist(c);
+    else if(view==="cohorts")rCohorts(c);
+    else if(view==="documents")rDocs(c);
+    else if(view==="grades")rGrades(c);
+    else if(view==="elem_grades")rElemGrades(c);
+    else if(view==="analytics")rAnalytics(c);
+    else if(view==="attendance")rAttendance(c);
+    else if(view==="interviews")rInterviews(c);
+    else if(view==="fees")rFees(c);
+    else if(view==="comms")rComms(c);
+    else if(view==="reportcards")rReportCards(c);
+    else if(view==="calendar")rCalendar(c);
+    else if(view==="staff")rStaff(c);
+    else if(view==="notifications")rNotifs(c);
+    else if(view==="audit")rAuditLog(c);
+    else if(view==="student360")rStudent360(c);
+    else if(view==="goals")rGoals(c);
+    else if(view==="pipeline")rAdmissionsPipeline(c);
+    else if(view==="backup")rFullBackup(c);
+    else if(view==="settings")rSettings(c);
+    else if(view==="tpms"||view.startsWith("tpms_"))rTPMS(c);
+    else if(view.startsWith("at_"))rAT(c);
+    else if(view.startsWith("pt_"))rPT(c);
+    else if(view.startsWith("lms_"))rLMS(c);
+    else if(view==="health")rHealth(c);
+    else if(view==="behaviour")rBehaviour(c);
+    else if(view==="users")rUsers(c);
+  } catch(_renderErr) {
+    if(c) c.innerHTML = '<div style="padding:40px;text-align:center">'
+      + '<div style="font-size:32px;margin-bottom:12px">⚠️</div>'
+      + '<div style="font-size:16px;font-weight:700;color:#D61F31;margin-bottom:8px">Page Error</div>'
+      + '<div style="font-size:12px;color:#5A7290;background:#FFF0F1;padding:12px 16px;border-radius:8px;font-family:monospace;text-align:left;max-width:600px;margin:0 auto;word-break:break-all">'
+      + esc(String(_renderErr)) + '</div>'
+      + '<div style="font-size:11px;color:#94A3B8;margin-top:12px">Open browser console (F12) for full stack trace</div>'
+      + '</div>';
+    console.error("render() error for view='" + view + "':", _renderErr);
+  }
   if(typeof _fullStudents!=="undefined")students=_fullStudents;
 }
 
@@ -2282,7 +2293,7 @@ function rWaitlist(c){
   html+='<div class="g4">'
     +sc("On Waitlist",wl.length,"#1FD6C4")
     +sc("High/Urgent Priority",wl.filter(function(s){return["High","Urgent"].includes(s.priority);}).length,"#D61F31")
-    +sc("Docs Complete",wl.filter(function(s){return s.documents.length>=getSA('docs').length;}).length,"#1DBD6A")
+    +sc("Docs Complete",wl.filter(function(s){return (s.documents||[]).length>=getSA('docs').length;}).length,"#1DBD6A")
     +sc("Days Avg Wait",wl.length?Math.round(wl.reduce(function(acc,s){return acc+(s.appDate?Math.round((new Date()-new Date(s.appDate))/86400000):0);},0)/wl.length):0,"#F5A623")
     +'</div>';
 
@@ -2313,7 +2324,7 @@ function rWaitlist(c){
 
   wl.forEach(function(s,i){
     var days=s.appDate?Math.round((new Date()-new Date(s.appDate))/86400000):0;
-    var docPct=getSA('docs').length?Math.round(s.documents.length/getSA('docs').length*100):0;
+    var docPct=getSA('docs').length?Math.round((s.documents||[]).length/getSA('docs').length*100):0;
     var docCol=docPct>=100?"#1DBD6A":docPct>=50?"#F5A623":"#D61F31";
     var dayCol=days>30?"#D61F31":days>14?"#F5A623":"#3D5475";
     html+='<tr class="sr" data-id="'+s.id+'">'
@@ -5421,7 +5432,7 @@ function rAnalytics(c){
   var priCols={"Urgent":"#D61F31","High":"#F5A623","Normal":"#1DBD6A","Low":"#7A92B0"};
 
   // Document completion
-  var docComplete=students.filter(function(s){return s.documents.length>=getSA('docs').length;}).length;
+  var docComplete=students.filter(function(s){return (s.documents||[]).length>=getSA('docs').length;}).length;
   var docPct=Math.round(docComplete/tot*100);
 
   // Interview scheduled
@@ -6094,8 +6105,8 @@ function rNotifs(c){
   });
 
   // Missing documents
-  students.filter(function(s){return s.documents.length<3&&!["Denied","Withdrawn"].includes(s.status);}).forEach(function(s){
-    var miss=getSA('docs').filter(function(d){return!s.documents.includes(d);});
+  students.filter(function(s){return (s.documents||[]).length<3&&!["Denied","Withdrawn"].includes(s.status);}).forEach(function(s){
+    var miss=getSA('docs').filter(function(d){return!(s.documents||[]).includes(d);});
     items.push({id:"docs-"+s.id,cat:"urgent",ico:"📄",col:"#F5A623",bg:"#FFF6E0",
       title:s.firstName+" "+s.lastName+" — Missing Documents",
       body:miss.slice(0,3).join(", ")+(miss.length>3?" +"+miss.length-3+" more":""),
@@ -6899,7 +6910,7 @@ function openDetail(id){
   }).join("");
 
   var docHtml=getSA('docs').map(function(d){
-    var have=s.documents.includes(d);
+    var have=(s.documents||[]).includes(d);
     return'<div class="doci '+(have?"have":"miss")+'">'+esc(d)+'<span>'+(have?"✓":"✕")+'</span></div>';
   }).join("");
 
@@ -7034,7 +7045,7 @@ function openDetail(id){
       +intHtml
       +feeHtml
       +commsHtml
-      +'<div><div class="dp-sec">Documents ('+s.documents.length+'/'+getSA('docs').length+')</div>'+docHtml+'</div>'
+      +'<div><div class="dp-sec">Documents ('+(s.documents||[]).length+'/'+getSA('docs').length+')</div>'+docHtml+'</div>'
       +(s.notes?'<div class="nb"><div class="nbl">Admissions Notes</div><p>'+esc(s.notes)+'</p></div>':"")
       +(s.counselorNotes?'<div class="nb" style="background:#F3EEFF;border-color:#C4A8F5"><div class="nbl" style="color:#5A2FA0">Counselor Notes</div><p style="color:#3D1F7A">'+esc(s.counselorNotes)+'</p></div>':"")
       +'<div class="dp-acts">'
@@ -7076,7 +7087,7 @@ function exportRecord(s){
   var gr=GR[s.id]||{};
   var lines=["AMERICAN WORLD SCHOOL — STUDENT RECORD","=======================================","","STUDENT ID:    "+(s.studentId||"Not Assigned"),"NAME:          "+s.firstName+" "+s.lastName,"DOB:           "+(s.dob||"—"),"GRADE:         "+s.grade,"STATUS:        "+s.status,"CAMPUS:        "+s.campus,"COHORT:        "+(s.cohort||"—"),"NATIONALITY:   "+(s.nationality||"—"),"LANGUAGE:      "+(s.lang||"—"),"","CONTACT","Parent:     "+(s.parent||"—")+" ("+s.relation+")","Email:      "+(s.email||"—"),"Phone:      "+(s.phone||"—"),"Emergency:  "+(s.ecName||"—")+" · "+(s.ecPhone||"—"),"","HEALTH","Blood:      "+(s.bloodGroup||"—"),"Allergies:  "+(s.allergy||"—"),"Medications:"+(s.meds||"—"),"Support:    "+(s.iep||"None")];
   if(Object.keys(gr).length){lines.push("");lines.push("GRADE RECORDS");SUBJECTS.forEach(function(sub){if(gr[sub])lines.push(sub+": "+gr[sub]);});}
-  lines.push("");lines.push("DOCUMENTS");s.documents.forEach(function(d){lines.push("✓ "+d);});getSA('docs').filter(function(d){return!s.documents.includes(d);}).forEach(function(d){lines.push("✕ "+d+" (missing)");});
+  lines.push("");lines.push("DOCUMENTS");(s.documents||[]).forEach(function(d){lines.push("✓ "+d);});getSA('docs').filter(function(d){return!(s.documents||[]).includes(d);}).forEach(function(d){lines.push("✕ "+d+" (missing)");});
   if(s.notes){lines.push("");lines.push("NOTES");lines.push(s.notes);}lines.push("");lines.push("Generated: "+new Date().toLocaleString());
   var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/plain"}));a.download=s.firstName+"_"+s.lastName+"_AWS_Record.txt";a.click();toast("Record exported","ok");
 }
@@ -22312,7 +22323,7 @@ function rubricScoringPanel(container, rubric, existingScores, assignMax, onScor
     return { raw: raw, scaled: scaled };
   }
 
-  function render() {
+  function _rbRender() {
     var scores = recalc();
     var h = '<div style="display:flex;flex-direction:column;gap:10px">';
     h += '<div style="font-size:10px;font-weight:800;color:#1A365E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">📐 Rubric Scoring</div>';
@@ -22355,12 +22366,12 @@ function rubricScoringPanel(container, rubric, existingScores, assignMax, onScor
       btn.addEventListener('click', function() {
         selMap[btn.dataset.cid] = parseFloat(btn.dataset.pts);
         var s2 = recalc();
-        render();
+        _rbRender();
         onScore(s2.scaled, JSON.stringify(selMap));
       });
     });
   }
-  render();
+  _rbRender();
 }
 
 // ── Rubric Display (read-only student view) ───────────────────────────────────
@@ -23307,7 +23318,7 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
     return 'https://docs.google.com/presentation/d/' + slideId + '/export/svg?pageid=g' + idx;
   }
 
-  function render() {
+  function _slideRender() {
     var h = '<div style="display:flex;flex-direction:column;gap:10px">';
     // Slide image (use iframe embed with specific slide)
     var embedUrl = 'https://docs.google.com/presentation/d/' + slideId + '/embed?rm=minimal&slide=id.p' + (current.idx+1);
@@ -23332,13 +23343,13 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
 
     var prev = document.getElementById('slide-prev');
     var next = document.getElementById('slide-next');
-    if (prev) prev.addEventListener('click', function(){ if(current.idx>0){current.idx--;render();} });
-    if (next) next.addEventListener('click', function(){ if(current.idx<slideCount-1){current.idx++;render();} });
+    if (prev) prev.addEventListener('click', function(){ if(current.idx>0){current.idx--;_slideRender();} });
+    if (next) next.addEventListener('click', function(){ if(current.idx<slideCount-1){current.idx++;_slideRender();} });
     container.querySelectorAll('.slide-dot').forEach(function(dot){
-      dot.addEventListener('click', function(){ current.idx=parseInt(dot.dataset.i); render(); });
+      dot.addEventListener('click', function(){ current.idx=parseInt(dot.dataset.i); _slideRender(); });
     });
   }
-  render();
+  _slideRender();
 }
 
 
