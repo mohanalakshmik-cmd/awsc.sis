@@ -192,7 +192,9 @@ button,input,select,textarea{font-family:'Poppins',sans-serif}
 #sp-login-btn{width:100%;padding:12px;background:#1A365E;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:Poppins,sans-serif;margin-top:4px;}
 #sp-login-btn:hover{background:#0F2240;}
 @keyframes spin{to{transform:rotate(360deg);}}
-</style>
+
+    @keyframes lms-shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-6px)} 40%,80%{transform:translateX(6px)} }
+  </style>
 </head>
 <body>
 
@@ -8774,6 +8776,9 @@ var SP_BADGE_DEFS = [
   {id:'de_pioneer',       name:'Early College Pioneer',  icon:'🎓', desc:'Earned first Dual Enrollment credit'},
   {id:'grad_halfway',     name:'Halfway There',          icon:'📚', desc:'Reached 12 of 24 graduation credits'},
   {id:'grad_complete',    name:'Graduation Ready',       icon:'🎊', desc:'All 24 graduation credits earned'},
+,
+  {id:'lms_first_pass',   name:'Quick Learner',          icon:'⚡', desc:'Passed a mastery test on the first attempt'},
+  {id:'lms_course_done',  name:'Course Champion',         icon:'🏅', desc:'Completed all lessons in an LMS course'}
 ];
 
 // ── Fetch all student data from App Script
@@ -8947,6 +8952,30 @@ function spCheckBadges() {
     award(SP_BADGE_DEFS.find(function(b){return b.id==='de_pioneer';}));
   var apScored = _SP.courses.filter(function(c){return parseInt(c.apScore)>=3;});
   if (apScored.length >= 1) award(SP_BADGE_DEFS.find(function(b){return b.id==='ap_scholar';}));
+
+  // ── LMS badges ─────────────────────────────────────────────────────────────
+  var lmsCourseItems = (_SP.lmsContent  || []);
+  var lmsProgItems   = (_SP.lmsProgress || []);
+  // Quick Learner: any mastery test passed on attempt #1
+  var firstPassExists = lmsProgItems.some(function(p){
+    return (p.masteryPassed === 'TRUE' || p.masteryPassed === true) && (parseInt(p.masteryAttempts) || 1) <= 1;
+  });
+  if (firstPassExists) {
+    var def1 = SP_BADGE_DEFS.find(function(b){ return b.id === 'lms_first_pass'; });
+    if (def1) award(def1);
+  }
+  // Course Champion: completed all lessons in at least one course
+  var courseIds = {};
+  lmsCourseItems.forEach(function(x){ courseIds[x.courseId] = (courseIds[x.courseId] || 0) + 1; });
+  var courseDoneExists = Object.keys(courseIds).some(function(cid){
+    var total = courseIds[cid];
+    var done  = lmsProgItems.filter(function(p){ return p.courseId === cid && p.status === 'completed'; }).length;
+    return total > 0 && done >= total;
+  });
+  if (courseDoneExists) {
+    var def2 = SP_BADGE_DEFS.find(function(b){ return b.id === 'lms_course_done'; });
+    if (def2) award(def2);
+  }
 
   // Sync new badges
   if (newBadges.length && webUrl) {
@@ -18895,6 +18924,11 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   h += '</div>';
   c.innerHTML = h;
 
+  // ── Wire one-by-one quiz rendering ──────────────────────────────────────
+  if (document.getElementById('lms-quiz-one-by-one')) {
+    lmsQuizRenderQuestion();
+  }
+
   // ── Start quiz timer if configured ─────────────────────────────────────
   var _timerEl = document.getElementById('lms-quiz-timer-display');
   if (_timerEl) {
@@ -19039,14 +19073,110 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
       masteryPassed: passed ? 'TRUE' : 'FALSE',
       completedAt: passed ? new Date().toISOString() : ''
     });
+
+    // ── P1-5: Award LMS first-pass badge ──────────────────────────────────
+    if (passed && attempts === 0) spCheckBadges();
+
+    // ── Show result screen (P1-1: correct answers, P1-2: auto-advance) ────
+    var masteryArea = document.getElementById('sp-lms-mastery-area');
+    var details     = window._lmsQuizLastDetails || [];
+    window._lmsQuizLastDetails = null;
+    var letters = ['A','B','C','D','E'];
+    var nextItem = null;
+    var allContent = _SP.lmsContent || [];
+    var courseContent = allContent.filter(function(x){ return x.courseId === courseId; })
+      .sort(function(a,b){ return (parseInt(a.unitOrder)||0)-(parseInt(b.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(b.order)||0); });
+    var thisIdx = courseContent.findIndex(function(x){ return x.id === item.id; });
+    if (thisIdx >= 0 && thisIdx < courseContent.length - 1) nextItem = courseContent[thisIdx + 1];
+
+    // Build result banner
+    var rh = '';
     if (passed) {
-      toast('🎉 Mastery test passed! ' + result + '% — Next lesson unlocked', 'ok');
+      // ── CONGRATULATIONS ──────────────────────────────────────────────────
+      rh += '<div style="background:linear-gradient(135deg,#059669,#047857);border-radius:14px;padding:20px 22px;text-align:center;margin-bottom:14px;position:relative;overflow:hidden">';
+      rh += '<div style="position:absolute;top:-20px;right:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.07)"></div>';
+      rh += '<div style="font-size:40px;margin-bottom:8px">🎉</div>';
+      rh += '<div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:4px">Congratulations!</div>';
+      rh += '<div style="font-size:13px;color:rgba(255,255,255,.85);margin-bottom:14px">You passed the mastery assessment with <strong>' + result + '%</strong></div>';
+      if (nextItem) {
+        rh += '<button id="lms-next-lesson-btn" data-nextid="' + esc(nextItem.id) + '" style="padding:10px 22px;background:#fff;color:#059669;border:none;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer">Continue to Next Lesson →</button>';
+      } else {
+        rh += '<div style="font-size:12px;color:rgba(255,255,255,.8);padding:8px 16px;background:rgba(255,255,255,.15);border-radius:8px;display:inline-block">🏁 You have completed all lessons in this course!</div>';
+      }
+      rh += '</div>';
     } else {
-      toast('Score: ' + result + '% — Need ' + passMark + '% to pass. ' + (maxRetakes - newAttempts) + ' attempt(s) left', 'err');
+      // ── TRY AGAIN ────────────────────────────────────────────────────────
+      var attLeft = maxRetakes - newAttempts;
+      rh += '<div style="background:linear-gradient(135deg,#DC2626,#B91C1C);border-radius:14px;padding:20px 22px;text-align:center;margin-bottom:14px">';
+      rh += '<div style="font-size:36px;margin-bottom:8px">😔</div>';
+      rh += '<div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:4px">Not quite there yet</div>';
+      rh += '<div style="font-size:12px;color:rgba(255,255,255,.85);margin-bottom:12px">You scored <strong>' + result + '%</strong> — you need <strong>' + passMark + '%</strong> to pass</div>';
+      if (attLeft > 0) {
+        rh += '<button id="lms-retry-btn" style="padding:9px 20px;background:#fff;color:#DC2626;border:none;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer">🔄 Try Again (' + attLeft + ' attempt' + (attLeft !== 1 ? 's' : '') + ' left)</button>';
+      } else {
+        rh += '<div style="font-size:11px;color:rgba(255,255,255,.8);padding:6px 14px;background:rgba(255,255,255,.15);border-radius:7px;display:inline-block">No retakes remaining — ask your teacher for help</div>';
+      }
+      rh += '</div>';
     }
-    spFetchData(function() {
-      spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId);
-    });
+
+    // ── P1-1: Correct answer review ──────────────────────────────────────
+    if (details.length) {
+      rh += '<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;overflow:hidden">';
+      rh += '<div style="padding:10px 14px;background:#F7F9FC;border-bottom:1px solid #E4EAF2;font-size:11px;font-weight:800;color:#1A365E">📝 Answer Review</div>';
+      details.forEach(function(d, di) {
+        var q = d.q;
+        var borderCol = d.isCorrect ? '#BBF7D0' : '#FECACA';
+        var bgCol     = d.isCorrect ? '#F0FDF4' : '#FFF7F7';
+        var icon      = d.isCorrect ? '✅' : '❌';
+        rh += '<div style="padding:12px 14px;border-bottom:1px solid #F0F4FA;background:' + bgCol + '">';
+        rh += '<div style="font-size:11px;font-weight:700;color:#1A365E;margin-bottom:6px">' + icon + ' Q' + (di+1) + ': ' + esc(q.q || '') + '</div>';
+        if (d.isShort) {
+          rh += '<div style="font-size:10px;color:#5A7290">Short answer — teacher will review your response.</div>';
+          if (d.selected) rh += '<div style="font-size:10px;color:#3D5475;margin-top:4px;padding:5px 8px;background:#F7F9FC;border-radius:6px"><em>' + esc(d.selected) + '</em></div>';
+        } else {
+          var opts = q.opts || [];
+          var selOpt  = d.selected !== undefined && opts[d.selected] !== undefined ? esc(opts[d.selected]) : '—';
+          var corrOpt = q.ans !== undefined && opts[q.ans]  !== undefined ? esc(opts[q.ans])  : '—';
+          var corrLetter = q.ans !== undefined ? (letters[q.ans] || '') : '';
+          if (!d.isCorrect) {
+            rh += '<div style="font-size:10px;color:#DC2626;margin-bottom:3px">Your answer: ' + (d.selected !== undefined ? letters[d.selected] || '' : '—') + '. ' + selOpt + '</div>';
+          }
+          rh += '<div style="font-size:10px;font-weight:700;color:#059669">Correct answer: ' + corrLetter + '. ' + corrOpt + '</div>';
+        }
+        rh += '</div>';
+      });
+      rh += '</div>';
+    }
+
+    if (masteryArea) {
+      masteryArea.innerHTML = rh;
+      // Wire next-lesson button (P1-2)
+      var nextBtn = document.getElementById('lms-next-lesson-btn');
+      if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+          window._spLMSLesson = nextBtn.dataset.nextid;
+          spFetchData(function() {
+            spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId);
+          });
+        });
+      }
+      // Wire retry button
+      var retryBtn = document.getElementById('lms-retry-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+          _lmsQuizState = null;
+          spFetchData(function() {
+            spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId);
+          });
+        });
+      }
+    } else {
+      spFetchData(function() {
+        spRenderLMSCourse(c, courseId, _SP.lmsContent || [], _SP.lmsProgress || [], studentId);
+      });
+    }
+    // Hide submit button after submission
+    if (mastBtn) { mastBtn.style.display = 'none'; }
   });
 
   // Prev / Next nav
@@ -19070,54 +19200,161 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   });
 }
 
+// ── Quiz state: one-question-at-a-time ──────────────────────────────────────
+var _lmsQuizState = null; // { questions, current, answers, prefix, container }
+
 function spRenderLMSQuiz(quizJson, prefix, isMastery) {
+  // Returns a placeholder; actual render happens via lmsQuizRenderQuestion
   if (!quizJson) return '<div style="font-size:11px;color:#94A3B8;text-align:center;padding:12px">No quiz questions configured.</div>';
   var questions = [];
   try { questions = JSON.parse(quizJson); } catch(e) { return '<div style="color:#D61F31;font-size:11px;padding:10px">Invalid quiz format.</div>'; }
   if (!questions.length) return '<div style="font-size:11px;color:#94A3B8;text-align:center;padding:12px">No questions.</div>';
-  var h = '';
+  // Initialise state
+  _lmsQuizState = { questions: questions, current: 0, answers: {}, prefix: prefix };
+  return '<div id="lms-quiz-one-by-one"></div>';
+}
+
+function lmsQuizRenderQuestion() {
+  var state = _lmsQuizState;
+  var el = document.getElementById('lms-quiz-one-by-one');
+  if (!state || !el) return;
+  var q   = state.questions[state.current];
+  var qi  = state.current;
+  var total = state.questions.length;
   var letters = ['A','B','C','D','E'];
-  questions.forEach(function(q, qi) {
-    h += '<div style="margin-bottom:12px;padding:14px;background:#F7F9FC;border:1px solid #E4EAF2;border-radius:10px">';
-    h += '<div style="font-size:12px;font-weight:700;color:#1A365E;margin-bottom:10px">' + (qi+1) + '. ' + esc(q.q || '') + '</div>';
-    if (q.type === 'mcq' || !q.type) {
-      (q.opts || []).forEach(function(opt, oi) {
-        if (!opt && opt !== 0) return; // skip empty options
-        var letter = letters[oi] || String(oi+1);
-        h += '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:11px;color:#3D5475;margin-bottom:4px;background:#fff;border:1.5px solid #E4EAF2">';
-        h += '<input type="radio" name="' + prefix + '_q' + qi + '" value="' + oi + '" style="flex-shrink:0"/>';
-        h += '<span style="font-size:10px;font-weight:800;color:#7A92B0;background:#F0F4FA;padding:2px 6px;border-radius:4px;flex-shrink:0">' + letter + '</span>';
-        h += '<span>' + esc(opt) + '</span></label>';
+  var saved = state.answers[qi]; // previously selected value (index or 'short')
+
+  var h = '';
+  // ── Progress dots ──────────────────────────────────────────────────────────
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">';
+  h += '<div style="font-size:10px;font-weight:700;color:#7A92B0">Question ' + (qi+1) + ' of ' + total + '</div>';
+  h += '<div style="display:flex;gap:5px;">';
+  for (var di = 0; di < total; di++) {
+    var dotW = di === qi ? '20px' : '8px';
+    var dotC = state.answers[di] !== undefined ? '#059669' : di === qi ? '#1A365E' : '#E4EAF2';
+    h += '<div style="width:' + dotW + ';height:8px;border-radius:4px;background:' + dotC + ';transition:all .3s"></div>';
+  }
+  h += '</div></div>';
+
+  // ── Question card ──────────────────────────────────────────────────────────
+  h += '<div style="background:#F7F9FC;border:1px solid #E4EAF2;border-radius:12px;padding:16px 18px;margin-bottom:14px">';
+  h += '<div style="font-size:13px;font-weight:700;color:#1A365E;line-height:1.6;margin-bottom:14px">' + esc(q.q || '') + '</div>';
+
+  if (q.type === 'mcq' || !q.type) {
+    (q.opts || []).forEach(function(opt, oi) {
+      if (!opt && opt !== 0) return;
+      var letter = letters[oi] || String(oi+1);
+      var isSel  = saved === oi;
+      h += '<label id="lms-qopt-' + oi + '" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;cursor:pointer;font-size:12px;color:#3D5475;margin-bottom:6px;background:' + (isSel ? '#EEF3FF' : '#fff') + ';border:1.5px solid ' + (isSel ? '#1A365E' : '#E4EAF2') + ';transition:all .15s">';
+      h += '<input type="radio" name="lms_q_' + qi + '" value="' + oi + '"' + (isSel ? ' checked' : '') + ' style="flex-shrink:0;accent-color:#1A365E"/>';
+      h += '<span style="font-size:10px;font-weight:800;color:#7A92B0;background:#F0F4FA;padding:2px 7px;border-radius:4px;flex-shrink:0">' + letter + '</span>';
+      h += '<span>' + esc(opt) + '</span></label>';
+    });
+  } else {
+    // Short answer
+    var savedTxt = state.answers[qi] === 'short' ? (state.answers[qi + '_text'] || '') : '';
+    h += '<textarea id="lms-short-ans" style="width:100%;padding:10px;border:1.5px solid #E4EAF2;border-radius:8px;font-size:12px;font-family:Poppins,sans-serif;resize:vertical;min-height:80px" rows="3" placeholder="Type your answer here...">' + esc(savedTxt) + '</textarea>';
+  }
+  h += '</div>';
+
+  // ── Navigation button ──────────────────────────────────────────────────────
+  var isLast = qi === total - 1;
+  h += '<button id="lms-quiz-next-btn" style="width:100%;padding:11px;background:#1A365E;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">';
+  h += isLast ? 'Submit Assessment →' : 'Next Question →';
+  h += '</button>';
+
+  el.innerHTML = h;
+
+  // Wire option highlight on change
+  var radios = el.querySelectorAll('input[type="radio"]');
+  radios.forEach(function(r) {
+    r.addEventListener('change', function() {
+      el.querySelectorAll('label[id^="lms-qopt-"]').forEach(function(lbl) {
+        lbl.style.background = '#fff';
+        lbl.style.borderColor = '#E4EAF2';
       });
-    } else {
-      // Short answer
-      h += '<textarea style="width:100%;padding:8px;border:1.5px solid #E4EAF2;border-radius:7px;font-size:11px;font-family:Poppins,sans-serif;resize:vertical" name="' + prefix + '_q' + qi + '_text" rows="2" placeholder="Type your answer here..."></textarea>';
-    }
-    h += '</div>';
+      var lbl = document.getElementById('lms-qopt-' + r.value);
+      if (lbl) { lbl.style.background = '#EEF3FF'; lbl.style.borderColor = '#1A365E'; }
+    });
   });
-  return h;
+
+  // Wire Next/Submit button
+  document.getElementById('lms-quiz-next-btn').addEventListener('click', function() {
+    // Collect answer
+    if (q.type === 'short' || q.type === 'short_answer') {
+      var ta = document.getElementById('lms-short-ans');
+      if (!ta || !ta.value.trim()) { lmsQuizShake(); toast('Please write your answer before continuing.', 'err'); return; }
+      state.answers[qi] = 'short';
+      state.answers[qi + '_text'] = ta.value.trim();
+    } else {
+      var sel = el.querySelector('input[type="radio"]:checked');
+      if (!sel) { lmsQuizShake(); toast('Please select an answer before continuing.', 'err'); return; }
+      state.answers[qi] = parseInt(sel.value);
+    }
+
+    if (isLast) {
+      // Submit — compute score and show result
+      lmsQuizSubmit();
+    } else {
+      state.current++;
+      lmsQuizRenderQuestion();
+    }
+  });
+}
+
+function lmsQuizShake() {
+  var el = document.getElementById('lms-quiz-one-by-one');
+  if (!el) return;
+  el.style.animation = 'none';
+  el.offsetHeight; // reflow
+  el.style.animation = 'lms-shake .3s ease';
+}
+
+function lmsQuizSubmit() {
+  var state = _lmsQuizState;
+  if (!state) return;
+  var questions = state.questions;
+  var correct = 0;
+  var resultDetails = [];
+  questions.forEach(function(q, qi) {
+    var isShort = q.type === 'short' || q.type === 'short_answer';
+    if (isShort) {
+      correct++;
+      resultDetails.push({ q: q, qi: qi, isShort: true, isCorrect: true, selected: state.answers[qi + '_text'] });
+    } else {
+      var sel = state.answers[qi];
+      var isCorrect = sel === q.ans;
+      if (isCorrect) correct++;
+      resultDetails.push({ q: q, qi: qi, isShort: false, isCorrect: isCorrect, selected: sel });
+    }
+  });
+  var score = Math.round(correct / questions.length * 100);
+
+  // Store result for the submit button handler to pick up
+  window._lmsQuizLastScore  = score;
+  window._lmsQuizLastDetails = resultDetails;
+
+  // Find and click the hidden submit button
+  var submitBtn = document.getElementById('sp-lms-submit-mastery');
+  if (submitBtn) { submitBtn.dataset.precomputed = score; submitBtn.click(); }
 }
 
 function spGradeLMSQuiz(prefix) {
-  var radios = document.querySelectorAll('[name^="' + prefix + '_q"]');
-  var answered = {};
-  radios.forEach(function(r) {
-    if (r.checked) answered[r.name] = true;
-  });
-  // Parse questions
+  // With one-question-at-a-time flow, score is precomputed in lmsQuizSubmit()
+  if (window._lmsQuizLastScore !== undefined && window._lmsQuizLastScore !== null) {
+    var s = window._lmsQuizLastScore;
+    window._lmsQuizLastScore = undefined; // consume
+    return s;
+  }
+  // Fallback: legacy all-on-page grading
   var questions = [];
-  var area = document.getElementById('sp-lms-mastery-area');
-  if (!area) return null;
-  // Re-parse from active lesson
   var currentItem = (_SP.lmsContent || []).find(function(x){ return x.id === window._spLMSLesson; });
   if (!currentItem) return null;
   try { questions = JSON.parse(currentItem.masteryQuizJson || currentItem.quizJson || '[]'); } catch(e) { return 0; }
-  if (!questions.length) return null; // No questions = cannot grade, show warning
-
-  var correct = 0;
-  var allAnswered = true;
+  if (!questions.length) return null;
+  var correct = 0, allAnswered = true;
   questions.forEach(function(q, qi) {
-    if (q.type === 'short') { correct++; return; } // Short answer = full marks (teacher grades)
+    if (q.type === 'short') { correct++; return; }
     var sel = document.querySelector('[name="' + prefix + '_q' + qi + '"]:checked');
     if (!sel) { allAnswered = false; return; }
     if (parseInt(sel.value) === q.ans) correct++;
@@ -20336,6 +20573,7 @@ function rLMSGradebook(c) {
     h += '</select>';
   }
   h += '<button onclick="nav(\'lms_section\')" style="padding:7px 14px;background:#F0F4FA;color:#1A365E;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📋 Section View</button>';
+  h += '<button id="lms-gb-csv-btn" style="padding:7px 14px;background:#059669;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">⬇ Export CSV</button>';
   h += '</div></div>';
   h += lmsNAV('lms_gradebook');
 
@@ -20371,8 +20609,9 @@ function rLMSGradebook(c) {
       if(diff>=10)ahead++;else if(diff>=-10)onP++;else off++;
     }
   });
-  // Count assignments needing scoring
+  // Count assignments needing scoring + at-risk students
   var needsScoring = 0;
+  var atRiskCount  = 0;
   enrolled.forEach(function(s){
     var sid = String(s.studentId||s.id);
     var myP = allProg.filter(function(p){ return p.courseId===course.id&&String(p.studentId)===sid; });
@@ -20385,8 +20624,24 @@ function rLMSGradebook(c) {
       if(p.assignStatus==='submitted' && (p.assignScore===''||p.assignScore===undefined||isNaN(p.assignScore))) needsScoring++;
     });
   });
+  // Compute at-risk count using same logic as per-row
+  enrolled.forEach(function(s) {
+    var sid2 = String(s.studentId||s.id);
+    var myP2 = allProg.filter(function(p){ return p.courseId===course.id&&String(p.studentId)===sid2; });
+    var comp2 = myP2.filter(function(p){ return p.status==='completed'; }).length;
+    var pct2  = content.length ? Math.round(comp2/content.length*100) : 0;
+    var mRows2 = myP2.filter(function(p){ return p.masteryScore!==''&&!isNaN(p.masteryScore); });
+    var avgM2  = mRows2.length ? Math.round(mRows2.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mRows2.length) : null;
+    var risk2 = false;
+    if (pct2 < 50 && enrol0.assignedAt && enrol0.dueDate) {
+      var _n3=Date.now(),_s3=new Date(enrol0.assignedAt).getTime(),_e3=new Date(enrol0.dueDate).getTime();
+      if (_e3>_s3 && pct2 < Math.min(100,Math.round((_n3-_s3)/(_e3-_s3)*100))-10) risk2=true;
+    }
+    if (avgM2!==null && avgM2<passMark && mRows2.filter(function(p){return (parseInt(p.masteryAttempts)||0)>1;}).length>0) risk2=true;
+    if (risk2) atRiskCount++;
+  });
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
-  [{icon:'👥',label:'All',val:total,col:'#1A365E',bg:'#EEF3FF'},{icon:'✅',label:'Done',val:done,col:'#059669',bg:'#DCFCE7'},{icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},{icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},{icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'},{icon:'📋',label:'To Score',val:needsScoring,col:'#7C3AED',bg:'#EDE9FE'}].forEach(function(st){
+  [{icon:'👥',label:'All',val:total,col:'#1A365E',bg:'#EEF3FF'},{icon:'✅',label:'Done',val:done,col:'#059669',bg:'#DCFCE7'},{icon:'🏃',label:'Ahead',val:ahead,col:'#059669',bg:'#D1FAE5'},{icon:'🚶',label:'On Pace',val:onP,col:'#D97706',bg:'#FEF3C7'},{icon:'⚠️',label:'Behind',val:off,col:'#D61F31',bg:'#FEE2E2'},{icon:'📋',label:'To Score',val:needsScoring,col:'#7C3AED',bg:'#EDE9FE'},{icon:'🚨',label:'At Risk',val:atRiskCount,col:'#D61F31',bg:'#FFF0F0'}].forEach(function(st){
     h+='<div style="padding:10px 14px;background:'+st.bg+';border-radius:10px;text-align:center;min-width:76px"><div style="font-size:16px">'+st.icon+'</div><div style="font-size:18px;font-weight:900;color:'+st.col+'">'+st.val+'</div><div style="font-size:9px;font-weight:700;color:'+st.col+';text-transform:uppercase">'+st.label+'</div></div>';
   });
   h+='</div>';
@@ -20442,6 +20697,16 @@ function rLMSGradebook(c) {
     var avgAssign=assignRows.length?Math.round(assignRows.reduce(function(s,p){return s+Number(p.assignScore);},0)/assignRows.length):null;
     // Composite (weighted average)
     var composite=lmsCourseComposite(myProg,content,passMark);
+    // At-risk flag: behind pace AND <50% done, or failing mastery with multiple attempts
+    var _atRisk = false;
+    if (pct < 50 && pct < 100) {
+      if (enrol0.assignedAt && enrol0.dueDate) {
+        var _now2=Date.now(), _s0=new Date(enrol0.assignedAt).getTime(), _e0=new Date(enrol0.dueDate).getTime();
+        var _expPct2 = _e0>_s0 ? Math.min(100,Math.round((_now2-_s0)/(_e0-_s0)*100)) : 0;
+        if (pct < _expPct2 - 10) _atRisk = true;
+      }
+    }
+    if (avgMastery !== null && avgMastery < passMark && mastRows.filter(function(p){ return (parseInt(p.masteryAttempts)||0) > 1; }).length > 0) _atRisk = true;
     // Time
     var realTime=myProg.reduce(function(s,p){return s+(parseFloat(p.timeSpentMins)||0);},0);
     var estTime=myProg.filter(function(p){return p.status==='completed';}).reduce(function(s,p){var it=content.find(function(x){return x.id===p.contentId;});return s+(it&&it.estimatedMins?parseFloat(it.estimatedMins)||0:0);},0);
@@ -20464,7 +20729,9 @@ function rLMSGradebook(c) {
     h+='<td style="'+sL+';background:'+rowBg+';padding:9px 14px;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;white-space:nowrap">';
     h+='<div style="display:flex;align-items:center;gap:8px"><div class="ava" style="width:28px;height:28px;font-size:10px;flex-shrink:0">'+esc((s.firstName||'?')[0]+(s.lastName||'?')[0])+'</div>';
     h+='<div><button class="lms-gb-stu-btn" data-sid="'+esc(sid)+'" data-cid="'+esc(course.id)+'" style="background:none;border:none;cursor:pointer;padding:0;text-align:left"><div style="font-size:11px;font-weight:700;color:#1A365E">'+esc(s.lastName+', '+s.firstName)+'</div></button>';
-    h+='<div style="font-size:9px;color:#7A92B0">'+esc(s.grade||'')+(s.cohort?' · '+esc(s.cohort):'')+'</div></div></div></td>';
+    h+='<div style="font-size:9px;color:#7A92B0">'+esc(s.grade||'')+(s.cohort?' · '+esc(s.cohort):'')+'</div>';
+    if (_atRisk) h += '<div style="margin-top:3px"><span style="font-size:9px;font-weight:800;color:#D61F31;background:#FEE2E2;padding:2px 7px;border-radius:4px">⚠️ At Risk</span></div>';
+    h+='</div></div></td>';
     // On-target
     h+='<td style="'+sL+';background:'+rowBg+';padding:7px 8px;text-align:center;border-bottom:1px solid #F0F4FA;border-right:1px solid #E4EAF2;font-size:10px;font-weight:700;color:'+paceCol+'">'+paceLabel+'</td>';
     // Mastery grade
@@ -20601,6 +20868,61 @@ function rLMSGradebook(c) {
         lmsRenderDiscussion(_gbDiscEl, course.id, '', false, { id: (_currentUser&&_currentUser.username)||'' });
       });
     }
+  }
+
+  // Wire CSV export
+  var csvBtn = document.getElementById('lms-gb-csv-btn');
+  if (csvBtn && course) {
+    csvBtn.addEventListener('click', function() {
+      var rows = [];
+      // Header row
+      var hdr = ['Student','Grade','Cohort','Completion %','Avg Mastery %','Avg Assignment %','Composite %','Time (mins)','Credits','At Risk'];
+      content.forEach(function(item) { hdr.push(esc(item.title) + ' (Composite)'); });
+      rows.push(hdr);
+      // One row per student
+      enrolled.forEach(function(s) {
+        var sid = String(s.studentId || s.id);
+        var myP = allProg.filter(function(p){ return p.courseId===course.id && String(p.studentId)===sid; });
+        var comp = myP.filter(function(p){ return p.status==='completed'; }).length;
+        var pctV = content.length ? Math.round(comp/content.length*100) : 0;
+        var mRows = myP.filter(function(p){ return p.masteryScore!==''&&!isNaN(p.masteryScore); });
+        var aRows = myP.filter(function(p){ return p.assignScore!==''&&!isNaN(p.assignScore); });
+        var avgM = mRows.length ? Math.round(mRows.reduce(function(s,p){return s+Number(p.masteryScore);},0)/mRows.length) : '';
+        var avgA = aRows.length ? Math.round(aRows.reduce(function(s,p){return s+Number(p.assignScore);},0)/aRows.length) : '';
+        var compV = lmsCourseComposite(myP, content, passMark);
+        var timeMins = Math.round(myP.reduce(function(s,p){return s+(parseFloat(p.timeSpentMins)||0);},0));
+        var credits = (pctV >= 100 && (avgM==='' || avgM >= passMark)) ? (course.creditHours||1) : 0;
+        // At-risk: behind pace AND <50%, or failing mastery with retries
+        var atRiskV = 'No';
+        if (pctV < 50) {
+          if (enrol0.assignedAt && enrol0.dueDate) {
+            var _n2=Date.now(),_s2=new Date(enrol0.assignedAt).getTime(),_e2=new Date(enrol0.dueDate).getTime();
+            var _ep2=_e2>_s2?Math.min(100,Math.round((_n2-_s2)/(_e2-_s2)*100)):0;
+            if (pctV < _ep2-10) atRiskV='Yes';
+          }
+        }
+        if (avgM!=='' && avgM < passMark && mRows.filter(function(p){return (parseInt(p.masteryAttempts)||0)>1;}).length>0) atRiskV='Yes';
+        var row = [s.lastName+', '+s.firstName, s.grade||'', s.cohort||'', pctV+'%', avgM!==''?avgM+'%':'', avgA!==''?avgA+'%':'', compV!==null?compV+'%':'', timeMins, credits, atRiskV];
+        content.forEach(function(item) {
+          var p = myP.find(function(pp){ return pp.contentId===item.id; });
+          var cs = p ? lmsCompositeScore(p, item, passMark) : null;
+          row.push(cs !== null ? cs+'%' : '');
+        });
+        rows.push(row);
+      });
+      // Build CSV string
+      var csv = rows.map(function(r){
+        return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(',');
+      }).join('\n');
+      var blob = new Blob([csv], {type:'text/csv'});
+      var url  = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'Gradebook_' + esc(course.title).replace(/[^a-z0-9]/gi,'_') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('✅ Gradebook exported to CSV', 'ok');
+    });
   }
 
   // Wire course selector
