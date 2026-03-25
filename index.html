@@ -17453,6 +17453,8 @@ function openLMSCourseModal(idx) {
     + '<div class="fl"><label class="flb">Status</label><select class="fsel2" id="lms-c-status"><option ' + (course.status === 'Draft' ? 'selected' : '') + '>Draft</option><option ' + (course.status === 'Published' ? 'selected' : '') + '>Published</option></select></div>'
     + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
+    + '<div class="fl" style="grid-column:span 2"><label class="flb">📢 Announcement <span style="font-weight:400;color:#94A3B8">(optional — shown as banner to enrolled students)</span></label>'
+    + '<textarea class="fta" id="lms-c-announcement" rows="2" placeholder="e.g. Quiz rescheduled to Friday · New resource added to Unit 3…" style="font-size:11px">' + esc(course.announcement||'') + '</textarea></div>'
     + '<button id="lms-c-cancel" style="padding:9px 20px;background:#F0F4FA;color:#1A365E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Cancel</button>'
     + '<button id="lms-c-save" style="padding:9px 20px;background:#1A365E;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">💾 Save Course</button>'
     + '</div></div></div>';
@@ -17470,6 +17472,7 @@ function openLMSCourseModal(idx) {
       passMark: parseInt(document.getElementById('lms-c-pass').value) || 80,
       creditHours: parseFloat(document.getElementById('lms-c-credits').value) || 1,
       status: document.getElementById('lms-c-status').value,
+      announcement: (document.getElementById('lms-c-announcement') ? document.getElementById('lms-c-announcement').value.trim() : (course.announcement||'')),
       createdBy: (_currentUser && _currentUser.name) || 'Admin',
       createdAt: course.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -17574,6 +17577,35 @@ function rLMSContent(c) {
   var newLessonBtn = document.getElementById('lms-new-lesson');
   if (newLessonBtn) newLessonBtn.addEventListener('click', function() { openLMSLessonModal(null, courseId, null); });
 
+  // Preview as student
+  c.querySelectorAll('.lms-preview-item').forEach(function(b) {
+    b.addEventListener('click', function() {
+      var pidx = parseInt(b.dataset.idx);
+      var pItem = (_LMS.content || []).filter(function(x){ return x.courseId === courseId; })
+        .sort(function(a,aa){ return (parseInt(a.unitOrder)||0)-(parseInt(aa.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(aa.order)||0); })[pidx];
+      if (!pItem) return;
+      var ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.7);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow-y:auto';
+      ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:100%;max-width:680px;margin:auto">';
+      ov.innerHTML += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,#059669,#047857);border-radius:14px 14px 0 0">';
+      ov.innerHTML += '<div style="font-size:12px;font-weight:800;color:#fff">👁 Teacher Preview — ' + esc(pItem.title) + '</div>';
+      ov.innerHTML += '<button id="lms-preview-close" style="padding:4px 12px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">✕ Close</button></div>';
+      ov.innerHTML += '<div style="padding:16px" id="lms-preview-body"></div></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('#lms-preview-close').addEventListener('click', function(){ ov.remove(); });
+      ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+      // Render the lesson as student would see it
+      var previewBody = ov.querySelector('#lms-preview-body');
+      var fakeProgress = [];
+      var fakeStudentId = 'preview';
+      var allItems = (_LMS.content||[]).filter(function(x){ return x.courseId===courseId; })
+        .sort(function(a,aa){ return (parseInt(a.unitOrder)||0)-(parseInt(aa.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(aa.order)||0); });
+      var fakeItemIdx = allItems.findIndex(function(x){ return x.id === pItem.id; });
+      var previewH = '';
+      try { spRenderLMSLesson(previewBody, pItem, fakeItemIdx, allItems, fakeProgress, fakeStudentId, courseId); previewH = null; } catch(pe) { previewBody.innerHTML = '<div style="padding:20px;color:#D61F31">Preview error: '+esc(pe.message)+'</div>'; previewH = null; }
+      // previewBody already set by spRenderLMSLesson above
+    });
+  });
   c.querySelectorAll('.lms-edit-item').forEach(function(b) {
     b.addEventListener('click', function() { openLMSLessonModal(parseInt(b.dataset.idx), courseId, null); });
   });
@@ -17640,6 +17672,12 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div class="fl" style="grid-column:span 2"><label class="flb">📋 Assessment Brief <span style="font-weight:400;color:#94A3B8">(optional — shown to student before the test)</span></label>'
     + '<textarea class="fta" id="lms-l-mbrief" rows="3" placeholder="Explain what this assessment is testing, what the student should focus on, or any instructions before they begin..." style="font-size:11px">'
     + esc(item.masteryBrief || '') + '</textarea></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<div class="fl"><label class="flb">⏱ Time Limit (minutes)</label>'
+    + '<input class="fi" id="lms-l-timelimit" type="number" min="1" max="180" placeholder="e.g. 30 — leave blank for unlimited" value="' + (item.masteryTimeLimit||'') + '"/></div>'
+    + '<div class="fl" style="justify-content:center;padding-top:20px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700;color:#1A365E">'
+    + '<input type="checkbox" id="lms-l-shuffle" ' + (item.masteryShuffleQuestions==='TRUE'||item.masteryShuffleQuestions===true?'checked':'') + ' style="width:16px;height:16px;cursor:pointer"/> 🔀 Shuffle Question Order</label></div>'
+    + '</div>'
     + '<div style="font-size:11px;font-weight:800;color:#1A365E;margin-bottom:6px">🎯 Mastery Test Questions</div>'
     + '<div id="lms-mquiz-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>'
     + '<button id="lms-mquiz-add" style="padding:6px 14px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">+ Add Mastery Question</button>'
@@ -17965,6 +18003,8 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       masteryRetakes: hasMastery ? (parseInt(document.getElementById('lms-l-retakes').value) || 3) : '',
       masteryQuizJson: hasMastery ? JSON.stringify(_mQuestions) : '',
       masteryBrief:    hasMastery ? (document.getElementById('lms-l-mbrief') ? document.getElementById('lms-l-mbrief').value.trim() : (item.masteryBrief||'')) : '',
+      masteryTimeLimit: hasMastery ? (document.getElementById('lms-l-timelimit') ? (parseInt(document.getElementById('lms-l-timelimit').value)||'') : (item.masteryTimeLimit||'')) : '',
+      masteryShuffleQuestions: hasMastery ? (document.getElementById('lms-l-shuffle') ? (document.getElementById('lms-l-shuffle').checked ? 'TRUE' : 'FALSE') : (item.masteryShuffleQuestions||'FALSE')) : 'FALSE',
       masteryWeight: hasMastery ? (parseInt(document.getElementById('lms-l-mweight') && document.getElementById('lms-l-mweight').value) || 60) : 60,
       assignWeight:  hasMastery ? (parseInt(document.getElementById('lms-l-aweight') && document.getElementById('lms-l-aweight').value) || 40) : 40,
       hasAssignment: hasAssign ? 'TRUE' : 'FALSE',
@@ -18053,9 +18093,13 @@ function openLMSEnrolModal() {
     + '<div style="background:linear-gradient(135deg,#0F2240,#1A365E);padding:18px 24px;border-radius:18px 18px 0 0"><div style="font-size:15px;font-weight:800;color:#fff">👥 Assign Course</div></div>'
     + '<div style="padding:22px 24px;display:flex;flex-direction:column;gap:12px">'
     + '<div class="fl"><label class="flb">Course *</label><select class="fsel2" id="lms-en-course">' + courseOpts + '</select></div>'
-    + '<div class="fl"><label class="flb">Assign to</label><select class="fsel2" id="lms-en-type"><option value="cohort">Cohort</option><option value="student">Individual Student</option></select></div>'
+    + '<div class="fl"><label class="flb">Assign to</label><select class="fsel2" id="lms-en-type"><option value="cohort">Cohort</option><option value="student">Individual Student</option><option value="grade">Grade Level</option></select></div>'
     + '<div class="fl" id="lms-en-cohort-wrap"><label class="flb">Cohort</label><select class="fsel2" id="lms-en-cohort">' + cohortOpts + '</select></div>'
     + '<div class="fl" id="lms-en-student-wrap" style="display:none"><label class="flb">Student</label><select class="fsel2" id="lms-en-student">' + studentOpts + '</select></div>'
+    + '<div class="fl" id="lms-en-grade-wrap" style="display:none"><label class="flb">Grade Level</label><select class="fsel2" id="lms-en-grade">' + gradeOpts + '</select></div>'
+    + '<div class="fl" id="lms-en-csv-wrap" style="display:none"><label class="flb">CSV of Student IDs</label>'
+    + '<textarea class="fta" id="lms-en-csv" rows="3" placeholder="Paste student IDs, one per line or comma-separated e.g.&#10;AWSC001&#10;AWSC002&#10;AWSC003" style="font-size:11px"></textarea>'
+    + '<div style="font-size:10px;color:#7A92B0;margin-top:3px">Enter student IDs (formatted, e.g. AWSC001) — one per line or comma-separated</div></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div class="fl"><label class="flb">Start Date</label><input class="fi" id="lms-en-start" type="date"/></div>'
     + '<div class="fl"><label class="flb">Due Date (optional)</label><input class="fi" id="lms-en-due" type="date"/></div>'
@@ -18081,8 +18125,12 @@ function openLMSEnrolModal() {
 
   var typeEl = document.getElementById('lms-en-type');
   typeEl.addEventListener('change', function() {
-    document.getElementById('lms-en-cohort-wrap').style.display = this.value === 'cohort' ? 'block' : 'none';
+    document.getElementById('lms-en-cohort-wrap').style.display  = this.value === 'cohort'  ? 'block' : 'none';
     document.getElementById('lms-en-student-wrap').style.display = this.value === 'student' ? 'block' : 'none';
+    var gradeWrap = document.getElementById('lms-en-grade-wrap');
+    var csvWrap   = document.getElementById('lms-en-csv-wrap');
+    if (gradeWrap) gradeWrap.style.display = this.value === 'grade' ? 'block' : 'none';
+    if (csvWrap)   csvWrap.style.display   = this.value === 'csv'   ? 'block' : 'none';
   });
   document.getElementById('lms-en-cancel').addEventListener('click', function() { ov.remove(); });
   document.getElementById('lms-en-save').addEventListener('click', function() {
@@ -18205,10 +18253,22 @@ function spRenderLMS(c) {
   }
 
   var h = '<div style="display:flex;flex-direction:column;gap:14px">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   h += '<div><div style="font-size:18px;font-weight:800;color:#1A365E">📚 My Learning</div>';
   h += '<div style="font-size:11px;color:#7A92B0;margin-top:2px">' + myCourses.length + ' course' + (myCourses.length !== 1 ? 's' : '') + ' assigned to you</div></div>';
+  h += '<input id="sp-lms-search" type="text" placeholder="🔍 Search courses…" style="padding:8px 12px;border:1.5px solid #E4EAF2;border-radius:9px;font-size:12px;min-width:180px;outline:none;font-family:Poppins,sans-serif" value="' + esc(window._spLMSSearch||'') + '"/>';
   h += '</div>';
+  // Subject filter pills
+  var allSubjects = []; myCourses.forEach(function(co){ if (co.subject && allSubjects.indexOf(co.subject)<0) allSubjects.push(co.subject); });
+  if (allSubjects.length > 1) {
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">';
+    var activeSub = window._spLMSSubjectFilter || 'All';
+    h += '<button class="sp-lms-subject-pill" data-sub="All" style="padding:5px 12px;border-radius:20px;border:1.5px solid ' + (activeSub==='All'?'#1A365E':'#E4EAF2') + ';background:' + (activeSub==='All'?'#1A365E':'#fff') + ';color:' + (activeSub==='All'?'#fff':'#5A7290') + ';font-size:10px;font-weight:700;cursor:pointer">All</button>';
+    allSubjects.forEach(function(sub){
+      h += '<button class="sp-lms-subject-pill" data-sub="' + esc(sub) + '" style="padding:5px 12px;border-radius:20px;border:1.5px solid ' + (activeSub===sub?'#1A365E':'#E4EAF2') + ';background:' + (activeSub===sub?'#1A365E':'#fff') + ';color:' + (activeSub===sub?'#fff':'#5A7290') + ';font-size:10px;font-weight:700;cursor:pointer">' + esc(sub) + '</button>';
+    });
+    h += '</div>';
+  }
 
   // Pace summary row
   if (myCourses.length > 0) {
@@ -18259,8 +18319,19 @@ function spRenderLMS(c) {
     h += '<div style="font-size:14px;font-weight:800;color:#1A365E;margin-bottom:6px">No courses assigned yet</div>';
     h += '<div style="font-size:12px;color:#7A92B0">Your teacher will assign courses here. Check back soon!</div></div>';
   } else {
+    // Apply search + subject filter
+    var displayCourses = myCourses.filter(function(co) {
+      var q = (window._spLMSSearch||'').toLowerCase();
+      var sub = window._spLMSSubjectFilter || 'All';
+      if (sub !== 'All' && co.subject !== sub) return false;
+      if (!q) return true;
+      return (co.title||'').toLowerCase().includes(q) || (co.subject||'').toLowerCase().includes(q) || (co.description||'').toLowerCase().includes(q);
+    });
+    if (!displayCourses.length && myCourses.length) {
+      h += '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:12px">No courses match your search.</div>';
+    } else {
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
-    myCourses.forEach(function(course) {
+    displayCourses.forEach(function(course) {
       var courseContent = content.filter(function(x){ return x.courseId === course.id; });
       var myProg = progress.filter(function(p){ return p.courseId === course.id; });
       var completed = myProg.filter(function(p){ return p.status === 'completed'; }).length;
@@ -18326,6 +18397,13 @@ function spRenderLMS(c) {
         h += '<div style="margin-bottom:6px;padding:5px 10px;background:#FEF3C7;border-radius:7px;font-size:10px;font-weight:700;color:#92400E;display:flex;align-items:center;gap:6px">';
         h += '<span>📋</span><span>' + pendingAssigns + ' assignment' + (pendingAssigns !== 1 ? 's' : '') + ' need' + (pendingAssigns === 1 ? 's' : '') + ' attention</span></div>';
       }
+      // Announcement banner on card (if teacher posted one)
+      if (course.announcement && course.announcement.trim()) {
+        h += '<div style="margin-bottom:8px;padding:7px 10px;background:#1A365E0D;border-left:3px solid #1A365E;border-radius:0 7px 7px 0;display:flex;align-items:flex-start;gap:7px">';
+        h += '<span style="font-size:13px;flex-shrink:0">📢</span>';
+        h += '<div style="font-size:10px;color:#1A365E;line-height:1.5">' + esc(course.announcement.length > 80 ? course.announcement.substring(0,80) + '…' : course.announcement) + '</div>';
+        h += '</div>';
+      }
       h += '<div style="margin-top:8px;padding:8px 12px;background:' + subjectCol + ';color:#fff;border-radius:8px;font-size:11px;font-weight:700;text-align:center">' + (pct === 0 ? '▶ Start Course' : pct === 100 ? '🔁 Review' : '▶ Continue') + '</div>';
       h += '</div></div>';
     });
@@ -18334,6 +18412,23 @@ function spRenderLMS(c) {
   h += '</div>';
   c.innerHTML = h;
 
+  // Wire search input
+  var _spSearchEl = document.getElementById('sp-lms-search');
+  if (_spSearchEl) {
+    var _spST;
+    _spSearchEl.addEventListener('input', function() {
+      clearTimeout(_spST);
+      _spST = setTimeout(function() { window._spLMSSearch = _spSearchEl.value; spRenderLMS(c); }, 250);
+    });
+  }
+  // Wire subject filter pills
+  c.querySelectorAll('.sp-lms-subject-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      window._spLMSSubjectFilter = pill.dataset.sub;
+      spRenderLMS(c);
+    });
+  });
+  // Wire course cards
   c.querySelectorAll('.sp-lms-course-card').forEach(function(card) {
     card.addEventListener('click', function() {
       window._spLMSCourse = card.dataset.courseid;
@@ -18400,6 +18495,14 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
   var subjectCol = {Mathematics:'#3B82F6','English Language Arts':'#8B5CF6',Science:'#059669','Social Studies':'#D97706',Entrepreneurship:'#D61F31',Other:'#6B7280'}[course.subject] || '#1A365E';
 
   var h = '<div style="display:flex;flex-direction:column;gap:12px">';
+  // Announcement banner (if set)
+  if (course.announcement && course.announcement.trim()) {
+    h += '<div style="background:linear-gradient(135deg,#1A365E,#0F2240);border-radius:11px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px">';
+    h += '<span style="font-size:20px;flex-shrink:0">📢</span>';
+    h += '<div><div style="font-size:10px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Course Announcement</div>';
+    h += '<div style="font-size:12px;color:#fff;line-height:1.6">' + esc(course.announcement) + '</div></div>';
+    h += '</div>';
+  }
   // Header
   h += '<div style="background:#fff;border-radius:13px;overflow:hidden;border:1px solid #E4EAF2">';
   h += '<div style="height:6px;background:' + subjectCol + '"></div>';
@@ -18408,6 +18511,57 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
   h += '<div style="flex:1"><div style="font-size:15px;font-weight:800;color:#1A365E">' + esc(course.title) + '</div>';
   h += '<div style="font-size:11px;color:#7A92B0">' + esc(course.subject || '') + ' · Pass: ' + (course.passMark || 80) + '%</div></div>';
   h += '</div></div>';
+
+  // ── Overall completion stats + certificate ──────────────────────────────
+  var _totalItems  = items.length;
+  var _doneItems   = items.filter(function(item) {
+    var p = progress.find(function(px){ return px.contentId === item.id && px.studentId === studentId; });
+    return p && p.status === 'completed';
+  }).length;
+  var _coursePct   = _totalItems ? Math.round(_doneItems / _totalItems * 100) : 0;
+  var _pCol = _coursePct === 100 ? '#059669' : _coursePct >= 50 ? '#D97706' : '#1A365E';
+  var _masteryRows = progress.filter(function(p) { return p.courseId === courseId && p.studentId === studentId && (p.masteryPassed === 'TRUE' || p.masteryPassed === true); });
+  var _mastScores  = progress.filter(function(p) { return p.courseId === courseId && p.studentId === studentId && p.masteryScore !== '' && !isNaN(p.masteryScore); });
+  var _avgScore    = _mastScores.length ? Math.round(_mastScores.reduce(function(s,p){ return s + Number(p.masteryScore); }, 0) / _mastScores.length) : null;
+  var _passMark    = parseInt(course.passMark) || 80;
+  var _coursePassed = _coursePct === 100 && (_avgScore === null || _avgScore >= _passMark);
+
+  // Progress bar strip
+  h += '<div style="background:#fff;border:1px solid #E4EAF2;border-radius:12px;padding:12px 16px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  h += '<div style="font-size:11px;font-weight:800;color:#1A365E">' + _doneItems + ' / ' + _totalItems + ' lessons completed</div>';
+  h += '<div style="font-size:13px;font-weight:900;color:' + _pCol + '">' + _coursePct + '%</div>';
+  h += '</div>';
+  h += '<div style="height:8px;background:#F0F4FA;border-radius:4px;overflow:hidden">';
+  h += '<div style="height:100%;width:' + _coursePct + '%;background:' + _pCol + ';border-radius:4px;transition:width .6s"></div>';
+  h += '</div>';
+  if (_avgScore !== null) h += '<div style="font-size:10px;color:#7A92B0;margin-top:5px">Average mastery score: <strong style="color:#1A365E">' + _avgScore + '%</strong></div>';
+  h += '</div>';
+
+  // ── Certificate banner (only when 100% complete) ─────────────────────────
+  if (_coursePassed) {
+    var _stu = _SP.student || {};
+    var _stuName = ((_stu.firstName || '') + ' ' + (_stu.lastName || '')).trim();
+    var _completedAt = '';
+    var _lastComplete = progress.filter(function(p){ return p.courseId === courseId && p.studentId === studentId && p.completedAt; })
+                                .sort(function(a,b){ return (b.completedAt||'').localeCompare(a.completedAt||''); });
+    if (_lastComplete.length) {
+      try { _completedAt = new Date(_lastComplete[0].completedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}); } catch(e) {}
+    }
+    h += '<div style="background:linear-gradient(135deg,#1A365E 0%,#0F2240 100%);border-radius:14px;padding:20px 22px;position:relative;overflow:hidden">';
+    // Decorative circles
+    h += '<div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.05)"></div>';
+    h += '<div style="position:absolute;bottom:-20px;right:60px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.04)"></div>';
+    h += '<div style="position:relative;display:flex;align-items:center;gap:16px;flex-wrap:wrap">';
+    h += '<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#FAC600,#F59E0B);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:24px">🏆</div>';
+    h += '<div style="flex:1;min-width:160px">';
+    h += '<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Course Completed</div>';
+    h += '<div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px">' + esc(course.title) + '</div>';
+    h += '<div style="font-size:11px;color:rgba(255,255,255,.75)">' + (_avgScore !== null ? 'Score: ' + _avgScore + '% · ' : '') + (_completedAt ? 'Completed ' + _completedAt : '') + '</div>';
+    h += '</div>';
+    h += '<button id="sp-lms-download-cert" style="padding:10px 18px;background:linear-gradient(135deg,#FAC600,#F59E0B);color:#1A365E;border:none;border-radius:10px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap;flex-shrink:0">📜 Download Certificate</button>';
+    h += '</div></div>';
+  }
 
   // Units + Lessons
   items.forEach(function(item, i) {
@@ -18471,6 +18625,24 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
   document.getElementById('sp-lms-back').addEventListener('click', function() {
     window._spLMSCourse = null; spRenderLMS(c);
   });
+
+  // Wire certificate download button
+  var _certBtn = document.getElementById('sp-lms-download-cert');
+  if (_certBtn) {
+    _certBtn.addEventListener('click', function() {
+      var _stu2 = _SP.student || {};
+      var _stuName2 = ((_stu2.firstName || '') + ' ' + (_stu2.lastName || '')).trim() || 'Student';
+      var _completedAt2 = '';
+      var _lc2 = (progress || []).filter(function(p){ return p.courseId === courseId && p.studentId === studentId && p.completedAt; })
+                               .sort(function(a,b){ return (b.completedAt||'').localeCompare(a.completedAt||''); });
+      if (_lc2.length) { try { _completedAt2 = new Date(_lc2[0].completedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}); } catch(e){} }
+      var _allProg2 = (progress || []).filter(function(p){ return p.courseId === courseId && p.studentId === studentId; });
+      var _sc2 = _allProg2.filter(function(p){ return p.masteryScore !== '' && !isNaN(p.masteryScore); });
+      var _avg2 = _sc2.length ? Math.round(_sc2.reduce(function(s,p){ return s + Number(p.masteryScore); },0)/_sc2.length) : null;
+      var _course2 = (_SP.lmsCourses || []).find(function(co){ return co.id === courseId; }) || {};
+      lmsGenerateCertificate(_stuName2, _course2.title || courseId, _course2.subject || '', _avg2, _completedAt2, _course2.creditHours || '1');
+    });
+  }
   c.querySelectorAll('.sp-lms-lesson-row').forEach(function(row) {
     row.addEventListener('click', function() {
       if (row.dataset.unlocked !== '1') {
@@ -18632,6 +18804,8 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
         h += '<div style="font-size:11px;color:#3D5475;line-height:1.6;white-space:pre-wrap">' + esc(item.masteryBrief) + '</div>';
         h += '</div>';
       }
+      // Retake request button
+      h += '<button id="sp-lms-request-retake" data-lesson="' + esc(item.title) + '" data-cid="' + esc(item.id) + '" style="margin-top:10px;width:100%;padding:9px;background:#FFF7ED;color:#92400E;border:1.5px solid #FDE68A;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer">✋ Request Retake from Teacher</button>';
     } else {
       // Check if mastery questions are actually configured
       var masteryQs = [];
@@ -18639,7 +18813,28 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
       if (!masteryQs.length) {
         h += '<div style="padding:10px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;font-size:12px;color:#92400E">⚠️ Mastery test questions have not been configured yet. Ask your teacher to add questions to this lesson.</div>';
       } else {
-        h += '<div id="sp-lms-mastery-area">' + spRenderLMSQuiz(item.masteryQuizJson, 'sp-lms-mastery', true) + '</div>';
+        // Shuffle questions if enabled
+        var quizJsonToRender = item.masteryQuizJson;
+        if (item.masteryShuffleQuestions === 'TRUE' || item.masteryShuffleQuestions === true) {
+          try {
+            var qs2 = JSON.parse(item.masteryQuizJson || '[]');
+            for (var si = qs2.length - 1; si > 0; si--) {
+              var sj = Math.floor(Math.random() * (si + 1));
+              var st2 = qs2[si]; qs2[si] = qs2[sj]; qs2[sj] = st2;
+            }
+            quizJsonToRender = JSON.stringify(qs2);
+          } catch(sErr) {}
+        }
+        // Timer countdown if time limit set
+        var timeLimitMins = parseInt(item.masteryTimeLimit) || 0;
+        if (timeLimitMins > 0) {
+          h += '<div id="lms-quiz-timer" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#FFF7ED;border:1px solid #FDE68A;border-radius:8px;margin-bottom:10px">';
+          h += '<span style="font-size:18px">⏱</span>';
+          h += '<div><div style="font-size:10px;font-weight:700;color:#92400E;text-transform:uppercase">Time Remaining</div>';
+          h += '<div id="lms-quiz-timer-display" style="font-size:18px;font-weight:900;color:#D61F31;font-variant-numeric:tabular-nums">' + timeLimitMins + ':00</div></div>';
+          h += '</div>';
+        }
+        h += '<div id="sp-lms-mastery-area">' + spRenderLMSQuiz(quizJsonToRender, 'sp-lms-mastery', true) + '</div>';
         h += '<button id="sp-lms-submit-mastery" style="margin-top:10px;padding:10px;background:#1A365E;color:#fff;border:none;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Submit Mastery Test (' + masteryQs.length + ' question' + (masteryQs.length!==1?'s':'') + ')</button>';
       }
     }
@@ -18675,6 +18870,21 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   h += '<div id="lms-lesson-disc-' + esc(item.id) + '"><div style="text-align:center;padding:14px;color:#94A3B8;font-size:11px">Loading…</div></div>';
   h += '</div>';
 
+  // ── Private lesson notepad ───────────────────────────────────────────────
+  var _noteKey = 'lms_note_' + item.id;
+  var _savedNote = '';
+  try { _savedNote = localStorage.getItem(_noteKey) || ''; } catch(e) {}
+  h += '<div style="margin-top:10px;background:#FFFBEA;border:1px solid #FDE68A;border-radius:13px;overflow:hidden">';
+  h += '<button id="lms-note-toggle" style="width:100%;padding:10px 16px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:#92400E;text-align:left">';
+  h += '<span style="font-size:16px">📝</span> My Notes <span style="font-size:10px;font-weight:400;color:#B45309;margin-left:auto">Private — only you can see these</span>';
+  h += '<span id="lms-note-arrow" style="color:#B45309;transition:transform .2s">' + (_savedNote ? '▼' : '▶') + '</span></button>';
+  h += '<div id="lms-note-wrap" style="display:' + (_savedNote ? 'block' : 'none') + ';padding:0 14px 14px">';
+  h += '<textarea id="lms-note-ta" rows="5" placeholder="Jot your thoughts, questions, or key takeaways here…" style="width:100%;padding:10px;border:1.5px solid #FDE68A;border-radius:8px;font-size:12px;font-family:Poppins,sans-serif;resize:vertical;box-sizing:border-box;background:#fff;line-height:1.6">' + esc(_savedNote) + '</textarea>';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">';
+  h += '<span style="font-size:10px;color:#B45309">Auto-saved as you type</span>';
+  h += '<button id="lms-note-clear" style="padding:4px 10px;background:#FFF0F1;color:#D61F31;border:1px solid #FFD0D3;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">Clear</button>';
+  h += '</div></div></div>';
+
   // Navigation
   var prevItem = allItems[itemIdx - 1];
   var nextItem = allItems[itemIdx + 1];
@@ -18685,6 +18895,29 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
   h += '</div>';
   c.innerHTML = h;
 
+  // ── Start quiz timer if configured ─────────────────────────────────────
+  var _timerEl = document.getElementById('lms-quiz-timer-display');
+  if (_timerEl) {
+    var _totalSecs = (parseInt(item.masteryTimeLimit) || 0) * 60;
+    var _timerInt = setInterval(function() {
+      _totalSecs--;
+      if (_totalSecs <= 0) {
+        clearInterval(_timerInt);
+        _timerEl.textContent = '0:00';
+        _timerEl.style.color = '#D61F31';
+        // Auto-submit when time runs out
+        var autoBtn = document.getElementById('sp-lms-submit-mastery');
+        if (autoBtn) { toast('⏱ Time is up! Your answers have been submitted.', 'err'); autoBtn.click(); }
+        return;
+      }
+      var m2 = Math.floor(_totalSecs / 60);
+      var s2 = _totalSecs % 60;
+      _timerEl.textContent = m2 + ':' + (s2 < 10 ? '0' : '') + s2;
+      if (_totalSecs <= 60) _timerEl.style.color = '#D61F31';
+      else if (_totalSecs <= 180) _timerEl.style.color = '#D97706';
+    }, 1000);
+  }
+
   // ── Init clickable slides if this is a presentation ──────────────────────
   if (item.type === 'presentation' && item.url) {
     var _slidesEl = document.getElementById('lms-slides-' + item.id);
@@ -18692,6 +18925,59 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
       lmsRenderClickableSlides(_slidesEl, item.url, item.slideCount || 20);
     }
   }
+
+  // ── Retake request wiring ─────────────────────────────────────────────────
+  var _retakeBtn = document.getElementById('sp-lms-request-retake');
+  if (_retakeBtn) {
+    _retakeBtn.addEventListener('click', function() {
+      _retakeBtn.disabled = true; _retakeBtn.textContent = '⏳ Sending…';
+      var _retakeLesson = _retakeBtn.dataset.lesson;
+      spRequest('saveCommunication', {
+        studentId: studentId,
+        channel: 'LMS',
+        direction: 'inbound',
+        subject: 'Retake Request: ' + _retakeLesson,
+        body: 'Student has used all retake attempts for mastery test: \"' + _retakeLesson + '\" and is requesting an additional attempt.',
+        sentBy: (_currentUser && _currentUser.name) || 'Student',
+        tags: 'lms,retake,mastery'
+      }, function(d) {
+        _retakeBtn.textContent = '✅ Request Sent — your teacher will be notified';
+        _retakeBtn.style.background = '#F0FDF4';
+        _retakeBtn.style.color = '#059669';
+        _retakeBtn.style.borderColor = '#BBF7D0';
+        toast('Retake request sent to your teacher ✓', 'ok');
+      });
+    });
+  }
+
+  // ── Lesson notepad wiring ─────────────────────────────────────────────────
+  var _noteToggle = document.getElementById('lms-note-toggle');
+  var _noteWrap   = document.getElementById('lms-note-wrap');
+  var _noteArrow  = document.getElementById('lms-note-arrow');
+  var _noteTa     = document.getElementById('lms-note-ta');
+  var _noteClear  = document.getElementById('lms-note-clear');
+  var _noteKey2   = 'lms_note_' + item.id;
+  if (_noteToggle) _noteToggle.addEventListener('click', function() {
+    var open = _noteWrap.style.display !== 'none';
+    _noteWrap.style.display = open ? 'none' : 'block';
+    if (_noteArrow) _noteArrow.textContent = open ? '▶' : '▼';
+    if (!open && _noteTa) _noteTa.focus();
+  });
+  if (_noteTa) {
+    var _noteTimer;
+    _noteTa.addEventListener('input', function() {
+      clearTimeout(_noteTimer);
+      _noteTimer = setTimeout(function() {
+        try { localStorage.setItem(_noteKey2, _noteTa.value); } catch(e) {}
+      }, 500);
+    });
+  }
+  if (_noteClear) _noteClear.addEventListener('click', function() {
+    if (!confirm('Clear your notes for this lesson?')) return;
+    try { localStorage.removeItem(_noteKey2); } catch(e) {}
+    if (_noteTa) _noteTa.value = '';
+    toast('Notes cleared', 'ok');
+  });
 
   // ── Discussion panel for this lesson ─────────────────────────────────────
   var _lessonDiscEl = document.getElementById('lms-lesson-disc-' + item.id);
@@ -22456,6 +22742,11 @@ function lmsRenderDiscussion(container, courseId, lessonId, isStudent, currentUs
       h2 += '<div style="margin-top:8px;display:flex;gap:6px">';
       h2 += '<button class="disc-reply-btn" data-id="'+p.id+'" style="padding:3px 10px;background:#EEF3FF;color:#1A365E;border:1px solid #C4D4E8;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">💬 Reply'+(replies.length?' ('+replies.length+')':'')+'</button>';
       h2 += '<button class="disc-like" data-id="'+p.id+'" style="padding:3px 10px;background:#F7F9FC;color:#5A7290;border:1px solid #E4EAF2;border-radius:6px;font-size:10px;cursor:pointer">👍 '+((p.reactions&&JSON.parse(p.reactions||'{}').likes)||0)+'</button>';
+      if (isStudent) {
+        var _rx = {}; try { _rx = JSON.parse(p.reactions||'{}'); } catch(e) {}
+        var _reported = _rx.reported || false;
+        h2 += '<button class="disc-report" data-id="'+p.id+'" style="padding:3px 8px;background:'+(_reported?'#FFF0F1':'#F7F9FC')+';color:'+(_reported?'#D61F31':'#94A3B8')+';border:1px solid '+(_reported?'#FFD0D3':'#E4EAF2')+';border-radius:6px;font-size:10px;cursor:pointer" title="Report this post">🚩'+(_reported?' Reported':'')+'</button>';
+      }
       h2 += '</div>';
       // Reply form (hidden by default)
       h2 += '<div class="disc-reply-form" data-parent="'+p.id+'" style="display:none;margin-top:8px;display:none">';
@@ -22542,6 +22833,26 @@ function lmsRenderDiscussion(container, courseId, lessonId, isStudent, currentUs
     });
   });
 
+  // Wire report
+  container.querySelectorAll('.disc-report').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if (btn.dataset.reported === 'true') return;
+      var pid = btn.dataset.id;
+      var key3 = courseId+'_'+(lessonId||'');
+      var post = (_lmsDiscCache[key3]||[]).find(function(p){ return p.id===pid; });
+      if (!post) return;
+      var rx = {}; try { rx=JSON.parse(post.reactions||'{}'); }catch(e){}
+      if (rx.reported) { toast('Already reported.', 'err'); return; }
+      rx.reported = true; post.reactions = JSON.stringify(rx);
+      gmsSheetRequest('saveLMSDiscussion', { post: { id:pid, reactions:post.reactions } }, function(){
+        btn.textContent = '🚩 Reported'; btn.style.color = '#D61F31';
+        btn.style.borderColor = '#FFD0D3'; btn.style.background = '#FFF0F1';
+        btn.dataset.reported = 'true';
+        toast('Post reported to your teacher.', 'ok');
+      });
+    });
+  });
+
   // Wire like
   container.querySelectorAll('.disc-like').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -22557,6 +22868,96 @@ function lmsRenderDiscussion(container, courseId, lessonId, isStudent, currentUs
       });
     });
   });
+}
+
+
+// ── Completion Certificate Generator ─────────────────────────────────────────
+// Opens a print-ready A4 certificate in a new tab. Student uses Ctrl+P / Cmd+P
+// (or the auto-triggered print dialog) to save as PDF.
+function lmsGenerateCertificate(studentName, courseTitle, subject, avgScore, completedDate, creditHours) {
+  var school = 'American World School';
+  var scoreText = avgScore !== null && avgScore !== undefined ? 'with an average mastery score of <strong>' + avgScore + '%</strong>' : 'having completed all required lessons';
+  var credText  = creditHours ? creditHours + ' Credit Hour' + (parseFloat(creditHours) !== 1 ? 's' : '') : '';
+  var subText   = subject ? subject + (credText ? ' &nbsp;·&nbsp; ' + credText : '') : credText;
+  var dateText  = completedDate || new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+  var certHtml = [
+    '<!DOCTYPE html><html><head><meta charset="UTF-8">',
+    '<title>Certificate of Completion — ' + courseTitle + '</title>',
+    '<style>',
+    '  @page { size: A4 landscape; margin: 0; }',
+    '  * { box-sizing: border-box; margin: 0; padding: 0; }',
+    '  body { width: 297mm; height: 210mm; font-family: Georgia, "Times New Roman", serif;',
+    '         background: #fff; display: flex; align-items: center; justify-content: center; }',
+    '  .cert { width: 267mm; height: 180mm; border: 2px solid #C4A44A; position: relative;',
+    '          display: flex; flex-direction: column; align-items: center; justify-content: center;',
+    '          padding: 0 30mm; text-align: center; }',
+    '  .cert::before { content: ""; position: absolute; inset: 6mm;',
+    '                  border: 1px solid #C4A44A; pointer-events: none; }',
+    '  .corner { position: absolute; width: 18mm; height: 18mm; }',
+    '  .corner svg { width: 100%; height: 100%; }',
+    '  .tl { top: 2mm; left: 2mm; }',
+    '  .tr { top: 2mm; right: 2mm; transform: scaleX(-1); }',
+    '  .bl { bottom: 2mm; left: 2mm; transform: scaleY(-1); }',
+    '  .br { bottom: 2mm; right: 2mm; transform: scale(-1,-1); }',
+    '  .school { font-size: 11pt; font-weight: bold; color: #1A365E;',
+    '            text-transform: uppercase; letter-spacing: 3px; margin-bottom: 6mm; }',
+    '  .presents { font-size: 9pt; color: #7A92B0; font-style: italic;',
+    '              text-transform: uppercase; letter-spacing: 2px; margin-bottom: 5mm; }',
+    '  .cert-title { font-size: 28pt; font-weight: bold; color: #1A365E; margin-bottom: 7mm; }',
+    '  .awarded-to { font-size: 9pt; color: #7A92B0; text-transform: uppercase;',
+    '                letter-spacing: 2px; margin-bottom: 3mm; }',
+    '  .student-name { font-size: 22pt; color: #1A365E; font-style: italic;',
+    '                  border-bottom: 1px solid #C4A44A; padding-bottom: 3mm; margin-bottom: 7mm;',
+    '                  min-width: 120mm; }',
+    '  .desc { font-size: 10pt; color: #3D5475; line-height: 1.7; margin-bottom: 6mm; max-width: 180mm; }',
+    '  .course-name { font-size: 13pt; font-weight: bold; color: #1A365E; }',
+    '  .meta { font-size: 8pt; color: #7A92B0; text-transform: uppercase;',
+    '          letter-spacing: 1.5px; margin-bottom: 8mm; }',
+    '  .footer { display: flex; justify-content: space-between; align-items: flex-end;',
+    '            width: 100%; margin-top: auto; padding-top: 4mm; }',
+    '  .sig-block { text-align: center; }',
+    '  .sig-line { border-top: 1px solid #1A365E; width: 50mm; margin: 0 auto 2mm; }',
+    '  .sig-label { font-size: 7pt; color: #7A92B0; text-transform: uppercase;',
+    '               letter-spacing: 1px; }',
+    '  .seal { width: 16mm; height: 16mm; border-radius: 50%;',
+    '          background: linear-gradient(135deg, #1A365E, #0F2240);',
+    '          display: flex; align-items: center; justify-content: center;',
+    '          font-size: 20pt; }',
+    '  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }',
+    '</style>',
+    '</head><body>',
+    '<div class="cert">',
+    '  <!-- Corner ornaments -->',
+    '  <div class="corner tl"><svg viewBox="0 0 60 60"><path d="M5 5 L55 5 M5 5 L5 55 M5 5 L25 5 Q35 5 35 15 L35 25 Q35 35 25 35 L15 35 Q5 35 5 25" fill="none" stroke="#C4A44A" stroke-width="1.5"/></svg></div>',
+    '  <div class="corner tr"><svg viewBox="0 0 60 60"><path d="M5 5 L55 5 M5 5 L5 55 M5 5 L25 5 Q35 5 35 15 L35 25 Q35 35 25 35 L15 35 Q5 35 5 25" fill="none" stroke="#C4A44A" stroke-width="1.5"/></svg></div>',
+    '  <div class="corner bl"><svg viewBox="0 0 60 60"><path d="M5 5 L55 5 M5 5 L5 55 M5 5 L25 5 Q35 5 35 15 L35 25 Q35 35 25 35 L15 35 Q5 35 5 25" fill="none" stroke="#C4A44A" stroke-width="1.5"/></svg></div>',
+    '  <div class="corner br"><svg viewBox="0 0 60 60"><path d="M5 5 L55 5 M5 5 L5 55 M5 5 L25 5 Q35 5 35 15 L35 25 Q35 35 25 35 L15 35 Q5 35 5 25" fill="none" stroke="#C4A44A" stroke-width="1.5"/></svg></div>',
+    '  <div class="school">' + school + '</div>',
+    '  <div class="presents">proudly presents this</div>',
+    '  <div class="cert-title">Certificate of Completion</div>',
+    '  <div class="awarded-to">This certifies that</div>',
+    '  <div class="student-name">' + studentName + '</div>',
+    '  <div class="desc">',
+    '    has successfully completed the course<br>',
+    '    <span class="course-name">' + courseTitle + '</span><br>',
+    '    ' + scoreText,
+    '  </div>',
+    '  <div class="meta">' + (subText ? subText + ' &nbsp;|&nbsp; ' : '') + 'Date: ' + dateText + '</div>',
+    '  <div class="footer">',
+    '    <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Student Signature</div></div>',
+    '    <div class="seal">🏆</div>',
+    '    <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Academic Director</div></div>',
+    '  </div>',
+    '</div>',
+    '<script>window.onload=function(){ window.print(); };<\/script>',
+    '</body></html>'
+  ].join('\n');
+
+  var win = window.open('', '_blank', 'width=1050,height=760');
+  if (!win) { toast('Please allow pop-ups to download the certificate.', 'err'); return; }
+  win.document.write(certHtml);
+  win.document.close();
 }
 
 // ── 7. Clickable Slide Presentation ──────────────────────────────────────────
@@ -22618,5 +23019,8 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
   render();
 }
 
+
+
+} // close missing brace
 
 </script>
