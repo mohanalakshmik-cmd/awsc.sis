@@ -17490,6 +17490,7 @@ function openLMSCourseModal(idx) {
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
     + '<div class="fl"><label class="flb">Pass Mark (%)</label><input class="fi" id="lms-c-pass" type="number" min="1" max="100" value="' + (course.passMark || 80) + '"/></div>'
     + '<div class="fl"><label class="flb">Credit Hours</label><input class="fi" id="lms-c-credits" type="number" min="0" max="10" step="0.5" value="' + (course.creditHours || 1) + '" placeholder="1"/></div>'
+    + '<div class="fl" style="grid-column:1/-1"><label class="flb">Required Study Hours (optional)</label><input class="fi" id="lms-c-reqhours" type="number" min="0" step="0.5" value="' + (course.requiredHours || '') + '" placeholder="e.g. 60 — student must spend this many hours before earning certificate"/><div style="font-size:10px;color:#7A92B0;margin-top:3px">Leave blank for no time requirement. If set, the certificate will only be issued after the student has spent this many hours on the course.</div></div>'
     + '<div class="fl"><label class="flb">Status</label><select class="fsel2" id="lms-c-status"><option ' + (course.status === 'Draft' ? 'selected' : '') + '>Draft</option><option ' + (course.status === 'Published' ? 'selected' : '') + '>Published</option></select></div>'
     + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">'
@@ -17511,6 +17512,7 @@ function openLMSCourseModal(idx) {
       description: document.getElementById('lms-c-desc').value.trim(),
       passMark: parseInt(document.getElementById('lms-c-pass').value) || 80,
       creditHours: parseFloat(document.getElementById('lms-c-credits').value) || 1,
+      requiredHours: parseFloat((document.getElementById('lms-c-reqhours') && document.getElementById('lms-c-reqhours').value) || 0) || 0,
       status: document.getElementById('lms-c-status').value,
       announcement: (document.getElementById('lms-c-announcement') ? document.getElementById('lms-c-announcement').value.trim() : (course.announcement||'')),
       createdBy: (_currentUser && _currentUser.name) || 'Admin',
@@ -18063,6 +18065,7 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       lessonSubType: (document.getElementById('lms-l-subtype') ? document.getElementById('lms-l-subtype').value : '') || (item.lessonSubType||''),
       lessonSubType: (document.getElementById('lms-l-subtype') ? document.getElementById('lms-l-subtype').value : (item.lessonSubType||'')),
       assignRubric:     hasAssign ? (window._lmsCurrentRubric !== undefined ? window._lmsCurrentRubric : (item.assignRubric || '')) : '',
+      lessonSubType:    (document.getElementById('lms-l-subtype') ? document.getElementById('lms-l-subtype').value : (item.lessonSubType || '')),
       assignments:      (function(){ readExtraAssigns(); return window._lmsExtraAssigns && window._lmsExtraAssigns.length ? JSON.stringify(window._lmsExtraAssigns) : ''; })(),
       moduleTitle:      (document.getElementById('lms-l-module') || {value:item.moduleTitle||''}).value || item.moduleTitle || '',
       moduleOrder:      parseInt((document.getElementById('lms-l-morder') || {value:item.moduleOrder||1}).value) || 1,
@@ -18136,6 +18139,11 @@ function openLMSEnrolModal() {
   var studentOpts = students.filter(function(s){ return s.status === 'Enrolled'; })
     .map(function(s){ return '<option value="' + esc(String(s.studentId || s.id)) + '">' + esc(s.firstName + ' ' + s.lastName) + '</option>'; }).join('');
 
+  // Grade level options for grade enrolment
+  var gradeOpts = ['Kindergarten','Grade 1','Grade 2','Grade 3','Grade 4','Grade 5',
+    'Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12']
+    .map(function(g){ return '<option value="' + esc(g) + '">' + esc(g) + '</option>'; }).join('');
+
   var ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.65);z-index:400;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)';
   ov.innerHTML = '<div style="background:#fff;border-radius:18px;width:100%;max-width:500px;box-shadow:0 24px 60px rgba(0,0,0,.3)">'
@@ -18186,7 +18194,10 @@ function openLMSEnrolModal() {
     var courseId = document.getElementById('lms-en-course').value;
     if (!courseId) { toast('Select a course', 'err'); return; }
     var targetType = typeEl.value;
-    var targetValue = targetType === 'cohort' ? document.getElementById('lms-en-cohort').value : document.getElementById('lms-en-student').value;
+    var targetValue;
+    if (targetType === 'cohort') targetValue = document.getElementById('lms-en-cohort').value;
+    else if (targetType === 'grade') { var grEl = document.getElementById('lms-en-grade'); targetValue = grEl ? grEl.value : ''; }
+    else targetValue = document.getElementById('lms-en-student').value;
     if (!targetValue) { toast('Select a ' + targetType, 'err'); return; }
     var paceEl    = document.getElementById('lms-en-pace');
     var paceDaysEl = document.getElementById('lms-en-pace-days');
@@ -18574,7 +18585,14 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
   var _mastScores  = progress.filter(function(p) { return p.courseId === courseId && p.studentId === studentId && p.masteryScore !== '' && !isNaN(p.masteryScore); });
   var _avgScore    = _mastScores.length ? Math.round(_mastScores.reduce(function(s,p){ return s + Number(p.masteryScore); }, 0) / _mastScores.length) : null;
   var _passMark    = parseInt(course.passMark) || 80;
-  var _coursePassed = _coursePct === 100 && (_avgScore === null || _avgScore >= _passMark);
+  // Total time student has spent on this course (in minutes)
+  var _totalTimeMins = progress.filter(function(p){ return p.courseId === courseId && p.studentId === studentId; })
+    .reduce(function(s, p){ return s + (parseFloat(p.timeSpentMins) || 0); }, 0);
+  var _totalTimeHours = _totalTimeMins / 60;
+  // Required hours gate — teacher can set course.requiredHours (e.g. 60)
+  var _reqHours = parseFloat(course.requiredHours) || 0;
+  var _timeGatePassed = (_reqHours <= 0) || (_totalTimeHours >= _reqHours);
+  var _coursePassed = _coursePct === 100 && (_avgScore === null || _avgScore >= _passMark) && _timeGatePassed;
 
   // Progress bar strip
   h += '<div style="background:#fff;border:1px solid #E4EAF2;border-radius:12px;padding:12px 16px">';
@@ -18586,6 +18604,20 @@ function spRenderLMSCourse(c, courseId, content, progress, studentId) {
   h += '<div style="height:100%;width:' + _coursePct + '%;background:' + _pCol + ';border-radius:4px;transition:width .6s"></div>';
   h += '</div>';
   if (_avgScore !== null) h += '<div style="font-size:10px;color:#7A92B0;margin-top:5px">Average mastery score: <strong style="color:#1A365E">' + _avgScore + '%</strong></div>';
+  // Show time progress if required hours is set
+  if (_reqHours > 0) {
+    var _timeRemMins = Math.max(0, Math.round((_reqHours * 60) - _totalTimeMins));
+    var _timePct = Math.min(100, Math.round(_totalTimeHours / _reqHours * 100));
+    h += '<div style="margin-top:8px">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+    h += '<div style="font-size:10px;color:#7A92B0">⏱ Time on task: <strong style="color:#1A365E">' + Math.round(_totalTimeHours * 10) / 10 + ' / ' + _reqHours + ' hrs required</strong></div>';
+    if (_timeRemMins > 0) h += '<div style="font-size:10px;color:#D97706;font-weight:700">' + _timeRemMins + ' min remaining</div>';
+    else h += '<div style="font-size:10px;color:#059669;font-weight:700">✅ Time requirement met</div>';
+    h += '</div>';
+    h += '<div style="height:5px;background:#F0F4FA;border-radius:3px;overflow:hidden">';
+    h += '<div style="height:100%;width:' + _timePct + '%;background:' + (_timePct >= 100 ? '#059669' : '#D97706') + ';border-radius:3px"></div>';
+    h += '</div></div>';
+  }
   h += '</div>';
 
   // ── Certificate banner (only when 100% complete) ─────────────────────────
@@ -18820,7 +18852,20 @@ function spRenderLMSLesson(c, item, itemIdx, allItems, progress, studentId, cour
 
   // Mark complete button (if not quiz / no mastery gate)
   if (!completed && !hasMastery) {
-    h += '<button id="sp-lms-complete" style="padding:12px;background:#1DBD6A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%">✅ Mark as Complete</button>';
+    // Check time spent on this lesson
+    var _lessonTimeMins = prog ? (parseFloat(prog.timeSpentMins) || 0) : 0;
+    var _reqMins = parseFloat(item.estimatedMins) || 0;
+    var _timeMet = (_reqMins <= 0) || (_lessonTimeMins >= _reqMins);
+    if (_timeMet) {
+      h += '<button id="sp-lms-complete" style="padding:12px;background:#1DBD6A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;width:100%">✅ Mark as Complete</button>';
+    } else {
+      var _remMins = Math.ceil(_reqMins - _lessonTimeMins);
+      h += '<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:12px 16px;text-align:center">';
+      h += '<div style="font-size:12px;font-weight:800;color:#92400E;margin-bottom:4px">⏱ Minimum time not reached</div>';
+      h += '<div style="font-size:11px;color:#B45309">This lesson requires at least <strong>' + _reqMins + ' min</strong> of study time.</div>';
+      h += '<div style="font-size:11px;color:#B45309;margin-top:2px">Approx. <strong>' + _remMins + ' more minute' + (_remMins !== 1 ? 's' : '') + '</strong> remaining before you can complete this lesson.</div>';
+      h += '</div>';
+    }
   }
 
   // Mastery test section
@@ -23484,87 +23529,132 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
   slideCount = parseInt(slideCount) || 20;
   var current = { idx: 0 };
 
-  // Convert to export URL pattern: /export/png?id=...&pageid=...
-  // Google Slides: https://docs.google.com/presentation/d/ID/...
+  // Extract Google Slides presentation ID
   var slideId = null;
   var m = presentationUrl.match(/\/presentation\/d\/([a-zA-Z0-9_-]+)/);
   if (m) slideId = m[1];
 
-  if (!slideId) {
-    // Not a Google Slides URL — fall back to iframe
-    container.innerHTML = '<div style="position:relative;padding-bottom:56.25%;height:0"><iframe src="'+esc(presentationUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allowfullscreen></iframe></div>';
-    return;
+  // Build the full-presentation embed URL (shows all slides stacked)
+  var embedUrl = slideId
+    ? 'https://docs.google.com/presentation/d/' + slideId + '/embed?rm=minimal&start=false&loop=false&delayms=99999'
+    : presentationUrl;
+
+  // For Drive /file/d/ links
+  var driveMatch = presentationUrl.match(/\/file\/d\/([^\/]+)/);
+  if (driveMatch && !slideId) {
+    embedUrl = 'https://drive.google.com/file/d/' + driveMatch[1] + '/preview';
   }
 
-  function slideImgUrl(idx) {
-    // Uses Google Slides thumbnail export (no auth required for published presentations)
-    return 'https://docs.google.com/presentation/d/' + slideId + '/export/svg?pageid=g' + idx;
-  }
+  // Slide height in the Google Slides embed is ~500px per slide at 16:9 ratio in a 960px-wide embed
+  // We clip the container to show only one slide and shift the iframe using CSS transform
+  var SLIDE_H = 500; // px per slide in the embed (at ~960px wide)
 
-  function _slideRender() {
-    var pct = Math.round(current.idx / Math.max(1,slideCount-1) * 100);
+  function _render() {
+    var pct = Math.round(current.idx / Math.max(1, slideCount - 1) * 100);
     var isFirst = current.idx === 0;
     var isLast  = current.idx === slideCount - 1;
+    var offsetPx = current.idx * SLIDE_H;
+
     var h = '<div style="display:flex;flex-direction:column;gap:0">';
-    // Slide iframe
-    var embedUrl = 'https://docs.google.com/presentation/d/' + slideId + '/embed?rm=minimal&slide=id.p' + (current.idx+1);
-    h += '<div style="position:relative;padding-bottom:56.25%;height:0;background:#1A1A2E;border-radius:10px 10px 0 0;overflow:hidden">';
-    h += '<iframe id="slide-frame" src="'+esc(embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allowfullscreen></iframe>';
+
+    // Clipped slide window — shows exactly one slide
+    h += '<div style="position:relative;overflow:hidden;border-radius:10px 10px 0 0;background:#1A1A2E;" id="slide-clip-box">';
+    // The iframe is tall enough for all slides; we clip and translate to show one
+    h += '<div style="position:relative;width:100%;transform:translateY(-' + offsetPx + 'px);transition:transform .3s ease">';
+    h += '<iframe id="slide-frame" src="' + esc(embedUrl) + '" '
+       + 'style="width:100%;height:' + (slideCount * SLIDE_H + 100) + 'px;border:none;display:block;pointer-events:none;" '
+       + 'scrolling="no" allowfullscreen></iframe>';
     h += '</div>';
-    // ── Progress scrubber bar ──────────────────────────────────────────
+    // Full transparent overlay — blocks ALL interaction with iframe
+    h += '<div style="position:absolute;inset:0;z-index:10;cursor:default;background:transparent" '
+       + 'title="Use ◀ Prev and ▶ Next buttons to navigate slides"></div>';
+    // Visible area: aspect-ratio box so exactly one 16:9 slide is visible
+    h += '</div>';
+
+    // ── Progress scrubber ────────────────────────────────────────────
     h += '<div style="background:#F0F4FA;padding:10px 16px 12px;border:1px solid #E4EAF2;border-top:none;border-radius:0 0 10px 10px">';
-    // Scrubber track
-    h += '<div style="position:relative;height:6px;background:#DDE6F0;border-radius:3px;cursor:pointer;margin-bottom:10px" id="slide-scrubber">';
-    h += '<div style="height:100%;width:'+pct+'%;background:#1A365E;border-radius:3px;transition:width .2s"></div>';
-    // Tick marks for each slide
-    for (var ti=0; ti<slideCount; ti++) {
-      var tpct = Math.round(ti/Math.max(1,slideCount-1)*100);
-      h += '<div class="slide-tick" data-i="'+ti+'" style="position:absolute;top:-3px;left:'+tpct+'%;width:12px;height:12px;border-radius:50%;background:'+(ti===current.idx?'#1A365E':ti<current.idx?'#1A365E':'#fff')+';border:2px solid '+(ti<current.idx?'#1A365E':'#DDE6F0')+';transform:translateX(-50%);cursor:pointer;transition:all .2s" title="Slide '+(ti+1)+'"></div>';
+    h += '<div style="position:relative;height:6px;background:#DDE6F0;border-radius:3px;margin-bottom:10px">';
+    h += '<div style="height:100%;width:' + pct + '%;background:#1A365E;border-radius:3px;transition:width .2s"></div>';
+    for (var ti = 0; ti < slideCount; ti++) {
+      var tpct = Math.round(ti / Math.max(1, slideCount - 1) * 100);
+      h += '<div class="slide-tick" data-i="' + ti + '" style="position:absolute;top:-3px;left:' + tpct + '%;'
+         + 'width:12px;height:12px;border-radius:50%;'
+         + 'background:' + (ti <= current.idx ? '#1A365E' : '#fff') + ';'
+         + 'border:2px solid ' + (ti < current.idx ? '#1A365E' : '#DDE6F0') + ';'
+         + 'transform:translateX(-50%);cursor:pointer;transition:all .2s" title="Slide ' + (ti+1) + '"></div>';
     }
     h += '</div>';
-    // Navigation controls row
+    // Nav row
     h += '<div style="display:flex;align-items:center;gap:10px">';
-    h += '<button id="slide-prev" style="padding:7px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(isFirst?'#E4EAF2':'#1A365E')+';color:'+(isFirst?'#94A3B8':'#fff')+';transition:all .2s">◀</button>';
-    // Slide counter + mini dots (max 15)
+    h += '<button id="slide-prev" style="padding:7px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:'
+       + (isFirst ? 'not-allowed' : 'pointer') + ';background:' + (isFirst ? '#E4EAF2' : '#1A365E')
+       + ';color:' + (isFirst ? '#94A3B8' : '#fff') + '">◀ Prev</button>';
     h += '<div style="flex:1;text-align:center">';
-    h += '<div style="font-size:13px;font-weight:800;color:#1A365E">Slide '+(current.idx+1)+' <span style="color:#94A3B8;font-weight:400">of '+slideCount+'</span></div>';
+    h += '<div style="font-size:13px;font-weight:800;color:#1A365E">Slide ' + (current.idx + 1)
+       + ' <span style="color:#94A3B8;font-weight:400">of ' + slideCount + '</span></div>';
     if (slideCount <= 20) {
       h += '<div style="display:flex;gap:3px;justify-content:center;margin-top:6px;flex-wrap:wrap">';
-      for (var di=0; di<slideCount; di++) {
+      for (var di = 0; di < slideCount; di++) {
         var isA = di === current.idx;
-        h += '<div class="slide-dot" data-i="'+di+'" style="width:'+(isA?'18':'6')+'px;height:6px;border-radius:3px;background:'+(isA?'#1A365E':di<current.idx?'#7A92B0':'#DDE6F0')+';cursor:pointer;transition:all .2s"></div>';
+        h += '<div class="slide-dot" data-i="' + di + '" style="width:' + (isA ? '18' : '6') + 'px;height:6px;border-radius:3px;'
+           + 'background:' + (isA ? '#1A365E' : di < current.idx ? '#7A92B0' : '#DDE6F0')
+           + ';cursor:pointer;transition:all .2s"></div>';
       }
       h += '</div>';
     }
     h += '</div>';
-    h += '<button id="slide-next" style="padding:7px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(isLast?'#E4EAF2':'#1A365E')+';color:'+(isLast?'#94A3B8':'#fff')+';transition:all .2s">▶</button>';
+    h += '<button id="slide-next" style="padding:7px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:'
+       + (isLast ? 'not-allowed' : 'pointer') + ';background:' + (isLast ? '#E4EAF2' : '#1A365E')
+       + ';color:' + (isLast ? '#94A3B8' : '#fff') + '">Next ▶</button>';
     h += '</div>';
-    // Links row
+    // Footer
     h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">';
-    h += '<div style="font-size:10px;color:#94A3B8">'+Math.round(pct)+'% through presentation</div>';
-    h += '<a href="'+esc(presentationUrl)+'" target="_blank" rel="noopener" style="font-size:10px;color:#1A365E;font-weight:700">↗ Open in Google Slides</a>';
+    h += '<div style="font-size:10px;color:#94A3B8">' + pct + '% through presentation</div>';
+    h += '<a href="' + esc(presentationUrl) + '" target="_blank" rel="noopener" '
+       + 'style="font-size:10px;color:#1A365E;font-weight:700">↗ Open in Google Slides</a>';
     h += '</div>';
     h += '</div></div>';
+
     container.innerHTML = h;
 
+    // ── Set clip box height to show exactly one slide ────────────────
+    // Wait for iframe to load so we can measure; set via JS after render
+    var clipBox = document.getElementById('slide-clip-box');
+    if (clipBox) {
+      // Aspect ratio 16:9 based on actual rendered width
+      var w = clipBox.offsetWidth || container.offsetWidth || 700;
+      var oneSlideH = Math.round(w * 9 / 16);
+      clipBox.style.height = oneSlideH + 'px';
+      // Also recalculate SLIDE_H for translate based on actual ratio
+      // Google Slides renders at 960px wide internally; scale accordingly
+      var scale = w / 960;
+      var scaledSlideH = Math.round(540 * scale); // 540px = 960*9/16
+      var shiftEl = clipBox.querySelector('div');
+      if (shiftEl) shiftEl.style.transform = 'translateY(-' + (current.idx * scaledSlideH) + 'px)';
+    }
+
+    // Wire nav buttons
     var prev = document.getElementById('slide-prev');
     var next = document.getElementById('slide-next');
-    if (prev) prev.addEventListener('click', function(){ if(current.idx>0){current.idx--;_slideRender();} });
-    if (next) next.addEventListener('click', function(){ if(current.idx<slideCount-1){current.idx++;_slideRender();} });
-    container.querySelectorAll('.slide-dot').forEach(function(dot){
-      dot.addEventListener('click', function(){ current.idx=parseInt(dot.dataset.i); _slideRender(); });
+    if (prev) prev.addEventListener('click', function() { if (current.idx > 0) { current.idx--; _render(); } });
+    if (next) next.addEventListener('click', function() { if (current.idx < slideCount - 1) { current.idx++; _render(); } });
+    container.querySelectorAll('.slide-dot').forEach(function(dot) {
+      dot.addEventListener('click', function() { current.idx = parseInt(dot.dataset.i); _render(); });
     });
-    container.querySelectorAll('.slide-tick').forEach(function(tick){
-      tick.addEventListener('click', function(e){ e.stopPropagation(); current.idx=parseInt(tick.dataset.i); _slideRender(); });
+    container.querySelectorAll('.slide-tick').forEach(function(tick) {
+      tick.addEventListener('click', function(e) { e.stopPropagation(); current.idx = parseInt(tick.dataset.i); _render(); });
     });
     // Keyboard navigation
-    var kHandler = function(e){
-      if(e.key==='ArrowRight'&&current.idx<slideCount-1){current.idx++;_slideRender();}
-      else if(e.key==='ArrowLeft'&&current.idx>0){current.idx--;_slideRender();}
-    };
-    if(!container._kbound){ document.addEventListener('keydown',kHandler); container._kbound=true; }
+    if (!container._kbound) {
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' && current.idx < slideCount - 1) { current.idx++; _render(); }
+        else if (e.key === 'ArrowLeft' && current.idx > 0) { current.idx--; _render(); }
+      });
+      container._kbound = true;
+    }
   }
-  _slideRender();
+  _render();
 }
+
 
 </script>
