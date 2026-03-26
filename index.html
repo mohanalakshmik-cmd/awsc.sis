@@ -17595,6 +17595,7 @@ function rLMSContent(c) {
         }
         h += '</div></div>';
         h += '<div style="display:flex;gap:4px;flex-shrink:0">';
+        h += '<button class="lms-preview-item" data-id="' + esc(item.id) + '" title="Preview as student" style="padding:5px 10px;background:#F0FFF4;color:#1DBD6A;border:1px solid #BBF7D0;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">👁</button>';
         h += '<button class="lms-edit-item" data-idx="' + real_idx + '" style="padding:5px 10px;background:#EEF3FF;color:#1A365E;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✏️</button>';
         h += '<button class="lms-del-item" data-idx="' + real_idx + '" style="padding:5px 8px;background:#FFF0F1;color:#D61F31;border:1px solid #F5C2C7;border-radius:6px;font-size:10px;cursor:pointer">🗑</button>';
         h += '</div></div>';
@@ -17620,9 +17621,8 @@ function rLMSContent(c) {
   // Preview as student
   c.querySelectorAll('.lms-preview-item').forEach(function(b) {
     b.addEventListener('click', function() {
-      var pidx = parseInt(b.dataset.idx);
-      var pItem = (_LMS.content || []).filter(function(x){ return x.courseId === courseId; })
-        .sort(function(a,aa){ return (parseInt(a.unitOrder)||0)-(parseInt(aa.unitOrder)||0)||(parseInt(a.order)||0)-(parseInt(aa.order)||0); })[pidx];
+      var pid = b.dataset.id;
+      var pItem = (_LMS.content || []).find(function(x){ return x.id === pid; });
       if (!pItem) return;
       var ov = document.createElement('div');
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,18,36,.7);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow-y:auto';
@@ -17683,6 +17683,9 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
     + '<div class="fl"><label class="flb">Unit</label><select class="fsel2" id="lms-l-unit">' + unitOpts + '<option value="__new__">+ New unit...</option></select></div>'
     + '<div class="fl"><label class="flb">Content Type</label><select class="fsel2" id="lms-l-type">'
     + ['video','article','link','file','quiz','presentation'].map(function(t){ return '<option ' + (t === item.type ? 'selected' : '') + '>' + t + '</option>'; }).join('')
+    + '</select></div>'
+    + '<div class="fl"><label class="flb">Lesson Role</label><select class="fsel2" id="lms-l-subtype">'
+    + ['','pretest','posttest','tutorial','practice'].map(function(sub){ var labels={'':'Standard Lesson','pretest':'📋 Pre-Test','posttest':'📊 Post-Test','tutorial':'📖 Tutorial','practice':'✏️ Practice'}; return '<option value="'+sub+'"'+(sub===(item.lessonSubType||'')?'selected':'')+'>'+labels[sub]+'</option>'; }).join('')
     + '</select></div>'
     + '</div>'
     + '<div class="fl"><label class="flb">Content URL / Body</label>'    + '<div style="position:relative">'    + '<textarea class="fta" id="lms-l-url" rows="3" placeholder="YouTube URL, Google Slides URL, Google Drive file link, or paste article text...">' + esc(item.url || item.body || '') + '</textarea>'    + '</div>'    + '<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'    + '<span style="font-size:10px;color:#7A92B0">📎 Or upload a file (PDF/PPT/image):</span>'    + '<input type="file" id="lms-l-file-upload" accept=".pdf,.ppt,.pptx,.jpg,.jpeg,.png,.gif" style="font-size:10px;flex:1"/>'    + '<button id="lms-l-upload-btn" style="padding:5px 12px;background:#059669;color:#fff;border:none;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">Upload</button>'    + '</div>'    + '<div id="lms-upload-status" style="font-size:10px;color:#059669;margin-top:4px;display:none"></div>'    + '</div>'
@@ -17760,6 +17763,10 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
   }
   typeEl.addEventListener('change', toggleType);
   toggleType();
+
+  // Pre-populate lessonSubType when editing
+  var subTypeEl = document.getElementById('lms-l-subtype');
+  if (subTypeEl && item.lessonSubType) subTypeEl.value = item.lessonSubType;
 
   // ── File upload handler ─────────────────────────────────────────────────
   var uploadBtn = document.getElementById('lms-l-upload-btn');
@@ -18053,6 +18060,8 @@ function openLMSLessonModal(idx, courseId, prefillUnit) {
       assignMaxScore:     hasAssign ? (parseInt(document.getElementById('lms-l-assign-maxscore').value) || 100) : 100,
       assignDueDays:      hasAssign ? (parseInt(document.getElementById('lms-l-assign-duedays').value) || '') : '',
       assignSubType:      hasAssign ? document.getElementById('lms-l-assign-subtype').value : 'both',
+      lessonSubType: (document.getElementById('lms-l-subtype') ? document.getElementById('lms-l-subtype').value : '') || (item.lessonSubType||''),
+      lessonSubType: (document.getElementById('lms-l-subtype') ? document.getElementById('lms-l-subtype').value : (item.lessonSubType||'')),
       assignRubric:     hasAssign ? (window._lmsCurrentRubric !== undefined ? window._lmsCurrentRubric : (item.assignRubric || '')) : '',
       assignments:      (function(){ readExtraAssigns(); return window._lmsExtraAssigns && window._lmsExtraAssigns.length ? JSON.stringify(window._lmsExtraAssigns) : ''; })(),
       moduleTitle:      (document.getElementById('lms-l-module') || {value:item.moduleTitle||''}).value || item.moduleTitle || '',
@@ -20053,11 +20062,21 @@ function rLMSStudent(c) {
   h+='<div style="font-size:16px;margin-bottom:3px">'+paceIcon+'</div>';
   h+='<div style="font-size:13px;font-weight:800;color:'+paceColor+'">'+paceLabel+'</div>';
   h+='</div>';
-  // On-target grade
-  var otCol=onTgt>=passMark?'#059669':'#D61F31';
+  // On-target grade — projected final grade if current mastery pace continues
+  var onTgtDisplay, onTgtColor;
+  if(!enrol0.assignedAt||!enrol0.dueDate){
+    onTgtDisplay='<span style="font-size:16px;color:#94A3B8">N/A</span>';
+    onTgtColor='#94A3B8';
+  } else {
+    // Project: if student maintains current avg mastery for all remaining lessons
+    var projScore=avgMastery!==null ? Math.round(avgMastery * (comp/Math.max(1,content.length)) + (avgMastery||0) * ((content.length-comp)/Math.max(1,content.length))) : null;
+    if(projScore===null) projScore=onTgt;
+    onTgtColor=projScore>=passMark?'#059669':projScore>0?'#D97706':'#D61F31';
+    onTgtDisplay='<span style="font-size:18px;font-weight:900;color:'+onTgtColor+'">'+projScore+'% <span style="font-size:13px">('+gl(projScore)+')</span></span>';
+  }
   h+='<div style="padding:0 16px;border-right:1px solid #F0F4FA">';
-  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">ON-TARGET GRADE ⓘ</div>';
-  h+='<div style="font-size:18px;font-weight:900;color:'+otCol+'">'+onTgt+'% <span style="font-size:13px">('+gl(onTgt)+')</span></div>';
+  h+='<div style="font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px" title="Projected final grade based on current mastery score average">ON-TARGET GRADE ⓘ</div>';
+  h+=onTgtDisplay;
   h+='</div>';
   // Current grade
   var cgColV=avgMastery!==null?(avgMastery>=passMark?'#059669':'#D61F31'):'#94A3B8';
@@ -20104,8 +20123,12 @@ function rLMSStudent(c) {
     h+='<button id="lms-stu-tab-'+tab.k+'" style="padding:10px 20px;border:none;background:transparent;font-size:12px;font-weight:700;cursor:pointer;color:'+(a?'#1A365E':'#94A3B8')+';border-bottom:2px solid '+(a?'#1A365E':'transparent')+';margin-bottom:-2px">'+tab.l+'</button>';
   });
   h+='<div style="flex:1"></div>';
-  h+='<button style="padding:8px 14px;background:transparent;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;color:#5A7290;cursor:pointer;margin-bottom:4px">ADD NOTES</button>';
-  h+='<button style="padding:8px 14px;background:transparent;border:1px solid #E4EAF2;border-radius:8px;font-size:11px;color:#5A7290;cursor:pointer;margin-bottom:4px;margin-left:6px">🖨 PRINT</button>';
+  h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
+  h+='<button id="lms-stu-expand-all" style="padding:6px 12px;background:transparent;border:1px solid #E4EAF2;border-radius:7px;font-size:10px;color:#5A7290;cursor:pointer">⊞ Expand All</button>';
+  h+='<button id="lms-stu-collapse-all" style="padding:6px 12px;background:transparent;border:1px solid #E4EAF2;border-radius:7px;font-size:10px;color:#5A7290;cursor:pointer">⊟ Collapse All</button>';
+  h+='<button id="lms-stu-notes-btn" style="padding:6px 12px;background:transparent;border:1px solid #E4EAF2;border-radius:7px;font-size:10px;color:#5A7290;cursor:pointer">📝 Notes</button>';
+  h+='<button id="lms-stu-print-btn" style="padding:6px 12px;background:transparent;border:1px solid #E4EAF2;border-radius:7px;font-size:10px;color:#5A7290;cursor:pointer">🖨 Print</button>';
+  h+='</div>';
   h+='</div>';
 
   if(_lmsStudentTab==='curriculum'){
@@ -20192,6 +20215,11 @@ function rLMSStudent(c) {
           h+='<div style="display:grid;grid-template-columns:1fr 100px 200px 80px 80px 70px 60px;padding:9px 16px 9px 40px;border-bottom:1px solid #F7F9FC;gap:6px;align-items:center;background:#fff">';
           h+='<div style="display:flex;align-items:center;gap:10px">';
           h+='<div style="width:12px;height:12px;border-radius:50%;background:'+dotCol+';flex-shrink:0"></div>';
+          // Pre/Post test badge
+          var isPre=item.lessonSubType==='pretest'||(item.title&&/^pre[\s-]?test/i.test(item.title.trim()));
+          var isPost=item.lessonSubType==='posttest'||(item.title&&/^post[\s-]?test/i.test(item.title.trim()));
+          var testBadge=isPre?'<span style="font-size:9px;font-weight:800;color:#7C3AED;background:#F3E8FF;padding:1px 6px;border-radius:4px;margin-right:5px">PRE-TEST</span>':isPost?'<span style="font-size:9px;font-weight:800;color:#D97706;background:#FEF3C7;padding:1px 6px;border-radius:4px;margin-right:5px">POST-TEST</span>':'';
+          h+=testBadge;
           h+='<span style="font-size:12px;color:#3D5475;font-weight:'+(status==='completed'?'700':'500')+'">'+esc(item.title)+'</span>';
           h+='</div>';
           h+='<div style="text-align:center;font-size:10px;color:#7A92B0">'+(item.dueDate||'')+'</div>';
@@ -20230,42 +20258,142 @@ function rLMSStudent(c) {
     h+='</div>';
   } else {
     // ── Weekly Progress ───────────────────────────────────────────────
-    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:20px">';
-    h+='<div style="font-size:13px;font-weight:700;color:#1A365E;margin-bottom:14px">Weekly Activity</div>';
-    // Group progress by week
+    h+='<div style="display:flex;flex-direction:column;gap:14px">';
+    // Group progress by week (last 8 weeks)
     var weekMap={};
     myProg.filter(function(p){return p.lastAccessAt;}).forEach(function(p){
       var d=new Date(p.lastAccessAt);
       var weekStart=new Date(d);
       weekStart.setDate(d.getDate()-d.getDay());
       var wk=weekStart.toISOString().substring(0,10);
-      if(!weekMap[wk])weekMap[wk]={wk,items:[],timeMins:0,comp:0};
+      if(!weekMap[wk])weekMap[wk]={wk:wk,items:[],timeMins:0,comp:0,masScores:[]};
       weekMap[wk].items.push(p);
       weekMap[wk].timeMins+=(parseFloat(p.timeSpentMins)||0);
       if(p.status==='completed')weekMap[wk].comp++;
+      if(p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore))weekMap[wk].masScores.push(Number(p.masteryScore));
     });
-    var weeks=Object.values(weekMap).sort(function(a,b){return b.wk.localeCompare(a.wk);});
-    if(!weeks.length){
+    // Fill last 8 weeks (including empty ones)
+    var now8=new Date();
+    for(var wi=7;wi>=0;wi--){
+      var wd=new Date(now8);
+      wd.setDate(wd.getDate()-wd.getDay()-wi*7);
+      var wkStr=wd.toISOString().substring(0,10);
+      if(!weekMap[wkStr])weekMap[wkStr]={wk:wkStr,items:[],timeMins:0,comp:0,masScores:[]};
+    }
+    var weeks=Object.values(weekMap).sort(function(a,b){return a.wk.localeCompare(b.wk);}).slice(-8);
+    var maxTime=Math.max(1,Math.max.apply(null,weeks.map(function(w){return w.timeMins;})));
+    var maxComp=Math.max(1,Math.max.apply(null,weeks.map(function(w){return w.comp;})));
+    // ── KPI row ──────────────────────────────────
+    var totalWeekTime=weeks.reduce(function(s,w){return s+w.timeMins;},0);
+    var totalWeekComp=weeks.reduce(function(s,w){return s+w.comp;},0);
+    var activeWeeks=weeks.filter(function(w){return w.items.length>0;}).length;
+    var avgWeekTime=activeWeeks?Math.round(totalWeekTime/activeWeeks):0;
+    h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">';
+    [{l:'Total Time (8wk)',v:fmtTime(totalWeekTime),i:'⏱'},{l:'Avg Time/Week',v:fmtTime(avgWeekTime),i:'📅'},{l:'Lessons Completed',v:totalWeekComp,i:'✅'},{l:'Active Weeks',v:activeWeeks+'/8',i:'📆'}].forEach(function(k){
+      h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:12px;padding:14px 16px">';
+      h+='<div style="font-size:18px;margin-bottom:4px">'+k.i+'</div>';
+      h+='<div style="font-size:18px;font-weight:900;color:#1A365E">'+k.v+'</div>';
+      h+='<div style="font-size:9px;color:#7A92B0;margin-top:3px;text-transform:uppercase;font-weight:700">'+k.l+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+    // ── Time-on-task bar chart ──────────────────
+    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:18px 20px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">';
+    h+='<div style="font-size:13px;font-weight:800;color:#1A365E">⏱ Time on Task per Week</div>';
+    h+='<div style="font-size:10px;color:#7A92B0">Last 8 weeks</div></div>';
+    h+='<div style="display:flex;align-items:flex-end;gap:8px;height:120px">';
+    weeks.forEach(function(w){
+      var barPct=maxTime>0?Math.round(w.timeMins/maxTime*100):0;
+      var wLabel=w.wk.substring(5).replace('-','/');
+      var hasActivity=w.items.length>0;
+      h+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">';
+      h+='<div style="font-size:9px;font-weight:700;color:'+(hasActivity?'#1A365E':'#CBD5E1')+'">'+fmtTime(w.timeMins)+'</div>';
+      h+='<div style="flex:1;width:100%;display:flex;align-items:flex-end">';
+      h+='<div style="width:100%;height:'+Math.max(barPct,hasActivity?4:1)+'%;background:'+(hasActivity?'#1A365E':'#E4EAF2')+';border-radius:4px 4px 0 0;transition:all .3s"></div>';
+      h+='</div>';
+      h+='<div style="font-size:8px;color:#94A3B8;text-align:center">'+wLabel+'</div>';
+      h+='</div>';
+    });
+    h+='</div></div>';
+    // ── Mastery score line chart (SVG) ──────────────────────────────────
+    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;padding:18px 20px">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
+    h+='<div style="font-size:13px;font-weight:800;color:#1A365E">📈 Avg Mastery Score per Week</div>';
+    h+='<div style="font-size:10px;color:#7A92B0">Last 8 weeks</div></div>';
+    var scoredWeeks=weeks.map(function(w){return w.masScores.length?Math.round(w.masScores.reduce(function(s,v){return s+v;},0)/w.masScores.length):null;});
+    var svgW=580,svgH=100,padL=30,padR=10,padT=10,padB=20;
+    var innerW=svgW-padL-padR,innerH=svgH-padT-padB;
+    var pts=[];
+    scoredWeeks.forEach(function(v,i){
+      if(v!==null)pts.push({x:padL+Math.round(i/(weeks.length-1||1)*innerW),y:padT+Math.round((1-v/100)*innerH),v:v,wk:weeks[i].wk.substring(5)});
+    });
+    var svgHtml='<svg viewBox="0 0 '+svgW+' '+svgH+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:120px">';
+    // Grid lines
+    [0,25,50,75,100].forEach(function(val){
+      var y=padT+Math.round((1-val/100)*innerH);
+      svgHtml+='<line x1="'+padL+'" x2="'+(svgW-padR)+'" y1="'+y+'" y2="'+y+'" stroke="#F0F4FA" stroke-width="1"/>';
+      svgHtml+='<text x="'+(padL-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#94A3B8">'+val+'%</text>';
+    });
+    // Pass mark line
+    var pmY=padT+Math.round((1-passMark/100)*innerH);
+    svgHtml+='<line x1="'+padL+'" x2="'+(svgW-padR)+'" y1="'+pmY+'" y2="'+pmY+'" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>';
+    svgHtml+='<text x="'+(svgW-padR+2)+'" y="'+(pmY+4)+'" font-size="8" fill="#D97706">Pass</text>';
+    // Line path
+    if(pts.length>=2){
+      var path=pts.map(function(p,i){return (i===0?'M':'L')+p.x+','+p.y;}).join(' ');
+      svgHtml+='<path d="'+path+'" fill="none" stroke="#1A365E" stroke-width="2" stroke-linejoin="round"/>';
+      // Area fill
+      var area='M'+pts[0].x+','+(padT+innerH)+' '+path+' L'+pts[pts.length-1].x+','+(padT+innerH)+' Z';
+      svgHtml+='<path d="'+area+'" fill="#1A365E" fill-opacity=".08"/>';
+    }
+    // Dots + labels
+    pts.forEach(function(p){
+      var col=p.v>=passMark?'#059669':'#D61F31';
+      svgHtml+='<circle cx="'+p.x+'" cy="'+p.y+'" r="4" fill="'+col+'" stroke="#fff" stroke-width="2"/>';
+      svgHtml+='<text x="'+p.x+'" y="'+(p.y-8)+'" text-anchor="middle" font-size="9" font-weight="bold" fill="'+col+'">'+p.v+'%</text>';
+    });
+    // X axis labels
+    weeks.forEach(function(w,i){
+      var x=padL+Math.round(i/(weeks.length-1||1)*innerW);
+      svgHtml+='<text x="'+x+'" y="'+(svgH-4)+'" text-anchor="middle" font-size="8" fill="#94A3B8">'+w.wk.substring(5).replace('-','/')+'</text>';
+    });
+    svgHtml+='</svg>';
+    h+=svgHtml;
+    h+='</div>';
+    // ── Per-week activity detail table ─────────────────────────────────
+    h+='<div style="background:#fff;border:1px solid #E4EAF2;border-radius:13px;overflow:hidden">';
+    h+='<div style="padding:14px 18px;border-bottom:1px solid #E4EAF2;font-size:13px;font-weight:800;color:#1A365E">📋 Weekly Activity Log</div>';
+    h+='<div style="display:grid;grid-template-columns:110px 1fr 90px 80px 80px;gap:0;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px;padding:8px 16px;border-bottom:1px solid #E4EAF2;background:#F7F9FC">';
+    h+='<div>Week</div><div>Lessons</div><div style="text-align:center">Time</div><div style="text-align:center">Completed</div><div style="text-align:center">Avg Score</div></div>';
+    if(!weeks.filter(function(w){return w.items.length>0;}).length){
       h+='<div style="text-align:center;padding:30px;color:#94A3B8">No activity recorded yet.</div>';
     } else {
-      h+='<div style="display:grid;grid-template-columns:120px 1fr 100px 80px;gap:0;font-size:9px;font-weight:800;color:#7A92B0;text-transform:uppercase;letter-spacing:.7px;padding:8px 0;border-bottom:1px solid #E4EAF2;margin-bottom:4px">';
-      h+='<div>Week</div><div>Activities</div><div style="text-align:center">Time</div><div style="text-align:center">Completed</div></div>';
-      weeks.forEach(function(w){
+      weeks.slice().reverse().forEach(function(w,wi){
+        if(!w.items.length)return;
+        var avgSc=w.masScores.length?Math.round(w.masScores.reduce(function(s,v){return s+v;},0)/w.masScores.length):null;
         var wEnd=new Date(w.wk); wEnd.setDate(wEnd.getDate()+6);
-        h+='<div style="display:grid;grid-template-columns:120px 1fr 100px 80px;gap:0;padding:10px 0;border-bottom:1px solid #F0F4FA;align-items:center">';
-        h+='<div style="font-size:11px;font-weight:700;color:#1A365E">'+w.wk.substring(5)+'</div>';
+        h+='<div style="display:grid;grid-template-columns:110px 1fr 90px 80px 80px;gap:0;padding:10px 16px;border-bottom:1px solid #F0F4FA;align-items:start">';
+        h+='<div style="font-size:11px;font-weight:700;color:#1A365E;padding-top:2px">'+w.wk.substring(5)+'</div>';
         h+='<div>';
-        w.items.slice(0,3).forEach(function(p){
+        w.items.forEach(function(p){
           var it=content.find(function(x){return x.id===p.contentId;});
-          if(it) h+='<div style="font-size:10px;color:#5A7290;margin-bottom:1px">· '+esc(it.title.substring(0,40))+'</div>';
+          if(!it)return;
+          var sc=p.masteryScore!==''&&p.masteryScore!==undefined&&!isNaN(p.masteryScore)?Number(p.masteryScore):null;
+          h+='<div style="font-size:10px;color:#5A7290;margin-bottom:3px;display:flex;align-items:center;gap:6px">';
+          h+='<span style="font-size:9px">'+(p.status==='completed'?'✅':'⏳')+'</span>';
+          h+='<span>'+esc(it.title.substring(0,38))+'</span>';
+          if(sc!==null)h+='<span style="font-size:9px;font-weight:700;color:'+(sc>=passMark?'#059669':'#D61F31')+'">'+sc+'%</span>';
+          h+='</div>';
         });
-        if(w.items.length>3) h+='<div style="font-size:10px;color:#94A3B8">+ '+(w.items.length-3)+' more</div>';
         h+='</div>';
-        h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E">'+fmtTime(w.timeMins)+'</div>';
-        h+='<div style="text-align:center;font-size:12px;font-weight:900;color:#059669">'+w.comp+'</div>';
+        h+='<div style="text-align:center;font-size:11px;font-weight:700;color:#1A365E;padding-top:2px">'+fmtTime(w.timeMins)+'</div>';
+        h+='<div style="text-align:center;font-size:12px;font-weight:900;color:#059669;padding-top:2px">'+w.comp+'</div>';
+        h+='<div style="text-align:center;padding-top:2px">'+(avgSc!==null?'<span style="font-size:12px;font-weight:900;color:'+(avgSc>=passMark?'#059669':'#D61F31')+'">'+avgSc+'%</span>':'<span style="color:#94A3B8">—</span>')+'</div>';
         h+='</div>';
       });
     }
+    h+='</div>';
     h+='</div>';
   }
   h+='</div>';
@@ -20284,7 +20412,61 @@ function rLMSStudent(c) {
       rLMSStudent(c);
     });
   });
-}
+  // Wire Expand All / Collapse All
+  var expBtn=document.getElementById('lms-stu-expand-all');
+  var colBtn=document.getElementById('lms-stu-collapse-all');
+  if(expBtn) expBtn.addEventListener('click',function(){
+    var unitGroups2=[]; var unitMap2={};
+    content.forEach(function(item){ var ut=item.unitTitle||'General'; if(!unitMap2[ut]){unitMap2[ut]=true;unitGroups2.push(ut);} });
+    unitGroups2.forEach(function(ut){ _lmsStudentExpanded[ut]=true; });
+    rLMSStudent(c);
+  });
+  if(colBtn) colBtn.addEventListener('click',function(){
+    var unitGroups2=[]; var unitMap2={};
+    content.forEach(function(item){ var ut=item.unitTitle||'General'; if(!unitMap2[ut]){unitMap2[ut]=true;unitGroups2.push(ut);} });
+    unitGroups2.forEach(function(ut){ _lmsStudentExpanded[ut]=false; });
+    rLMSStudent(c);
+  });
+  // Wire Print
+  var printBtn=document.getElementById('lms-stu-print-btn');
+  if(printBtn) printBtn.addEventListener('click',function(){ window.print(); });
+  // Wire Notes modal
+  var notesBtn=document.getElementById('lms-stu-notes-btn');
+  if(notesBtn) notesBtn.addEventListener('click',function(){
+    var noteKey='lms_note_'+_lmsStudentId+'_'+_lmsStudentCourseId;
+    var existing=localStorage.getItem(noteKey)||'';
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(10,18,36,.6);z-index:900;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML='<div style="background:#fff;border-radius:14px;width:520px;max-width:95vw;padding:20px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+      +'<div style="font-size:14px;font-weight:800;color:#1A365E">📝 Teacher Notes — '+esc(s.firstName+' '+s.lastName)+' · '+esc(course.title)+'</div>'
+      +'<button id="stu-note-close" style="background:none;border:none;font-size:18px;cursor:pointer;color:#94A3B8">✕</button></div>'
+      +'<textarea id="stu-note-ta" style="width:100%;height:160px;border:1px solid #E4EAF2;border-radius:8px;padding:10px;font-size:12px;resize:vertical;box-sizing:border-box" placeholder="Add notes about this student&#39;s progress, areas of concern, or achievements...">'+esc(existing)+'</textarea>'
+      +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">'
+      +'<button id="stu-note-cancel" style="padding:8px 18px;border:1px solid #E4EAF2;border-radius:8px;background:#fff;color:#5A7290;font-size:12px;cursor:pointer">Cancel</button>'
+      +'<button id="stu-note-save" style="padding:8px 18px;border:none;border-radius:8px;background:#1A365E;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Save Notes</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('stu-note-close').onclick=function(){ ov.remove(); };
+    document.getElementById('stu-note-cancel').onclick=function(){ ov.remove(); };
+    document.getElementById('stu-note-save').onclick=function(){
+      var val=document.getElementById('stu-note-ta').value;
+      localStorage.setItem(noteKey,val);
+      ov.remove();
+      toast('Notes saved','ok');
+    };
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+  });
+  // Show saved notes indicator
+  var noteKey='lms_note_'+_lmsStudentId+'_'+_lmsStudentCourseId;
+  var hasNote=localStorage.getItem(noteKey);
+  if(hasNote&&hasNote.trim()&&notesBtn){
+    notesBtn.style.background='#FEF3C7';
+    notesBtn.style.borderColor='#D97706';
+    notesBtn.style.color='#92400E';
+    notesBtn.textContent='📝 Notes ●';
+  }
+} // close rLMSStudent
 
 
 
@@ -23320,26 +23502,49 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
   }
 
   function _slideRender() {
-    var h = '<div style="display:flex;flex-direction:column;gap:10px">';
-    // Slide image (use iframe embed with specific slide)
+    var pct = Math.round(current.idx / Math.max(1,slideCount-1) * 100);
+    var isFirst = current.idx === 0;
+    var isLast  = current.idx === slideCount - 1;
+    var h = '<div style="display:flex;flex-direction:column;gap:0">';
+    // Slide iframe
     var embedUrl = 'https://docs.google.com/presentation/d/' + slideId + '/embed?rm=minimal&slide=id.p' + (current.idx+1);
-    h += '<div style="position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:10px;overflow:hidden">';
+    h += '<div style="position:relative;padding-bottom:56.25%;height:0;background:#1A1A2E;border-radius:10px 10px 0 0;overflow:hidden">';
     h += '<iframe id="slide-frame" src="'+esc(embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none" allowfullscreen></iframe>';
     h += '</div>';
-    // Navigation bar
-    h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#F0F4FA;border-radius:10px;padding:8px 14px">';
-    h += '<button id="slide-prev" style="padding:8px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(current.idx>0?'#1A365E':'#E4EAF2')+';color:'+(current.idx>0?'#fff':'#94A3B8')+'">◀ Prev</button>';
-    h += '<div style="text-align:center">';
-    h += '<div style="font-size:12px;font-weight:700;color:#1A365E">Slide '+(current.idx+1)+' of '+slideCount+'</div>';
-    h += '<div style="display:flex;gap:4px;justify-content:center;margin-top:5px;flex-wrap:wrap">';
-    for (var i=0;i<Math.min(slideCount,20);i++) {
-      h += '<div class="slide-dot" data-i="'+i+'" style="width:'+(i===current.idx?'20':'8')+'px;height:8px;border-radius:4px;background:'+(i===current.idx?'#1A365E':'#C4D4E8')+';cursor:pointer;transition:all .2s"></div>';
+    // ── Progress scrubber bar ──────────────────────────────────────────
+    h += '<div style="background:#F0F4FA;padding:10px 16px 12px;border:1px solid #E4EAF2;border-top:none;border-radius:0 0 10px 10px">';
+    // Scrubber track
+    h += '<div style="position:relative;height:6px;background:#DDE6F0;border-radius:3px;cursor:pointer;margin-bottom:10px" id="slide-scrubber">';
+    h += '<div style="height:100%;width:'+pct+'%;background:#1A365E;border-radius:3px;transition:width .2s"></div>';
+    // Tick marks for each slide
+    for (var ti=0; ti<slideCount; ti++) {
+      var tpct = Math.round(ti/Math.max(1,slideCount-1)*100);
+      h += '<div class="slide-tick" data-i="'+ti+'" style="position:absolute;top:-3px;left:'+tpct+'%;width:12px;height:12px;border-radius:50%;background:'+(ti===current.idx?'#1A365E':ti<current.idx?'#1A365E':'#fff')+';border:2px solid '+(ti<current.idx?'#1A365E':'#DDE6F0')+';transform:translateX(-50%);cursor:pointer;transition:all .2s" title="Slide '+(ti+1)+'"></div>';
     }
+    h += '</div>';
+    // Navigation controls row
+    h += '<div style="display:flex;align-items:center;gap:10px">';
+    h += '<button id="slide-prev" style="padding:7px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(isFirst?'#E4EAF2':'#1A365E')+';color:'+(isFirst?'#94A3B8':'#fff')+';transition:all .2s">◀</button>';
+    // Slide counter + mini dots (max 15)
+    h += '<div style="flex:1;text-align:center">';
+    h += '<div style="font-size:13px;font-weight:800;color:#1A365E">Slide '+(current.idx+1)+' <span style="color:#94A3B8;font-weight:400">of '+slideCount+'</span></div>';
+    if (slideCount <= 20) {
+      h += '<div style="display:flex;gap:3px;justify-content:center;margin-top:6px;flex-wrap:wrap">';
+      for (var di=0; di<slideCount; di++) {
+        var isA = di === current.idx;
+        h += '<div class="slide-dot" data-i="'+di+'" style="width:'+(isA?'18':'6')+'px;height:6px;border-radius:3px;background:'+(isA?'#1A365E':di<current.idx?'#7A92B0':'#DDE6F0')+';cursor:pointer;transition:all .2s"></div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+    h += '<button id="slide-next" style="padding:7px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(isLast?'#E4EAF2':'#1A365E')+';color:'+(isLast?'#94A3B8':'#fff')+';transition:all .2s">▶</button>';
+    h += '</div>';
+    // Links row
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">';
+    h += '<div style="font-size:10px;color:#94A3B8">'+Math.round(pct)+'% through presentation</div>';
+    h += '<a href="'+esc(presentationUrl)+'" target="_blank" rel="noopener" style="font-size:10px;color:#1A365E;font-weight:700">↗ Open in Google Slides</a>';
+    h += '</div>';
     h += '</div></div>';
-    h += '<button id="slide-next" style="padding:8px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(current.idx<slideCount-1?'#1A365E':'#E4EAF2')+';color:'+(current.idx<slideCount-1?'#fff':'#94A3B8')+'">Next ▶</button>';
-    h += '</div>';
-    h += '<div style="text-align:right;padding:4px 0"><a href="'+esc(presentationUrl)+'" target="_blank" rel="noopener" style="font-size:10px;color:#7A92B0">↗ Open in Google Slides</a></div>';
-    h += '</div>';
     container.innerHTML = h;
 
     var prev = document.getElementById('slide-prev');
@@ -23349,6 +23554,15 @@ function lmsRenderClickableSlides(container, presentationUrl, slideCount) {
     container.querySelectorAll('.slide-dot').forEach(function(dot){
       dot.addEventListener('click', function(){ current.idx=parseInt(dot.dataset.i); _slideRender(); });
     });
+    container.querySelectorAll('.slide-tick').forEach(function(tick){
+      tick.addEventListener('click', function(e){ e.stopPropagation(); current.idx=parseInt(tick.dataset.i); _slideRender(); });
+    });
+    // Keyboard navigation
+    var kHandler = function(e){
+      if(e.key==='ArrowRight'&&current.idx<slideCount-1){current.idx++;_slideRender();}
+      else if(e.key==='ArrowLeft'&&current.idx>0){current.idx--;_slideRender();}
+    };
+    if(!container._kbound){ document.addEventListener('keydown',kHandler); container._kbound=true; }
   }
   _slideRender();
 }
